@@ -17,7 +17,7 @@ from app.models import (
     DigitalHumanHumanLog,
 )
 from app.services import digital_human as dh_service
-from app.views import DigitalHumanApiView, DigitalHumanView
+from app.views import DigitalHumanApiView, DigitalHumanView, ViewsBase
 
 
 class DigitalHumanAppShellApiTests(TestCase):
@@ -73,6 +73,15 @@ class DigitalHumanAppShellApiTests(TestCase):
         self.assertEqual(response.status_code, 401)
         self.assertEqual(body["code"], 401)
         self.assertEqual(body["msg"], "unauthorized")
+
+    def test_shared_post_parser_rejects_empty_or_non_object_json(self):
+        requests = [
+            self.rf.get("/api/app-shell/digital-human/device/action/update-window"),
+            self.rf.post("/probe", data="{", content_type="application/json"),
+            self.rf.post("/probe", data="[]", content_type="application/json"),
+        ]
+        for request in requests:
+            self.assertEqual(ViewsBase.f_parsePostParams(request), {})
 
     def test_dashboard_endpoint_forbids_non_admin_beacon_user(self):
         request = self._attach_session(

@@ -309,8 +309,12 @@ def f_parse_post_params(request):
 
     # 接收json方式上传的参数
     if not params:
-        params = request.body.decode('utf-8')
-        params = json.loads(params)
+        try:
+            params = json.loads(request.body.decode('utf-8')) if request.body else {}
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            params = {}
+        if not isinstance(params, dict):
+            params = {}
 
     return params
 f_parsePostParams = f_parse_post_params  # pragma: no cover - compatibility alias
