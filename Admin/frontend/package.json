@@ -13,22 +13,22 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@ant-design/icons": "^5.6.1",
-    "antd": "^5.24.6",
-    "dayjs": "^1.11.13",
+    "@ant-design/icons": "^6.3.2",
+    "antd": "^6.5.1",
+    "dayjs": "^1.11.21",
     "prop-types": "^15.8.1",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "recharts": "^2.15.3",
-    "zustand": "^5.0.3"
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "recharts": "^3.9.2",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
-    "@vitejs/plugin-react": "^5.2.0",
-    "@vitest/coverage-v8": "^3.2.6",
-    "jsdom": "^25.0.1",
-    "vite": "^7.3.6",
-    "vitest": "^3.2.6"
+    "@vitejs/plugin-react": "^6.0.3",
+    "@vitest/coverage-v8": "^4.1.10",
+    "jsdom": "^29.1.1",
+    "vite": "^8.1.4",
+    "vitest": "^4.1.10"
   }
 }
