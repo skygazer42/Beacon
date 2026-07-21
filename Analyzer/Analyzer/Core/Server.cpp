@@ -53,12 +53,28 @@ using namespace AVSAnalyzer;
 
 constexpr int kRecvBufMaxSize = 1024 * 8;
 
+namespace {
+    void send_json(struct evhttp_request* req, int http_status, int code, const std::string& msg);
+}
+
 template <void (*Handler)(struct evhttp_request* req, Scheduler* scheduler)>
 static void api_cb(struct evhttp_request* req, void* arg) {  // NOSONAR - libevent callback signature
-    Handler(req, static_cast<Scheduler*>(arg));
+    try {
+        Handler(req, static_cast<Scheduler*>(arg));
+    } catch (const Json::Exception& ex) {
+        LOGE("Analyzer API rejected invalid JSON value: %s", ex.what());
+        send_json(req, HTTP_BADREQUEST, 0, "invalid request parameter");
+    } catch (const std::exception& ex) {
+        LOGE("Analyzer API handler failed: %s", ex.what());
+        send_json(req, HTTP_INTERNAL, 0, "internal server error");
+    } catch (...) {
+        LOGE("Analyzer API handler failed with an unknown exception");
+        send_json(req, HTTP_INTERNAL, 0, "internal server error");
+    }
 }
 
 static void api_index(struct evhttp_request* req, Scheduler* scheduler);
+static void api_not_found(struct evhttp_request* req, Scheduler* scheduler);
 static void api_health(struct evhttp_request* req, Scheduler* scheduler);
 static void api_controls(struct evhttp_request* req, Scheduler* scheduler);
 static void api_control(struct evhttp_request* req, Scheduler* scheduler);
@@ -758,7 +774,7 @@ void Server::run(Scheduler* scheduler) {
         mStarted.store(false);
         return;
     }
-    evhttp_set_default_content_type(http, "text/html; charset=utf-8");
+    evhttp_set_default_content_type(http, "application/json; charset=utf-8");
 
     evhttp_set_timeout(http, 30);
     evhttp_set_cb(http, "/", api_cb<api_index>, scheduler);
@@ -787,6 +803,7 @@ void Server::run(Scheduler* scheduler) {
     evhttp_set_cb(http, "/api/scheduler/info", api_cb<api_scheduler_info>, scheduler);
     evhttp_set_cb(http, "/metrics", api_cb<api_metrics>, scheduler);
     evhttp_set_cb(http, "/api/metrics", api_cb<api_metrics>, scheduler);
+    evhttp_set_gencb(http, api_cb<api_not_found>, scheduler);
 
 	    const auto bind_port = static_cast<std::uint16_t>(port);
 	    const int bind_rc = evhttp_bind_socket(http, bind_host, bind_port);
@@ -865,7 +882,7 @@ static void api_index(struct evhttp_request* req, Scheduler* /*scheduler*/) {
     [[maybe_unused]] auto otel_span = beacon::otel::StartServerSpan(req);
    
     Json::Value result_urls;
-    result_urls["/api"] = "this api version 1.0";
+    result_urls["/"] = "this api version 1.0";
     result_urls["/api/health"] = "check health";
     result_urls["/api/controls"] = "get all control being analyzed";
     result_urls["/api/control"] = "get control being analyzed";
@@ -881,7 +898,6 @@ static void api_index(struct evhttp_request* req, Scheduler* /*scheduler*/) {
     result_urls["/api/face/search"] = "search nearest face (face db)";
     result_urls["/api/face/enable"] = "enable face search";
     result_urls["/api/face/disable"] = "disable face search";
-    result_urls["/api/largeModelCalcu"] = "largeModelCalcu";
     result_urls["/api/license/info"] = "local license info";
     result_urls["/api/device/info"] = "inference device/providers info";
     result_urls["/api/resource/info"] = "resource info";
@@ -892,6 +908,8 @@ static void api_index(struct evhttp_request* req, Scheduler* /*scheduler*/) {
     
     
     Json::Value result;
+    result["code"] = 1000;
+    result["msg"] = "success";
     result["urls"] = result_urls;
 
     struct evbuffer* buff = evbuffer_new();
@@ -899,6 +917,9 @@ static void api_index(struct evhttp_request* req, Scheduler* /*scheduler*/) {
     beacon::otel::SendReply(req, HTTP_OK, nullptr, buff);
     evbuffer_free(buff);
 
+}
+static void api_not_found(struct evhttp_request* req, Scheduler* /*scheduler*/) {
+    send_json(req, HTTP_NOTFOUND, 0, "not found");
 }
 static void api_health(struct evhttp_request* req, Scheduler* scheduler) {
     [[maybe_unused]] auto otel_span = beacon::otel::StartServerSpan(req);
@@ -939,7 +960,7 @@ static void api_controls(struct evhttp_request* req, Scheduler* scheduler) {
     Json::Value root;
     JSONCPP_STRING errs;
 
-    Json::Value result_data;
+    Json::Value result_data(Json::arrayValue);
     Json::Value result_data_item;
     int result_code = 0;
     std::string result_msg = "error";
@@ -978,13 +999,10 @@ static void api_controls(struct evhttp_request* req, Scheduler* scheduler) {
 
                 result_data.append(result_data_item);
             }
-            result["data"] = result_data;
-            result_code = 1000;
-            result_msg = "success";
         }
-        else {
-            result_msg = "the number of control exector is empty";
-        }
+        result["data"] = result_data;
+        result_code = 1000;
+        result_msg = "success";
 
 
     }
@@ -1092,7 +1110,7 @@ static void api_control_add(struct evhttp_request* req, Scheduler* scheduler) {
 
         Control control;
 
-        control.code = root["code"].asCString();
+        control.code = root["code"].asString();
 
         control.streamCode = root["streamCode"].asString();
         control.streamApp = root["streamApp"].asString();
@@ -1679,7 +1697,7 @@ static void api_algorithm_list(struct evhttp_request* req, Scheduler* scheduler)
 
     std::vector<std::string> algorithms = scheduler->listAlgorithms();
 
-    Json::Value result_data;
+    Json::Value result_data(Json::arrayValue);
     for (const auto& algo : algorithms) {
         result_data.append(algo);
     }
@@ -2444,8 +2462,8 @@ static void api_device_info(struct evhttp_request* req, Scheduler* scheduler) {
         return;
     }
 
-    Json::Value openvino_devices;
-    Json::Value onnx_providers;
+    Json::Value openvino_devices(Json::arrayValue);
+    Json::Value onnx_providers(Json::arrayValue);
     std::string msg = "success";
     int code = 1000;
 
