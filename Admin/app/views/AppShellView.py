@@ -4234,6 +4234,8 @@ def api_cloud_edge_clusters_action(request):
     auth, response = _cloud_edge_action_access_response(request)
     if response is not None:
         return response
+    if str(request.POST.get("action") or "").strip() not in CloudConsoleView._EDGE_CLUSTER_MANAGE_ACTIONS:
+        return f_responseJson({"code": 0, "msg": "unsupported edge cluster action"})
 
     context, resp = CloudConsoleView._handle_edge_clusters_post(request, auth)
     redirect_target = "/cloud/edge-clusters"
@@ -4965,6 +4967,8 @@ def api_cloud_iam_action(request):
     access = _cloud_access_state(request, admin_only=True)
     if not access["access_ok"]:
         return f_responseJson({"code": 0, "msg": access["message"]})
+    if str(request.POST.get("action") or "").strip() not in CloudConsoleView._IAM_ACTIONS:
+        return f_responseJson({"code": 0, "msg": "unsupported IAM action"})
 
     context = CloudConsoleView._handle_iam_post_action(request)
     redirect_target = "/cloud/iam"

@@ -19,6 +19,19 @@ class CloudConsoleRbacTest(TestCase):
         session["user"] = {"id": user.id, "username": user.username}
         session.save()
 
+    def test_management_apis_reject_unknown_actions(self):
+        admin = User.objects.create_superuser(username="cloud-admin", password="pass12345")
+        self._login_as(admin)
+
+        for path in (
+            "/api/app-shell/cloud/edge-clusters/action",
+            "/api/app-shell/cloud/iam/action",
+        ):
+            with self.subTest(path=path):
+                response = self.client.post(path, data={"action": "unknown"})
+                payload = json.loads(response.content.decode("utf-8"))
+                self.assertEqual(payload.get("code"), 0, msg=payload)
+
     def test_alarms_requires_permission(self):
         from app.models import CloudProject, CloudRole, CloudTenant, CloudUserMembership
 

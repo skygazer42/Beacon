@@ -38,6 +38,20 @@ class CloudOpenApiTest(TestCase):
         )
         self.assertEqual(res.status_code, 401, msg=res.content)
 
+    def test_open_apis_reject_non_object_json(self):
+        for path in (
+            "/open/cloud/v1/presign/image",
+            "/open/cloud/v1/events/alarm-created",
+        ):
+            with self.subTest(path=path):
+                res = self.client.post(
+                    path,
+                    data="[]",
+                    content_type="application/json",
+                    HTTP_AUTHORIZATION=f"Bearer {self.edge_token}",
+                )
+                self.assertEqual(res.status_code, 400, msg=res.content)
+
     def test_presign_disabled_cluster_is_forbidden(self):
         self.cluster.enabled = False
         self.cluster.save(update_fields=["enabled"])

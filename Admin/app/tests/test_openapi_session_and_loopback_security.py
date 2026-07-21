@@ -1,8 +1,11 @@
 import json
 import os
+import re
 from unittest import mock
 
 from django.test import TestCase
+
+from app.urls import urlpatterns
 
 
 class OpenApiSessionAndLoopbackSecurityTest(TestCase):
@@ -19,6 +22,23 @@ class OpenApiSessionAndLoopbackSecurityTest(TestCase):
         self.assertEqual(res.status_code, 401, msg=res.content)
         body = json.loads(res.content.decode("utf-8"))
         self.assertEqual(body.get("code"), 0, msg=body)
+
+    def test_openapi_token_does_not_authorize_app_shell_without_session(self):
+        routes = []
+        for url_pattern in urlpatterns:
+            route = str(url_pattern.pattern)
+            if route.startswith("api/app-shell/"):
+                routes.append("/" + re.sub(r"<[^>]+>", "probe", route))
+
+        with mock.patch.dict(os.environ, {"BEACON_OPEN_API_TOKEN": "t1"}, clear=False):
+            for route in routes:
+                for method in ("get", "post"):
+                    with self.subTest(method=method, route=route):
+                        res = getattr(self.client, method)(
+                            route,
+                            HTTP_AUTHORIZATION="Bearer t1",
+                        )
+                        self.assertEqual(res.status_code, 401, msg=res.content)
 
     def test_session_user_does_not_bypass_ops_healthz_auth(self):
         self._login_session()
@@ -40,4 +60,3 @@ class OpenApiSessionAndLoopbackSecurityTest(TestCase):
                 )
         self.assertEqual(res.status_code, 401, msg=res.content)
         self.assertFalse(m_restart.called)
-

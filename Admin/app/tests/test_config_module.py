@@ -2,10 +2,21 @@ import os
 import tempfile
 from unittest import mock
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase
 
 
 class ConfigModuleHelpersTest(SimpleTestCase):
+    def test_config_import_rejects_non_object_sections(self):
+        from app.views.ConfigExportView import _load_import_data_from_uploaded_file
+
+        for raw in (b'{"data": []}', b'{"data": {"algorithms": ["bad"]}}'):
+            with self.subTest(raw=raw):
+                uploaded = SimpleUploadedFile("config.json", raw, content_type="application/json")
+                data, error = _load_import_data_from_uploaded_file(uploaded)
+                self.assertIsNone(data)
+                self.assertTrue(error)
+
     def test_analyzer_localdeps_prefers_gpu_onnxruntime(self):
         import runtime_paths
 

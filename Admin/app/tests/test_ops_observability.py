@@ -532,6 +532,11 @@ class OpsAuditExportTest(TestCase):
 
 
 class AdminIndexAnalyzerInfoTest(TestCase):
+    def setUp(self):
+        session = self.client.session
+        session["user"] = {"id": 1, "username": "admin"}
+        session.save()
+
     def test_dashboard_includes_runtime_and_process_summary(self):
         process_rows = [
             {
@@ -736,6 +741,11 @@ class AdminIndexAnalyzerInfoTest(TestCase):
 
 
 class OpsMetricsCacheTtlEnvTest(TestCase):
+    def setUp(self):
+        session = self.client.session
+        session["user"] = {"id": 1, "username": "admin"}
+        session.save()
+
     def test_metrics_count_cache_ttl_defaults_and_clamps(self):
         from app.views import OpsView
 

@@ -89,3 +89,14 @@ class CloudEdgeClientTest(SimpleTestCase):
                 client.list_streams()
 
         self.assertIn("edge denied", str(ctx.exception))
+
+    def test_invalid_edge_code_raises_client_error(self):
+        from app.utils.CloudEdgeClient import CloudEdgeClient, CloudEdgeClientError
+
+        with mock.patch(
+            "app.utils.CloudEdgeClient.requests.get",
+            return_value=_DummyResponse(payload={"code": "invalid", "msg": "bad response"}),
+        ):
+            client = CloudEdgeClient(base_url="http://edge.local", open_api_token="edge-token")
+            with self.assertRaises(CloudEdgeClientError):
+                client.list_streams()

@@ -39,6 +39,7 @@ _FLASH_KEY_CLOUD_REMOTE_STREAM_DETAIL = "_cloud_flash_remote_stream_detail"
 LABEL_LIVE_ROLLOUT = "Live rollout"
 MSG_TENANT_NOT_FOUND = "tenant 不存在"
 _EDGE_CLUSTER_MANAGE_ACTIONS = {"create", "toggle", "rotate", "update_remote"}
+_IAM_ACTIONS = {"create_tenant", "toggle_tenant", "upsert_role", "upsert_membership", "set_tenant_branding"}
 
 _IAM_PERMISSION_META = [
     {"key": _PERM_EDGE_CLUSTERS_VIEW, "name": "边缘集群-查看", "desc": "允许查看边缘集群列表"},

@@ -59,7 +59,7 @@ def _sanitize_oidc_error(raw) -> str:
         v = str(raw or "").strip()
     except Exception:
         v = ""
-    while len(v) >= 2 and ((v.startswith(""") and v.endswith(""")) or (v.startswith("'") and v.endswith("'"))):
+    while len(v) >= 2 and ((v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'"))):
         v = v[1:-1].strip()
     if not v:
         return ""

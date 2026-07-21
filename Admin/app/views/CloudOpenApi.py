@@ -44,7 +44,8 @@ def _parse_json_body(request) -> Dict[str, Any]:
         raw = getattr(request, "body", b"") or b""
         if not raw:
             return {}
-        return json.loads(raw.decode("utf-8"))
+        parsed = json.loads(raw.decode("utf-8"))
+        return parsed if isinstance(parsed, dict) else {}
     except Exception:
         return {}
 

@@ -295,11 +295,20 @@ def _load_import_data_from_uploaded_file(uploaded_file):
         return None, str(e)
 
     try:
-        return json.loads(raw), ""
+        data = json.loads(raw)
     except json.JSONDecodeError as e:
         return None, f"invalid json: {e}"
     except Exception as e:
         return None, str(e)
+
+    payload = data.get("data", {}) if isinstance(data, dict) else None
+    if not isinstance(payload, dict):
+        return None, "data must be a JSON object"
+    for key in ("algorithms", "streams", "controls"):
+        items = payload.get(key, [])
+        if not isinstance(items, list) or any(not isinstance(item, dict) for item in items):
+            return None, f"data.{key} must be an array of objects"
+    return data, ""
 
 
 def _collect_conflicts(items, *, model):

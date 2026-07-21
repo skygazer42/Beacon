@@ -57,6 +57,7 @@ class CloudSaaSV1HelmChartTest(unittest.TestCase):
         deployment = (CHART_DIR / "templates/beacon-cloud-deployment.yaml").read_text(encoding="utf-8")
 
         self.assertIn("USER 10001:10001", dockerfile)
+        self.assertIn("BEACON_ROOT_DIR=/app/data", dockerfile)
         self.assertIn("exec gunicorn", entrypoint)
         self.assertNotIn("manage.py runserver", entrypoint)
         self.assertIn('BEACON_DJANGO_DEBUG: "0"', compose)

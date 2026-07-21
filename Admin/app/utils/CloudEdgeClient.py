@@ -61,7 +61,11 @@ class CloudEdgeClient:
         if not isinstance(body, dict):
             raise CloudEdgeClientError("edge response is not a JSON object")
 
-        if int(body.get("code") or 0) != 1000:
+        try:
+            code = int(body.get("code") or 0)
+        except (TypeError, ValueError) as e:
+            raise CloudEdgeClientError("edge response code is invalid") from e
+        if code != 1000:
             raise CloudEdgeClientError(str(body.get("msg") or "edge request failed"))
 
         return body

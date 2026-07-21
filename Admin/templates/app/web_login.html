@@ -388,7 +388,9 @@
     </section>
   </div>
 
-  {% block javascripts %}
+{% endblock body %}
+
+{% block javascripts %}
     <script>
       (function () {
         const form = document.getElementById('login-form');
@@ -457,5 +459,4 @@
         });
       })();
     </script>
-  {% endblock javascripts %}
-{% endblock body %}
+{% endblock javascripts %}

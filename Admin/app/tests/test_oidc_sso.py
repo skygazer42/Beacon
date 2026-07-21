@@ -131,6 +131,11 @@ class OidcSsoLoginTest(TestCase):
         redirect_uri = (qs.get("redirect_uri") or [""])[0]
         self.assertTrue(redirect_uri.endswith("/login/oidc/callback"), msg=redirect_uri)
 
+    def test_login_template_registers_submit_handler_once(self):
+        res = self.client.get("/login")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.content.count(b"form.addEventListener('submit'"), 1)
+
     def test_oidc_start_rejects_invalid_provider_id(self):
         res = self.client.get("/login/oidc/start?provider=../bad")
         self.assertEqual(res.status_code, 400)
@@ -140,6 +145,11 @@ class OidcSsoLoginTest(TestCase):
         res = self.client.get("/login/oidc/callback?provider=bad/../x")
         self.assertEqual(res.status_code, 400)
         self.assertIn("provider invalid", str(res.content.decode("utf-8")).lower())
+
+    def test_oidc_callback_normalizes_quoted_error_code(self):
+        res = self.client.get('/login/oidc/callback?error=%22access_denied%22')
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.content.decode("utf-8"), "oidc error: access_denied")
 
     def test_oidc_merge_claims_keeps_non_empty_identity_fields(self):
         from app.views import web as web_views

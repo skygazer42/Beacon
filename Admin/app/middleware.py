@@ -1043,6 +1043,8 @@ def _open_api_authorized(request) -> bool:
 
 def _is_open_api_path(path):
     """判断OpenAPI路径。"""
+    if path == "api/app-shell" or path.startswith("api/app-shell/"):
+        return False
     return path.startswith((
         "open",
         "alarm/open",
@@ -1830,6 +1832,9 @@ def _unauthenticated_request_response(request, path: str):
     """返回未认证请求响应。"""
     if _is_public_sessionless_path(path, screen_login_required=_screen_login_required()):
         return None
+
+    if path == "api/app-shell" or path.startswith("api/app-shell/"):
+        return _gateway_json_response(status=401, msg="unauthorized")
 
     scope = _public_gateway_scope_for_path(path)
     if not scope:
