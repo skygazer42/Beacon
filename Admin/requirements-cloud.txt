@@ -9,12 +9,12 @@
 # - Edge/本地交付仍可继续使用 `requirements-linux.txt` / `requirements-windows.txt`
 
 # Web 框架
-Django==5.2.16
+Django==6.0.7
 
 # 系统监控（控制台首页会展示系统资源）
 # 注意：psutil 5.x 在部分平台（例如 linux/arm64 + Python 3.11）缺少预编译 wheel，
 # 会触发源码编译（需要 gcc）。为保证 docker-compose POC 开箱即用，这里选用 6.x。
-psutil==6.1.1
+psutil==7.2.2
 
 # HTTP 请求（Edge/Cloud 内部 API 调用等）
 requests==2.34.2
@@ -33,7 +33,7 @@ Pillow==12.3.0
 cryptography==49.0.0
 
 # Cloud SaaS v1：S3 presign / 读取截图对象
-boto3==1.34.162
+boto3==1.43.47
 
 # Postgres 驱动（BEACON_CLOUD_DB_URL=postgres://...）
 psycopg2-binary==2.9.12
