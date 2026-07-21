@@ -1,0 +1,82 @@
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /Admin/frontend
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      frontend:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /sdk/javascript
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      javascript-sdk:
+        patterns: ["*"]
+
+  - package-ecosystem: pip
+    directory: /Admin
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      admin-python:
+        patterns: ["*"]
+
+  - package-ecosystem: pip
+    directory: /sdk/python
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      python-sdk:
+        patterns: ["*"]
+
+  - package-ecosystem: pip
+    directory: /docs
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      documentation:
+        patterns: ["*"]
+
+  - package-ecosystem: gomod
+    directory: /sdk/go
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      go-sdk:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directory: /deploy/cloud-saas-v1
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      cloud-images:
+        patterns: ["*"]

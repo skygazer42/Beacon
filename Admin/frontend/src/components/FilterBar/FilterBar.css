@@ -1,0 +1,45 @@
+/* ===== Beacon FilterBar Component ===== */
+
+.beacon-filter-bar {
+  margin-bottom: var(--beacon-space-4);
+  padding: var(--beacon-space-3) var(--beacon-space-4);
+  background: var(--beacon-glass-bg);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--beacon-glass-border);
+  border-radius: var(--beacon-radius-lg);
+  animation: beacon-fade-in var(--beacon-duration-normal) var(--beacon-ease-out);
+}
+
+/* --- Search button: gradient background --- */
+.beacon-filter-bar__search-btn.ant-btn-primary {
+  background: linear-gradient(
+    135deg,
+    var(--beacon-tone-blue-icon-color) 0%,
+    var(--beacon-tone-cyan-icon-color) 100%
+  );
+  border: none;
+  box-shadow: var(--beacon-shadow-xs);
+  transition: opacity var(--beacon-duration-fast) var(--beacon-ease-out),
+              box-shadow var(--beacon-duration-fast) var(--beacon-ease-out);
+}
+
+.beacon-filter-bar__search-btn.ant-btn-primary:hover {
+  opacity: 0.9;
+  box-shadow: var(--beacon-shadow-sm);
+}
+
+/* --- Input focus ring --- */
+.beacon-filter-bar .ant-input:focus,
+.beacon-filter-bar .ant-input-affix-wrapper:focus,
+.beacon-filter-bar .ant-input-affix-wrapper-focused,
+.beacon-filter-bar .ant-picker-focused,
+.beacon-filter-bar .ant-select-focused .ant-select-selector {
+  border-color: var(--beacon-tone-blue-icon-color) !important;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12) !important;
+}
+
+/* --- Input prefix icon color --- */
+.beacon-filter-bar .ant-input-prefix {
+  color: var(--beacon-text-faint);
+}

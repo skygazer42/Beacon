@@ -1,0 +1,17 @@
+{
+  "name": "@skygazer42/beacon-sdk",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Minimal JavaScript SDK for Beacon developer integration endpoints",
+  "main": "./beacon-sdk.mjs",
+  "exports": "./beacon-sdk.mjs",
+  "files": ["beacon-sdk.mjs", "README.md", "LICENSE"],
+  "scripts": {"test": "node --test tests/client.test.mjs"},
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/skygazer42/Beacon.git",
+    "directory": "sdk/javascript"
+  },
+  "engines": {"node": ">=18"}
+}

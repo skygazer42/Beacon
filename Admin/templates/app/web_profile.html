@@ -1,0 +1,359 @@
+{% extends "app/base_react_shell.html" %}
+
+{% block title %} 个人资料 {% endblock title %}
+
+{% block stylesheets %}
+  {{ block.super }}
+  <style>
+    .profile-card {
+      background: var(--beacon-surface-1);
+      border: 1px solid var(--beacon-border-1);
+      border-radius: var(--beacon-radius-md);
+      overflow: hidden;
+    }
+    .profile-card-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--beacon-border-1);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .profile-card-header h3 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--beacon-text-1);
+    }
+    .profile-card-header h3 i { color: var(--beacon-accent); }
+    .profile-card-body {
+      padding: 24px;
+    }
+    .profile-field {
+      display: flex;
+      align-items: flex-start;
+      margin-bottom: 20px;
+    }
+    .profile-field:last-child { margin-bottom: 0; }
+    .profile-label {
+      flex: 0 0 140px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--beacon-text-2);
+      padding-top: 8px;
+    }
+    .profile-label .required { color: var(--beacon-danger); margin-left: 2px; }
+    .profile-input { flex: 1; max-width: 500px; }
+    .profile-divider {
+      border: none;
+      border-top: 1px solid var(--beacon-border-1);
+      margin: 24px 0;
+    }
+    .totp-section {
+      background: var(--beacon-surface-2);
+      border: 1px solid var(--beacon-border-1);
+      border-radius: var(--beacon-radius-md);
+      padding: 20px;
+    }
+    .totp-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+    .totp-secret-block {
+      background: var(--beacon-surface-1);
+      border: 1px solid var(--beacon-border-1);
+      border-radius: var(--beacon-radius-sm);
+      padding: 12px 16px;
+      margin: 12px 0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 13px;
+      color: var(--beacon-text-1);
+      word-break: break-all;
+    }
+    .totp-secret-block .label-text {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--beacon-text-3);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: block;
+      margin-bottom: 4px;
+    }
+    .totp-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+    .recovery-codes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .recovery-codes code {
+      background: var(--beacon-surface-1);
+      border: 1px solid var(--beacon-border-1);
+      padding: 4px 10px;
+      border-radius: var(--beacon-radius-sm);
+      font-size: 13px;
+      color: var(--beacon-text-1);
+    }
+    .profile-footer {
+      padding: 16px 24px;
+      border-top: 1px solid var(--beacon-border-1);
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+    #profileMsg {
+      display: none;
+      padding: 10px 16px;
+      border-radius: var(--beacon-radius-sm);
+      margin-bottom: 20px;
+      font-size: 13px;
+    }
+    #profileMsg.msg-success { display: block; background: var(--beacon-success-bg); color: var(--beacon-success); border: 1px solid var(--beacon-success); }
+    #profileMsg.msg-error { display: block; background: var(--beacon-danger-bg); color: var(--beacon-danger); border: 1px solid var(--beacon-danger); }
+
+    @media (max-width: 767px) {
+      .profile-field { flex-direction: column; }
+      .profile-label { flex: none; padding-top: 0; margin-bottom: 6px; }
+      .profile-input { max-width: 100%; }
+    }
+  </style>
+{% endblock stylesheets %}
+
+{% block content %}
+<div class="right_col" role="main">
+  <div class="bcn-page">
+
+    <div class="bcn-page-header">
+      <h2><i class="fa fa-user" style="color: var(--beacon-accent);"></i> 个人资料</h2>
+    </div>
+
+    <div id="profileMsg"></div>
+
+    <div class="profile-card">
+      <div class="profile-card-header">
+        <h3><i class="fa fa-id-card-o"></i> 基本信息</h3>
+      </div>
+      <div class="profile-card-body">
+        <div class="profile-field">
+          <div class="profile-label">用户名</div>
+          <div class="profile-input">
+            <input id="username" class="form-control" value="{{ user.username }}" readonly style="opacity: 0.7; cursor: not-allowed;">
+          </div>
+        </div>
+        <div class="profile-field">
+          <div class="profile-label">邮箱<span class="required">*</span></div>
+          <div class="profile-input">
+            <input type="email" id="email" class="form-control" value="{{ user.email }}">
+          </div>
+        </div>
+
+        <hr class="profile-divider">
+
+        <div class="profile-field">
+          <div class="profile-label">原密码</div>
+          <div class="profile-input">
+            <input type="password" id="old_password" class="form-control" placeholder="修改密码时填写">
+          </div>
+        </div>
+        <div class="profile-field">
+          <div class="profile-label">新密码</div>
+          <div class="profile-input">
+            <input type="password" id="new_password" class="form-control" placeholder="留空则不修改">
+          </div>
+        </div>
+
+        <hr class="profile-divider">
+
+        <div class="profile-field">
+          <div class="profile-label">TOTP 二次验证</div>
+          <div class="profile-input">
+            <div class="totp-section">
+              <div class="totp-status">
+                <span style="font-size: 13px; color: var(--beacon-text-2);">状态：</span>
+                {% if totp_enabled %}
+                  <span class="bcn-pill bcn-pill-success"><i class="fa fa-check-circle"></i> 已启用</span>
+                {% else %}
+                  <span class="bcn-pill bcn-pill-muted"><i class="fa fa-minus-circle"></i> 未启用</span>
+                {% endif %}
+              </div>
+
+              {% if totp_secret %}
+                <div class="totp-secret-block">
+                  <span class="label-text">TOTP 密钥</span>
+                  {{ totp_secret }}
+                </div>
+                {% if totp_otpauth_uri %}
+                  <div class="totp-secret-block">
+                    <span class="label-text">otpauth:// URI (可复制到认证器 App)</span>
+                    {{ totp_otpauth_uri }}
+                  </div>
+                  <canvas id="qrCanvas" style="display:block; margin: 12px 0; border: 1px solid var(--beacon-border-1); border-radius: var(--beacon-radius-sm);"></canvas>
+                {% endif %}
+              {% else %}
+                <p style="font-size: 13px; color: var(--beacon-text-3); margin: 8px 0;">点击"生成密钥"后，可在认证器 App 中扫码或手动录入密钥。</p>
+              {% endif %}
+
+              <input type="text" id="totp_code" class="form-control" placeholder="输入 6 位 TOTP 验证码" style="max-width: 240px; margin-top: 12px;">
+
+              <div class="totp-actions">
+                <button type="button" class="btn btn-default btn-sm" data-totp="totp_generate"><i class="fa fa-key"></i> 生成密钥</button>
+                <button type="button" class="btn btn-success btn-sm" data-totp="totp_enable"><i class="fa fa-check"></i> 启用 TOTP</button>
+                <button type="button" class="btn btn-warning btn-sm" data-totp="totp_disable"><i class="fa fa-ban"></i> 停用 TOTP</button>
+                <button type="button" class="btn btn-default btn-sm" data-totp="totp_reauth"><i class="fa fa-lock"></i> 敏感操作二次确认</button>
+              </div>
+
+              <hr class="profile-divider">
+
+              <p style="font-size: 12px; color: var(--beacon-text-3); margin: 0 0 8px 0;">
+                恢复码：用于在无法获取 TOTP 时登录（一次性）。剩余：<strong style="color: var(--beacon-text-1);">{{ totp_recovery_unused_count|default:"0" }}</strong>
+              </p>
+              <button type="button" class="btn btn-default btn-sm" data-totp="totp_recovery_generate"><i class="fa fa-refresh"></i> 生成恢复码</button>
+
+              {% if totp_recovery_codes %}
+                <div style="background: var(--beacon-warning-bg); border: 1px solid var(--beacon-warning); border-radius: var(--beacon-radius-sm); padding: 12px 16px; margin-top: 16px;">
+                  <p style="color: var(--beacon-warning); font-weight: 600; margin: 0 0 8px 0;"><i class="fa fa-exclamation-triangle"></i> 请保存以下恢复码（仅展示一次）：</p>
+                  <div class="recovery-codes">
+                    {% for code in totp_recovery_codes %}
+                      <code>{{ code }}</code>
+                    {% endfor %}
+                  </div>
+                </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="profile-footer">
+        <button type="button" class="btn btn-default btn-sm" id="btnCancel"><i class="fa fa-arrow-left"></i> 返回</button>
+        <button type="button" class="btn btn-primary btn-sm" id="btnSave"><i class="fa fa-save"></i> 保存资料</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock content %}
+
+{% block javascripts %}
+  {{ block.super }}
+  <script>
+    (function() {
+      'use strict';
+
+      const showMsg = (text, type) => {
+        const $msg = $('#profileMsg');
+        $msg.removeClass('msg-success msg-error').addClass(type === 'success' ? 'msg-success' : 'msg-error').text(text);
+        setTimeout(() => $msg.fadeOut(300, () => $msg.removeClass('msg-success msg-error')), 5000);
+      };
+
+      // Save profile via AJAX
+      $('#btnSave').on('click', () => {
+        const data = {
+          action: 'save_profile',
+          email: $('#email').val().trim(),
+          old_password: $('#old_password').val(),
+          new_password: $('#new_password').val()
+        };
+
+        if (!data.email) {
+          showMsg('请填写邮箱地址', 'error');
+          return;
+        }
+
+        $.post(window.location.pathname, data, (res) => {
+          if (res && (res.code === 1000 || res.status === 'ok')) {
+            showMsg('资料已保存', 'success');
+            $('#old_password').val('');
+            $('#new_password').val('');
+          } else {
+            showMsg(res.msg || res.message || '保存失败', 'error');
+          }
+        }, 'json').fail(() => {
+          showMsg('请求失败，请重试', 'error');
+        });
+      });
+
+      $('#btnCancel').on('click', () => history.back());
+
+      // TOTP actions via AJAX
+      $(document).on('click', '[data-totp]', function() {
+        const action = $(this).data('totp');
+        const data = {
+          action,
+          totp_code: $('#totp_code').val().trim()
+        };
+
+        $.post(window.location.pathname, data, (res) => {
+          if (res && (res.code === 1000 || res.status === 'ok')) {
+            showMsg('操作成功', 'success');
+            // Reload to reflect TOTP state changes
+            setTimeout(() => location.reload(), 800);
+          } else {
+            showMsg(res.msg || res.message || '操作失败', 'error');
+          }
+        }, 'json').fail(() => {
+          // Fallback: submit as form if API not supported
+          const form = document.createElement('form');
+          form.method = 'POST';
+          form.action = window.location.pathname;
+
+          const addField = (name, value) => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = name;
+            input.value = value;
+            form.appendChild(input);
+          };
+
+          addField('action', action);
+          addField('totp_code', data.totp_code);
+
+          // Include CSRF token
+          const csrfCookie = document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith('csrftoken='));
+          if (csrfCookie) {
+            addField('csrfmiddlewaretoken', csrfCookie.split('=')[1]);
+          }
+
+          document.body.appendChild(form);
+          form.submit();
+        });
+      });
+
+      // Simple QR code renderer for otpauth URI using canvas
+      {% if totp_otpauth_uri %}
+      (function renderQR() {
+        const uri = "{{ totp_otpauth_uri|escapejs }}";
+        const canvas = document.getElementById('qrCanvas');
+        if (!canvas || !uri) return;
+
+        // Minimal QR: draw a placeholder with instructions since a full QR
+        // library is not bundled. For production, include qrcode.min.js.
+        const ctx = canvas.getContext('2d');
+        canvas.width = 200;
+        canvas.height = 200;
+
+        // Check if qrcode library is available
+        if (typeof QRCode !== 'undefined') {
+          new QRCode(canvas, { text: uri, width: 200, height: 200 });
+        } else {
+          // Draw a styled placeholder
+          const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+          ctx.fillStyle = isDark ? '#122038' : '#f8fafc';
+          ctx.fillRect(0, 0, 200, 200);
+          ctx.fillStyle = isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)';
+          ctx.font = '12px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('请复制上方 otpauth URI', 100, 90);
+          ctx.fillText('粘贴至认证器 App', 100, 110);
+          ctx.font = '24px sans-serif';
+          ctx.fillText('\uD83D\uDD12', 100, 150);
+        }
+      })();
+      {% endif %}
+    })();
+  </script>
+{% endblock javascripts %}

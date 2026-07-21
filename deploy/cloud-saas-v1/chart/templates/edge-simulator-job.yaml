@@ -1,0 +1,37 @@
+{{- if .Values.edgeSimulator.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "beacon-cloud-saas-v1.edgeSimulatorName" . }}
+  labels:
+    {{- include "beacon-cloud-saas-v1.labels" . | nindent 4 }}
+spec:
+  template:
+    metadata:
+      labels:
+        {{- include "beacon-cloud-saas-v1.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: edge-simulator
+    spec:
+      restartPolicy: {{ .Values.edgeSimulator.restartPolicy }}
+      containers:
+        - name: edge-simulator
+          image: "{{ .Values.edgeSimulator.image.repository }}:{{ .Values.edgeSimulator.image.tag }}"
+          imagePullPolicy: {{ .Values.edgeSimulator.image.pullPolicy }}
+          command:
+            - python
+            - deploy/cloud-saas-v1/scripts/edge_simulator.py
+          env:
+            - name: BEACON_CLOUD_BASE_URL
+              value: {{ default (printf "http://%s:%v" (include "beacon-cloud-saas-v1.fullname" .) .Values.beaconCloud.service.port) .Values.edgeSimulator.cloudBaseURL | quote }}
+            - name: BEACON_BOOTSTRAP_EDGE_TOKEN_FILE
+              value: {{ .Values.beaconCloud.env.bootstrapEdgeTokenFile | quote }}
+          volumeMounts:
+            - name: demo
+              mountPath: /demo
+          resources:
+            {{- toYaml .Values.edgeSimulator.resources | nindent 12 }}
+      volumes:
+        - name: demo
+          persistentVolumeClaim:
+            claimName: {{ include "beacon-cloud-saas-v1.demoPVCName" . }}
+{{- end }}

@@ -1,0 +1,10 @@
+﻿#ifndef ANALYZER_VERSION_H
+#define ANALYZER_VERSION_H
+
+#ifndef BEACON_PROJECT_VERSION
+#define BEACON_PROJECT_VERSION "v0.0.0"
+#endif
+
+inline constexpr const char* PROJECT_VERSION = BEACON_PROJECT_VERSION;
+
+#endif //ANALYZER_VERSION_H

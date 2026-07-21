@@ -1,0 +1,3 @@
+# Packaging-only dependency. Install this in addition to the platform runtime
+# requirements when producing the standalone executables.
+pyinstaller==6.21.0

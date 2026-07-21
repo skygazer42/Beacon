@@ -1,0 +1,83 @@
+{{- if .Values.minio.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "beacon-cloud-saas-v1.minioName" . }}
+  labels:
+    {{- include "beacon-cloud-saas-v1.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "beacon-cloud-saas-v1.minioName" . }}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "beacon-cloud-saas-v1.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: minio
+  template:
+    metadata:
+      labels:
+        {{- include "beacon-cloud-saas-v1.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: minio
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: minio
+          image: "{{ .Values.minio.image.repository }}:{{ .Values.minio.image.tag }}"
+          imagePullPolicy: {{ .Values.minio.image.pullPolicy }}
+          args:
+            - server
+            - /data
+            - --console-address
+            - :{{ .Values.minio.service.consolePort }}
+          ports:
+            - name: api
+              containerPort: {{ .Values.minio.service.apiPort }}
+            - name: console
+              containerPort: {{ .Values.minio.service.consolePort }}
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "beacon-cloud-saas-v1.fullname" . }}-secret
+                  key: minio-root-user
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "beacon-cloud-saas-v1.fullname" . }}-secret
+                  key: minio-root-password
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: {{ .Values.minio.resources.requests.cpu | default "100m" | quote }}
+              memory: {{ .Values.minio.resources.requests.memory | default "256Mi" | quote }}
+              ephemeral-storage: {{ .Values.minio.resources.requests.ephemeralStorage | default "1Gi" | quote }}
+            limits:
+              cpu: {{ .Values.minio.resources.limits.cpu | default "1000m" | quote }}
+              memory: {{ .Values.minio.resources.limits.memory | default "1Gi" | quote }}
+              ephemeral-storage: {{ .Values.minio.resources.limits.ephemeralStorage | default "2Gi" | quote }}
+  volumeClaimTemplates:
+    {{- if .Values.minio.persistence.enabled }}
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          {{- range .Values.minio.persistence.accessModes }}
+          - {{ . }}
+          {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.minio.persistence.size }}
+        {{- if .Values.minio.persistence.storageClassName }}
+        storageClassName: {{ .Values.minio.persistence.storageClassName | quote }}
+        {{- end }}
+    {{- else }}
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
+    {{- end }}
+{{- end }}

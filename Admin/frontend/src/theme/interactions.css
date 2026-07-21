@@ -1,0 +1,114 @@
+/* ===== Beacon Interaction Micro-effects ===== */
+
+/* Primary button active press */
+.ant-btn-primary:active {
+  transform: scale(0.97);
+}
+
+/* Primary button gradient hover shift */
+.ant-btn-primary {
+  transition: background var(--beacon-duration-normal) var(--beacon-ease-out),
+              box-shadow var(--beacon-duration-normal) var(--beacon-ease-out),
+              transform var(--beacon-duration-fast) var(--beacon-ease-out);
+}
+
+/* Card hover float */
+.beacon-hover-float {
+  transition: transform var(--beacon-duration-normal) var(--beacon-ease-out),
+              box-shadow var(--beacon-duration-normal) var(--beacon-ease-out);
+}
+
+.beacon-hover-float:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--beacon-shadow-lg);
+}
+
+/* Focus ring for interactive elements */
+.beacon-focus-ring:focus-visible {
+  outline: 2px solid var(--beacon-tone-blue-icon-color, #2563eb);
+  outline-offset: 2px;
+}
+
+/* Clickable cursor */
+[role="button"],
+.beacon-clickable {
+  cursor: pointer;
+}
+
+/* --- Ant Design Message (Toast) refinements --- */
+.ant-message .ant-message-notice-content {
+  border-radius: var(--beacon-radius-lg);
+  box-shadow: var(--beacon-shadow-lg);
+  animation: beacon-slide-up var(--beacon-duration-normal) var(--beacon-ease-spring) both;
+}
+
+[data-theme="dark"] .ant-message .ant-message-notice-content {
+  background: var(--beacon-surface-elevated);
+  border: 1px solid var(--beacon-border-soft);
+}
+
+/* --- Modal scale-in --- */
+.ant-modal .ant-modal-content {
+  border-radius: var(--beacon-radius-xl);
+  animation: beacon-scale-in var(--beacon-duration-normal) var(--beacon-ease-spring) both;
+}
+
+[data-theme="dark"] .ant-modal .ant-modal-content {
+  background: var(--beacon-surface-panel);
+  border: 1px solid var(--beacon-border-soft);
+}
+
+[data-theme="dark"] .ant-modal .ant-modal-header {
+  background: var(--beacon-surface-panel);
+}
+
+/* --- Drawer spring easing --- */
+.ant-drawer .ant-drawer-content-wrapper {
+  transition: transform var(--beacon-duration-slow) var(--beacon-ease-spring) !important;
+}
+
+[data-theme="dark"] .ant-drawer .ant-drawer-content {
+  background: var(--beacon-surface-panel);
+}
+
+[data-theme="dark"] .ant-drawer .ant-drawer-header {
+  background: var(--beacon-surface-panel);
+  border-bottom-color: var(--beacon-border-soft);
+}
+
+/* --- Success feedback pulse --- */
+.ant-message-success .anticon {
+  animation: beacon-pulse-ring 0.6s var(--beacon-ease-out);
+  color: var(--color-status-online);
+}
+
+/* --- Popover dark mode --- */
+[data-theme="dark"] .ant-popover .ant-popover-inner {
+  background: var(--beacon-surface-elevated);
+  border: 1px solid var(--beacon-border-soft);
+}
+
+/* --- Dropdown dark mode --- */
+[data-theme="dark"] .ant-dropdown .ant-dropdown-menu {
+  background: var(--beacon-surface-elevated);
+  border: 1px solid var(--beacon-border-soft);
+}
+
+/* --- Tooltip dark mode --- */
+[data-theme="dark"] .ant-tooltip .ant-tooltip-inner {
+  background: var(--beacon-surface-elevated);
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .ant-btn-primary:active {
+    transform: none;
+  }
+  .beacon-hover-float:hover {
+    transform: none;
+  }
+  .ant-message .ant-message-notice-content,
+  .ant-modal .ant-modal-content {
+    animation: none;
+  }
+}

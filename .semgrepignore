@@ -1,0 +1,26 @@
+# Generated frontend bundle; scan Admin/frontend/src instead.
+Admin/static/app-shell/
+
+# Test fixtures intentionally contain local HTTP/WS URLs and deterministic keys.
+**/tests/
+**/test_*.py
+**/*.test.js
+**/*.test.jsx
+
+# Documentation contains non-production protocol examples, not executable code.
+docs/
+
+# Vendored upstream code is tracked separately from Beacon-authored findings.
+MediaServer/source/3rdpart/
+MediaServer/source/www/swagger/
+MediaServer/source/www/webassist/
+MediaServer/source/www/ZLMRTCClient.js
+MediaServer/source/www/webrtc/ZLMRTCClient.js
+MediaServer/source/src/Http/WebSocketClient.h
+
+# Build and runtime output.
+**/dist/
+**/build/
+**/__pycache__/
+data/
+logs/

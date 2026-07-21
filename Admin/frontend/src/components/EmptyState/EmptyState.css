@@ -1,0 +1,85 @@
+/* ===== Beacon EmptyState Component ===== */
+
+.beacon-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  animation: beacon-fade-in var(--beacon-duration-normal) var(--beacon-ease-out);
+}
+
+/* --- Variant: card (compact, within a card) --- */
+.beacon-empty-state--card {
+  padding: var(--beacon-space-6) var(--beacon-space-4);
+  gap: var(--beacon-space-3);
+}
+
+/* --- Variant: page (full page centered) --- */
+.beacon-empty-state--page {
+  padding: var(--beacon-space-8) var(--beacon-space-4);
+  gap: var(--beacon-space-4);
+  min-height: 320px;
+  justify-content: center;
+}
+
+/* --- Icon container --- */
+.beacon-empty-state__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: linear-gradient(
+    135deg,
+    var(--beacon-tone-blue-icon-bg) 0%,
+    var(--beacon-tone-cyan-icon-bg) 100%
+  );
+  color: var(--beacon-tone-blue-icon-color);
+  flex: none;
+}
+
+.beacon-empty-state--card .beacon-empty-state__icon {
+  width: 40px;
+  height: 40px;
+  font-size: 18px;
+}
+
+.beacon-empty-state--page .beacon-empty-state__icon {
+  width: 64px;
+  height: 64px;
+  font-size: 28px;
+}
+
+/* --- Text --- */
+.beacon-empty-state__title {
+  margin: 0;
+  font-weight: 600;
+  color: var(--beacon-text-strong);
+}
+
+.beacon-empty-state--card .beacon-empty-state__title {
+  font-size: var(--beacon-text-base);
+}
+
+.beacon-empty-state--page .beacon-empty-state__title {
+  font-size: var(--beacon-text-lg);
+}
+
+.beacon-empty-state__description {
+  margin: 0;
+  color: var(--beacon-text-muted);
+  max-width: 320px;
+  line-height: 1.6;
+}
+
+.beacon-empty-state--card .beacon-empty-state__description {
+  font-size: var(--beacon-text-sm);
+}
+
+.beacon-empty-state--page .beacon-empty-state__description {
+  font-size: var(--beacon-text-base);
+}
+
+/* --- Action slot --- */
+.beacon-empty-state__action {
+  margin-top: var(--beacon-space-2);
+}

@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "beacon-cloud-saas-v1.fullname" . }}-test-connection
+  labels:
+    {{- include "beacon-cloud-saas-v1.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  containers:
+    - name: wget
+      image: busybox:1.36
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+          ephemeral-storage: 64Mi
+        limits:
+          cpu: 100m
+          memory: 64Mi
+          ephemeral-storage: 128Mi
+      command:
+        - /bin/sh
+        - -ec
+        - wget -qO- http://{{ include "beacon-cloud-saas-v1.fullname" . }}:{{ .Values.beaconCloud.service.port }}/login >/dev/null

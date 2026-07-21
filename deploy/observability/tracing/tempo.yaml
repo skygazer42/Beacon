@@ -1,0 +1,37 @@
+# Grafana Tempo (single binary) - local/dev config.
+#
+# Ingestion: OTLP gRPC+HTTP (collector exports to OTLP gRPC :4317).
+# Storage: local filesystem (persisted via docker volume).
+
+auth_enabled: false
+
+server:
+  http_listen_port: 3200
+  log_level: info
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+ingester:
+  trace_idle_period: 10s
+  max_block_bytes: 1048576
+  max_block_duration: 5m
+
+compactor:
+  compaction:
+    compacted_block_retention: 1h
+
+storage:
+  trace:
+    backend: local
+    local:
+      path: /tmp/tempo/blocks
+    wal:
+      path: /tmp/tempo/wal
+

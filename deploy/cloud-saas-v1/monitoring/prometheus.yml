@@ -1,0 +1,16 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+- job_name: "beacon-cloud-admin"
+  metrics_path: /metrics
+  scheme: http
+    # Beacon 使用 OpenAPI Token 保护 /metrics（复用 BEACON_OPEN_API_TOKEN）。
+    # Prometheus 推荐用标准 Bearer auth（需要 Beacon 端支持 Authorization: Bearer ...）。
+  authorization:
+    type: Bearer
+    credentials_file: /tmp/beacon-metrics-token
+  static_configs:
+  - targets:
+    - "beacon-cloud:8000"

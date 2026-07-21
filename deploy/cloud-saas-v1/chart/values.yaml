@@ -1,0 +1,156 @@
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: ""
+
+config:
+  code: cloud-demo
+  name: Beacon Cloud Demo
+  describe: Beacon Cloud SaaS v1 Helm deployment
+  siteName: Beacon
+  siteTitle: Beacon Cloud SaaS v1
+  siteLogo: /static/images/logo.png
+  authorName: Beacon Team
+  authorLink: https://github.com/skygazer42/Beacon
+  host: 127.0.0.1
+  adminPort: 9991
+  mediaHttpPort: 9992
+  analyzerPort: 9993
+  mediaRtspPort: 9994
+  mediaRtmpPort: 9995
+  mediaSecret: ''
+  openApiToken: ""
+  uploadDir: /app/data/upload
+  modelDir: /app/data/models
+  alarmOutboxEnabled: true
+  alarmOutboxPollSeconds: 2
+  alarmOutboxMaxBatch: 50
+  alarmOutboxRetentionHours: 72
+  alarmComposeCacheRetentionHours: 72
+
+beaconCloud:
+  replicaCount: 1
+  image:
+    repository: beacon-cloud-saas-v1
+    tag: v4.753
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8000
+  ingress:
+    enabled: false
+    className: ""
+    annotations: {}
+    hosts:
+    - host: beacon-cloud.local
+      paths:
+      - path: /
+        pathType: Prefix
+    tls: []
+  env:
+    deploymentMode: cloud
+    djangoDebug: "0"
+    djangoAllowedHosts: "beacon-cloud.local,beacon-cloud,127.0.0.1"
+    healthCheckHost: beacon-cloud.local
+    cloudImagePreviewProxy: "1"
+    bootstrapEdgeClusterName: edge-default
+    bootstrapEdgeTokenFile: ''
+  secrets:
+    openApiToken: ''
+    # Required for deployment; generate a random value of at least 32 characters.
+    djangoSecretKey: ''
+    edgeTokenPepper: ''
+    bootstrapAdminUsername: admin
+    bootstrapAdminPassword: ''
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+      ephemeralStorage: 1Gi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+      ephemeralStorage: 2Gi
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+postgres:
+  enabled: true
+  image:
+    repository: postgres
+    tag: 16-alpine
+    pullPolicy: IfNotPresent
+  auth:
+    database: beacon
+    username: beacon
+    password: ''
+  service:
+    port: 5432
+  persistence:
+    enabled: true
+    accessModes:
+    - ReadWriteOnce
+    size: 8Gi
+    storageClassName: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+      ephemeralStorage: 1Gi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+      ephemeralStorage: 2Gi
+
+minio:
+  enabled: true
+  image:
+    repository: minio/minio
+    tag: RELEASE.2025-09-07T16-13-09Z
+    pullPolicy: IfNotPresent
+  mcImage:
+    repository: minio/mc
+    tag: RELEASE.2025-08-13T08-35-41Z
+    pullPolicy: IfNotPresent
+  rootUser: beacon-minio
+  rootPassword: ''
+  bucket: beacon-cloud
+  region: us-east-1
+  service:
+    apiPort: 9000
+    consolePort: 9001
+  persistence:
+    enabled: true
+    accessModes:
+    - ReadWriteOnce
+    size: 10Gi
+    storageClassName: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+      ephemeralStorage: 1Gi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+      ephemeralStorage: 2Gi
+
+demoVolume:
+  enabled: true
+  accessModes:
+  - ReadWriteOnce
+  size: 1Gi
+  storageClassName: ""
+
+edgeSimulator:
+  enabled: false
+  image:
+    repository: beacon-cloud-saas-v1
+    tag: v4.753
+    pullPolicy: IfNotPresent
+  cloudBaseURL: ""
+  restartPolicy: OnFailure
+  resources: {}

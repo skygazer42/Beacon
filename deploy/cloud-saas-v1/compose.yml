@@ -1,0 +1,161 @@
+# Beacon Cloud SaaS v1 - Docker Compose 一键 POC
+#
+# 用法：
+#   cd deploy/cloud-saas-v1
+#   cp .env.example .env  # replace every CHANGE_ME value
+#   docker compose up -d --build
+#   docker compose logs -f beacon-cloud
+#   docker compose logs -f edge-simulator
+#
+# Web：
+#   http://localhost:9991/login  (账号密码由 .env 提供)
+#
+# 清理：
+#   docker compose down -v
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      # NOTE: Do not hard-code credentials in the repo.
+      # Create `deploy/cloud-saas-v1/.env` with:
+      #   BEACON_CLOUD_DB_NAME=beacon
+      #   BEACON_CLOUD_DB_USER=beacon
+      #   BEACON_CLOUD_DB_PASSWORD=<strong-random>
+      POSTGRES_DB: "${BEACON_CLOUD_DB_NAME:?Set in deploy/cloud-saas-v1/.env}"
+      POSTGRES_USER: "${BEACON_CLOUD_DB_USER:?Set in deploy/cloud-saas-v1/.env}"
+      POSTGRES_PASSWORD: "${BEACON_CLOUD_DB_PASSWORD:?Set in deploy/cloud-saas-v1/.env}"
+    volumes:
+    - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: "${MINIO_ROOT_USER:?Set in deploy/cloud-saas-v1/.env}"
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?}
+    volumes:
+    - minio_data:/data
+    ports:
+    - "9000:9000"
+    - "9001:9001"
+    restart: unless-stopped
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    depends_on:
+      minio:
+        condition: service_started
+    environment:
+      # MinIO 服务地址（docker 内部网络）
+      MINIO_ENDPOINT: http://minio:9000
+      # MinIO 账号密码（与 minio service 一致）
+      MINIO_ROOT_USER: "${MINIO_ROOT_USER:?Set in deploy/cloud-saas-v1/.env}"
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?}
+      # Beacon Cloud 用到的 bucket
+      BEACON_CLOUD_S3_BUCKET: beacon-cloud
+    volumes:
+    - ./scripts/minio_init.sh:/scripts/minio_init.sh:ro
+    # NOTE: On Windows, even with `.gitattributes` enforcing `eol=lf`, a local checkout may still
+    # end up with CRLF in the working tree. When bind-mounted into Linux containers, CRLF breaks
+    # `/bin/sh` with errors like: `set: -\r: invalid option`.
+    #
+    # Make the POC resilient by normalizing CRLF -> LF at runtime.
+    entrypoint: ["/bin/sh", "-c", "tr -d '\\r' < /scripts/minio_init.sh | /bin/sh"]
+    restart: "no"
+
+  beacon-cloud:
+    build:
+      context: ../../
+      dockerfile: deploy/cloud-saas-v1/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      # ========== 部署模式 ==========
+      BEACON_DEPLOYMENT_MODE: cloud
+
+      # ========== OpenAPI Token（用于保护 /metrics、/open/* 等接口） ==========
+      # 注意：
+      # - 生产必须替换为随机长串（>=32）
+      # - Prometheus 建议用 Authorization: Bearer <token> 抓取 /metrics
+      BEACON_OPEN_API_TOKEN: "${BEACON_OPEN_API_TOKEN:?}"
+
+      # ========== Django（默认关闭 debug，禁止通配 Host） ==========
+      BEACON_DJANGO_DEBUG: "0"
+      BEACON_DJANGO_SECRET_KEY: "${BEACON_DJANGO_SECRET_KEY:?}"
+      BEACON_DJANGO_ALLOWED_HOSTS: "${BEACON_DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,beacon-cloud}"
+      # 本地 HTTP POC 默认关闭 Secure Cookie；放到 HTTPS 反代后必须在 .env 设为 1。
+      BEACON_DJANGO_SESSION_COOKIE_SECURE: "${BEACON_DJANGO_SESSION_COOKIE_SECURE:-0}"
+      BEACON_DJANGO_CSRF_COOKIE_SECURE: "${BEACON_DJANGO_CSRF_COOKIE_SECURE:-0}"
+      BEACON_DJANGO_TRUST_X_FORWARDED_PROTO: "${BEACON_DJANGO_TRUST_X_FORWARDED_PROTO:-0}"
+      BEACON_DJANGO_CSRF_TRUSTED_ORIGINS: "${BEACON_DJANGO_CSRF_TRUSTED_ORIGINS:-}"
+
+      # ========== Cloud DB（Postgres） ==========
+      BEACON_CLOUD_DB_URL: "${BEACON_CLOUD_DB_URL:?}"
+
+      # ========== Cloud Edge Token 鉴权 pepper（必须独立生成并保密） ==========
+      BEACON_CLOUD_EDGE_TOKEN_PEPPER: "${BEACON_CLOUD_EDGE_TOKEN_PEPPER:?}"
+
+      # ========== Cloud S3（MinIO） ==========
+      BEACON_CLOUD_S3_BUCKET: "beacon-cloud"
+      BEACON_CLOUD_S3_REGION: "us-east-1"
+      BEACON_CLOUD_S3_ENDPOINT_URL: "http://minio:9000"
+      BEACON_CLOUD_S3_ACCESS_KEY_ID: "${MINIO_ROOT_USER:?}"
+      BEACON_CLOUD_S3_SECRET_ACCESS_KEY: "${MINIO_ROOT_PASSWORD:?}"
+
+      # ========== Docker POC：图片预览走 Cloud 代理 ==========
+      # 原因：presigned GET 会包含 `minio` 作为 host，浏览器无法解析 docker 内部服务名。
+      BEACON_CLOUD_IMAGE_PREVIEW_PROXY: "1"
+
+      # ========== Bootstrap（自动创建 admin + default tenant/project/cluster + token 文件） ==========
+      BEACON_BOOTSTRAP_ADMIN_USERNAME: "admin"
+      BEACON_BOOTSTRAP_ADMIN_PASSWORD: "${BEACON_BOOTSTRAP_ADMIN_PASSWORD:?}"
+      BEACON_BOOTSTRAP_EDGE_CLUSTER_NAME: "edge-default"
+      BEACON_BOOTSTRAP_EDGE_TOKEN_FILE: "${BEACON_BOOTSTRAP_EDGE_TOKEN_FILE:?}"
+
+    volumes:
+      # 共享：Cloud bootstrap 输出 edge_token，edge-simulator 读取
+    - demo:/demo
+      # 覆盖 config.json（避免 Windows 路径在容器内落地）
+    - ./config.cloud.json:/app/config.json:ro
+    ports:
+    - "9991:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/login', timeout=3).read(1)"]
+      interval: 5s
+      timeout: 4s
+      retries: 20
+      start_period: 20s
+    command: ["/app/deploy/cloud-saas-v1/scripts/entrypoint.sh"]
+    restart: unless-stopped
+
+  edge-simulator:
+    build:
+      context: ../../
+      dockerfile: deploy/cloud-saas-v1/Dockerfile
+    depends_on:
+      beacon-cloud:
+        condition: service_healthy
+    environment:
+      # Cloud 内部访问地址（docker network）
+      BEACON_CLOUD_BASE_URL: "http://beacon-cloud:8000"
+      # 从共享卷读取 bootstrap 输出的 edge token
+      BEACON_BOOTSTRAP_EDGE_TOKEN_FILE: "${BEACON_BOOTSTRAP_EDGE_TOKEN_FILE:?}"
+    volumes:
+    - demo:/demo
+    command: ["python", "deploy/cloud-saas-v1/scripts/edge_simulator.py"]
+    restart: "no"
+
+volumes:
+  pgdata:
+  minio_data:
+  demo:

@@ -1,0 +1,158 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "beacon-cloud-saas-v1.fullname" . }}
+  labels:
+    {{- include "beacon-cloud-saas-v1.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.beaconCloud.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "beacon-cloud-saas-v1.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: beacon-cloud
+  template:
+    metadata:
+      labels:
+        {{- include "beacon-cloud-saas-v1.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: beacon-cloud
+      annotations:
+        checksum/config: {{ toJson .Values.config | sha256sum }}
+        {{- with .Values.beaconCloud.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "beacon-cloud-saas-v1.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+        - name: beacon-cloud
+          image: "{{ .Values.beaconCloud.image.repository }}:{{ .Values.beaconCloud.image.tag }}"
+          imagePullPolicy: {{ .Values.beaconCloud.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+          command:
+            - /app/deploy/cloud-saas-v1/scripts/entrypoint.sh
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: BEACON_DEPLOYMENT_MODE
+              value: {{ .Values.beaconCloud.env.deploymentMode | quote }}
+            - name: BEACON_OPEN_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "beacon-cloud-saas-v1.fullname" . }}-secret
+                  key: beacon-open-api-token
+            - name: BEACON_DJANGO_DEBUG
+              value: {{ .Values.beaconCloud.env.djangoDebug | quote }}
+            - name: BEACON_DJANGO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "beacon-cloud-saas-v1.fullname" . }}-secret
+                  key: beacon-django-secret-key
+            - name: BEACON_DJANGO_ALLOWED_HOSTS
+              value: {{ .Values.beaconCloud.env.djangoAllowedHosts | quote }}
+            - name: BEACON_CLOUD_DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "beacon-cloud-saas-v1.fullname" . }}-secret
+                  key: beacon-cloud-db-url
+            - name: BEACON_PG_HOST
+              value: {{ include "beacon-cloud-saas-v1.postgresName" . | quote }}
+            - name: BEACON_PG_PORT
+              value: {{ printf "%v" .Values.postgres.service.port | quote }}
+            - name: BEACON_CLOUD_EDGE_TOKEN_PEPPER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "beacon-cloud-saas-v1.fullname" . }}-secret
+                  key: beacon-edge-token-pepper
+            - name: BEACON_CLOUD_S3_BUCKET
+              value: {{ .Values.minio.bucket | quote }}
+            - name: BEACON_CLOUD_S3_REGION
+              value: {{ .Values.minio.region | quote }}
+            - name: BEACON_CLOUD_S3_ENDPOINT_URL
+              value: {{ printf "http://%s:%v" (include "beacon-cloud-saas-v1.minioName" .) .Values.minio.service.apiPort | quote }}
+            - name: BEACON_CLOUD_S3_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "beacon-cloud-saas-v1.fullname" . }}-secret
+                  key: minio-root-user
+            - name: BEACON_CLOUD_S3_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "beacon-cloud-saas-v1.fullname" . }}-secret
+                  key: minio-root-password
+            - name: BEACON_CLOUD_IMAGE_PREVIEW_PROXY
+              value: {{ .Values.beaconCloud.env.cloudImagePreviewProxy | quote }}
+            - name: BEACON_BOOTSTRAP_ADMIN_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "beacon-cloud-saas-v1.fullname" . }}-secret
+                  key: beacon-bootstrap-admin-username
+            - name: BEACON_BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "beacon-cloud-saas-v1.fullname" . }}-secret
+                  key: beacon-bootstrap-admin-password
+            - name: BEACON_BOOTSTRAP_EDGE_CLUSTER_NAME
+              value: {{ .Values.beaconCloud.env.bootstrapEdgeClusterName | quote }}
+            - name: BEACON_BOOTSTRAP_EDGE_TOKEN_FILE
+              value: {{ .Values.beaconCloud.env.bootstrapEdgeTokenFile | quote }}
+          readinessProbe:
+            httpGet:
+              path: /login
+              port: http
+              httpHeaders:
+                - name: Host
+                  value: {{ .Values.beaconCloud.env.healthCheckHost | quote }}
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /login
+              port: http
+              httpHeaders:
+                - name: Host
+                  value: {{ .Values.beaconCloud.env.healthCheckHost | quote }}
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          volumeMounts:
+            - name: app-config
+              mountPath: /app/config.json
+              subPath: config.json
+            {{- if .Values.demoVolume.enabled }}
+            - name: demo
+              mountPath: /demo
+            {{- end }}
+          resources:
+            requests:
+              cpu: {{ .Values.beaconCloud.resources.requests.cpu | default "100m" | quote }}
+              memory: {{ .Values.beaconCloud.resources.requests.memory | default "256Mi" | quote }}
+              ephemeral-storage: {{ .Values.beaconCloud.resources.requests.ephemeralStorage | default "1Gi" | quote }}
+            limits:
+              cpu: {{ .Values.beaconCloud.resources.limits.cpu | default "1000m" | quote }}
+              memory: {{ .Values.beaconCloud.resources.limits.memory | default "1Gi" | quote }}
+              ephemeral-storage: {{ .Values.beaconCloud.resources.limits.ephemeralStorage | default "2Gi" | quote }}
+      volumes:
+        - name: app-config
+          configMap:
+            name: {{ include "beacon-cloud-saas-v1.fullname" . }}-config
+        {{- if .Values.demoVolume.enabled }}
+        - name: demo
+          persistentVolumeClaim:
+            claimName: {{ include "beacon-cloud-saas-v1.demoPVCName" . }}
+        {{- end }}
+      nodeSelector:
+        {{- toYaml .Values.beaconCloud.nodeSelector | nindent 8 }}
+      tolerations:
+        {{- toYaml .Values.beaconCloud.tolerations | nindent 8 }}
+      affinity:
+        {{- toYaml .Values.beaconCloud.affinity | nindent 8 }}

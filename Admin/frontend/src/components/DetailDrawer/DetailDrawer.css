@@ -1,0 +1,68 @@
+/* ===== Beacon DetailDrawer Component ===== */
+
+/* --- Header gradient background --- */
+.beacon-detail-drawer .ant-drawer-header {
+  background: linear-gradient(
+    135deg,
+    var(--beacon-tone-blue-head) 0%,
+    var(--beacon-surface-muted) 100%
+  );
+  border-bottom: 1px solid var(--beacon-border-muted);
+}
+
+.beacon-detail-drawer .ant-drawer-header-title .ant-drawer-title {
+  font-size: var(--beacon-text-lg);
+  font-weight: 700;
+  color: var(--beacon-text-strong);
+}
+
+/* --- Body --- */
+.beacon-detail-drawer .ant-drawer-body {
+  padding: var(--beacon-space-4) var(--beacon-space-6);
+  background: var(--beacon-surface-panel);
+}
+
+/* --- Section with left accent bar --- */
+.beacon-detail-section {
+  margin-bottom: var(--beacon-space-4);
+  animation: beacon-fade-in var(--beacon-duration-normal) var(--beacon-ease-out);
+}
+
+.beacon-detail-section__title {
+  font-weight: 700;
+  margin-bottom: var(--beacon-space-2);
+  font-size: var(--beacon-text-base);
+  color: var(--beacon-text-strong);
+}
+
+.beacon-detail-section__body {
+  border-left: 3px solid var(--beacon-tone-blue-icon-color);
+  padding-left: var(--beacon-space-3);
+  border-radius: 2px;
+}
+
+/* --- Loading skeleton --- */
+.beacon-detail-drawer__loading {
+  padding: var(--beacon-space-6) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--beacon-space-4);
+}
+
+/* --- Footer: frosted-glass sticky --- */
+.beacon-detail-drawer .ant-drawer-footer {
+  position: sticky;
+  bottom: 0;
+  background: var(--beacon-glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid var(--beacon-glass-border);
+  padding: var(--beacon-space-3) var(--beacon-space-6);
+  z-index: 1;
+}
+
+.beacon-detail-drawer__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--beacon-space-2);
+}

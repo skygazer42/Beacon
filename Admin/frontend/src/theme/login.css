@@ -1,0 +1,656 @@
+/* ===== Beacon Login — Industrial Dark / Signal Graphite =====
+ * 仅作用于 .beacon-login 作用域。不污染全局 body 或其他页面。
+ * 强制深色通过 LoginPage.jsx 的 useLayoutEffect 在 <html> 打 data-theme="dark"。
+ */
+
+.beacon-login {
+  /* ---- Color tokens (scoped) ---- */
+  --login-bg: #0a0d14;
+  --login-surface: #0f131c;
+  --login-input-bg: #080a10;
+  --login-hairline: #1f232e;
+  --login-hairline-soft: #1a1d25;
+  --login-text-strong: #fafafa;
+  --login-text-default: #e4e4e7;
+  --login-text-muted: #a1a1aa;
+  --login-text-faint: #71717a;
+  --login-text-ghost: #52525b;
+  --login-accent: #06b6d4;
+  --login-accent-soft: rgba(6, 182, 212, 0.16);
+  --login-accent-focus: rgba(6, 182, 212, 0.12);
+  --login-cta-bg: #fafafa;
+  --login-cta-bg-hover: #ffffff;
+  --login-cta-text: #0a0d14;
+  --login-danger-text: #fca5a5;
+  --login-danger-border: #7f1d1d;
+  --login-danger-bg: rgba(127, 29, 29, 0.12);
+  --login-warn-text: #fcd34d;
+  --login-warn-border: #78350f;
+  --login-warn-bg: rgba(120, 53, 15, 0.14);
+  --login-success-text: #67e8f9;
+  --login-success-border: #0e7490;
+  --login-success-bg: rgba(6, 182, 212, 0.12);
+
+  /* ---- Container ---- */
+  background: var(--login-bg);
+  min-height: 100vh;
+  padding: clamp(24px, 4vw, 56px);
+  display: grid;
+  place-items: center;
+  font-family: 'Inter', 'SF Pro Text', system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  color: var(--login-text-default);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Make everything inside login use Inter by default (override page-level Manrope) */
+.beacon-login,
+.beacon-login * {
+  font-family: inherit;
+}
+
+.beacon-login__shell {
+  width: min(100%, 1160px);
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(380px, 0.95fr);
+  gap: clamp(48px, 6vw, 88px);
+  align-items: center;
+}
+
+/* ============================================================
+ * Left copy column
+ * ============================================================ */
+.beacon-login__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.beacon-login__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  width: fit-content;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--login-text-ghost);
+}
+
+.beacon-login__eyebrow-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--login-accent);
+  box-shadow: 0 0 0 4px var(--login-accent-soft);
+  animation: beacon-login-pulse 2.4s ease-in-out infinite;
+}
+
+.beacon-login__hero {
+  margin: 0;
+  font-size: clamp(40px, 5vw, 60px);
+  font-weight: 600;
+  line-height: 0.96;
+  letter-spacing: -0.03em;
+  color: var(--login-text-strong);
+}
+
+.beacon-login__tagline {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--login-text-muted);
+  max-width: 32rem;
+}
+
+.beacon-login__workspace {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+  padding-top: 20px;
+  border-top: 1px solid var(--login-hairline-soft);
+}
+
+.beacon-login__mark {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--login-hairline);
+  border-radius: 4px;
+  background: var(--login-surface);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex: none;
+}
+
+.beacon-login__mark img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+
+.beacon-login__mark span {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--login-text-muted);
+}
+
+.beacon-login__workspace-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.beacon-login__workspace-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--login-text-ghost);
+}
+
+.beacon-login__workspace-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--login-text-default);
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+/* ============================================================
+ * Right panel
+ * ============================================================ */
+.beacon-login__panel {
+  background: var(--login-surface);
+  border: 1px solid var(--login-hairline);
+  border-radius: 6px;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow:
+    0 24px 48px rgba(0, 0, 0, 0.35),
+    0 4px 12px rgba(0, 0, 0, 0.20);
+}
+
+.beacon-login__panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.beacon-login__panel-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--login-text-faint);
+}
+
+.beacon-login__panel-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10px;
+  color: var(--login-text-muted);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
+.beacon-login__panel-status-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--login-accent);
+  flex: none;
+}
+
+.beacon-login__panel-status-text {
+  white-space: nowrap;
+}
+
+/* Override Ant Spin dot color inside status slot */
+.beacon-login__panel-status .ant-spin-dot-item {
+  background-color: var(--login-accent);
+}
+
+/* ============================================================
+ * Form & Fields
+ * ============================================================ */
+.beacon-login__form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0;
+}
+
+.beacon-login__field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.beacon-login__field > label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.beacon-login__field--with-hint {
+  gap: 4px;
+}
+
+.beacon-login__field-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--login-text-faint);
+}
+
+.beacon-login__field-hint {
+  font-size: 10px;
+  color: var(--login-text-ghost);
+  line-height: 1.5;
+  margin-top: 2px;
+}
+
+/* --- AntD Input overrides --- */
+.beacon-login .ant-input-affix-wrapper,
+.beacon-login .ant-input {
+  background: var(--login-input-bg);
+  border: 1px solid var(--login-hairline);
+  border-radius: 3px;
+  color: var(--login-text-strong);
+  box-shadow: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.beacon-login .ant-input-affix-wrapper-lg,
+.beacon-login .ant-input-lg {
+  padding: 9px 12px;
+  font-size: 13px;
+}
+
+.beacon-login .ant-input-affix-wrapper .ant-input {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.beacon-login .ant-input::placeholder,
+.beacon-login .ant-input-affix-wrapper input::placeholder {
+  color: var(--login-text-ghost);
+}
+
+.beacon-login .ant-input-prefix {
+  color: var(--login-text-ghost);
+  margin-inline-end: 8px;
+}
+
+.beacon-login .ant-input-password-icon {
+  color: var(--login-text-ghost);
+}
+
+.beacon-login .ant-input-password-icon:hover {
+  color: var(--login-text-muted);
+}
+
+.beacon-login .ant-input-affix-wrapper:hover,
+.beacon-login .ant-input:hover {
+  border-color: #2a303e;
+  background: var(--login-input-bg);
+}
+
+.beacon-login .ant-input-affix-wrapper-focused,
+.beacon-login .ant-input-affix-wrapper:focus-within,
+.beacon-login .ant-input:focus,
+.beacon-login .ant-input-affix-wrapper:focus {
+  border-color: var(--login-accent);
+  box-shadow: 0 0 0 3px var(--login-accent-focus);
+  background: var(--login-input-bg);
+}
+
+.beacon-login__input--mono.ant-input-affix-wrapper .ant-input,
+.beacon-login__input--mono .ant-input {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.05em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Autofill (WebKit) — keep dark bg instead of default yellow */
+.beacon-login .ant-input:-webkit-autofill,
+.beacon-login .ant-input-affix-wrapper input:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px var(--login-input-bg) inset !important;
+  -webkit-text-fill-color: var(--login-text-strong) !important;
+  caret-color: var(--login-text-strong);
+  transition: background-color 9999s ease-in-out 0s;
+}
+
+/* ============================================================
+ * Divider (SECOND FACTOR / Or)
+ * ============================================================ */
+.beacon-login__divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 2px;
+}
+
+.beacon-login__divider-line {
+  flex: 1;
+  height: 1px;
+  background: var(--login-hairline-soft);
+}
+
+.beacon-login__divider-text {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--login-text-ghost);
+}
+
+.beacon-login__divider--or .beacon-login__divider-text {
+  letter-spacing: 0.18em;
+}
+
+/* ============================================================
+ * Captcha row
+ * ============================================================ */
+.beacon-login__captcha-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px;
+  gap: 10px;
+  align-items: end;
+}
+
+.beacon-login__captcha {
+  align-self: end;
+  height: 41px;
+  padding: 0 4px 0 4px;
+  border: 1px solid var(--login-hairline);
+  border-radius: 3px;
+  background: var(--login-input-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    transform 120ms ease;
+  font-family: inherit;
+  color: var(--login-text-muted);
+}
+
+.beacon-login__captcha-img {
+  background: #f5f5f4;
+  padding: 3px 6px;
+  border-radius: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 auto;
+  max-width: 86px;
+}
+
+.beacon-login__captcha-img img {
+  width: 74px;
+  height: 26px;
+  object-fit: contain;
+  display: block;
+}
+
+.beacon-login__captcha-refresh {
+  color: var(--login-accent);
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  flex: none;
+}
+
+.beacon-login__captcha:hover {
+  border-color: var(--login-accent);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+}
+
+.beacon-login__captcha:focus-visible {
+  outline: none;
+  border-color: var(--login-accent);
+  box-shadow: 0 0 0 3px var(--login-accent-focus);
+}
+
+.beacon-login__captcha:active {
+  transform: translateY(0);
+}
+
+/* ============================================================
+ * Primary CTA (AntD Button override)
+ * ============================================================ */
+.beacon-login .beacon-login__cta.ant-btn {
+  background: var(--login-cta-bg);
+  color: var(--login-cta-text);
+  border: none;
+  border-radius: 3px;
+  height: 44px;
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  box-shadow: none;
+  transition:
+    background-color 150ms ease,
+    transform 120ms ease,
+    box-shadow 150ms ease;
+  margin-top: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.beacon-login .beacon-login__cta.ant-btn:hover,
+.beacon-login .beacon-login__cta.ant-btn:focus {
+  background: var(--login-cta-bg-hover);
+  color: var(--login-cta-text);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+}
+
+.beacon-login .beacon-login__cta.ant-btn:active {
+  transform: translateY(0);
+}
+
+.beacon-login .beacon-login__cta.ant-btn:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px var(--login-accent-focus),
+    0 6px 16px rgba(0, 0, 0, 0.35);
+}
+
+.beacon-login .beacon-login__cta.ant-btn-loading {
+  color: var(--login-cta-text);
+  opacity: 1;
+}
+
+.beacon-login .beacon-login__cta .ant-btn-loading-icon .anticon {
+  color: var(--login-accent);
+}
+
+.beacon-login__cta-arrow {
+  font-weight: 400;
+  margin-inline-start: 2px;
+}
+
+/* ============================================================
+ * SSO text link (AntD Button → plain link look)
+ * ============================================================ */
+.beacon-login .beacon-login__sso.ant-btn {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: var(--login-accent);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px;
+  height: auto;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  margin: -2px auto 0;
+}
+
+.beacon-login .beacon-login__sso.ant-btn:hover,
+.beacon-login .beacon-login__sso.ant-btn:focus {
+  background: transparent;
+  color: var(--login-accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.beacon-login .beacon-login__sso.ant-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--login-accent-focus);
+  border-radius: 3px;
+}
+
+/* ============================================================
+ * Alert (AntD Alert override)
+ * ============================================================ */
+.beacon-login .beacon-login__alert.ant-alert {
+  border-radius: 3px;
+  border-width: 1px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.55;
+  align-items: flex-start;
+}
+
+.beacon-login .beacon-login__alert.ant-alert .ant-alert-message {
+  color: inherit;
+  font-weight: 500;
+}
+
+.beacon-login .beacon-login__alert.ant-alert .ant-alert-icon {
+  margin-inline-end: 8px;
+  font-size: 14px;
+}
+
+.beacon-login .beacon-login__alert--error.ant-alert-error {
+  background: var(--login-danger-bg);
+  border-color: var(--login-danger-border);
+  color: var(--login-danger-text);
+}
+
+.beacon-login .beacon-login__alert--error.ant-alert-error .ant-alert-icon {
+  color: var(--login-danger-text);
+}
+
+.beacon-login .beacon-login__alert--warning.ant-alert-warning {
+  background: var(--login-warn-bg);
+  border-color: var(--login-warn-border);
+  color: var(--login-warn-text);
+}
+
+.beacon-login .beacon-login__alert--warning.ant-alert-warning .ant-alert-icon {
+  color: var(--login-warn-text);
+}
+
+.beacon-login .beacon-login__alert--success.ant-alert-success {
+  background: var(--login-success-bg);
+  border-color: var(--login-success-border);
+  color: var(--login-success-text);
+}
+
+.beacon-login .beacon-login__alert--success.ant-alert-success .ant-alert-icon {
+  color: var(--login-success-text);
+}
+
+/* ============================================================
+ * Animations
+ * ============================================================ */
+@keyframes beacon-login-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 4px var(--login-accent-soft);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(6, 182, 212, 0.04);
+    transform: scale(1.08);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .beacon-login__eyebrow-dot {
+    animation: none;
+  }
+  .beacon-login__captcha,
+  .beacon-login .beacon-login__cta.ant-btn {
+    transition: none;
+  }
+  .beacon-login__captcha:hover,
+  .beacon-login .beacon-login__cta.ant-btn:hover,
+  .beacon-login .beacon-login__cta.ant-btn:focus {
+    transform: none;
+  }
+}
+
+/* ============================================================
+ * Responsive
+ * ============================================================ */
+@media (max-width: 1024px) {
+  .beacon-login__shell {
+    gap: 32px;
+  }
+  .beacon-login__hero {
+    font-size: clamp(36px, 6vw, 48px);
+  }
+}
+
+@media (max-width: 768px) {
+  .beacon-login {
+    padding: 24px;
+  }
+  .beacon-login__shell {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 28px;
+    align-items: stretch;
+  }
+  .beacon-login__copy {
+    gap: 20px;
+  }
+  .beacon-login__tagline {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .beacon-login__panel {
+    padding: 20px;
+  }
+  .beacon-login__divider-text {
+    font-size: 8px;
+  }
+  .beacon-login__captcha-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .beacon-login__captcha {
+    justify-self: start;
+    min-width: 160px;
+  }
+}

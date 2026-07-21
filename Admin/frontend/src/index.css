@@ -1,0 +1,176 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+/* Design system layers — order matters */
+@import './theme/variables.css';
+@import './theme/motion.css';
+@import './theme/cards.css';
+@import './theme/tables.css';
+@import './theme/interactions.css';
+@import './theme/login.css';
+
+/* ===== Base Reset ===== */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Manrope', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-size: var(--beacon-text-base);
+  line-height: 1.5;
+  color: var(--beacon-text-default);
+  background: var(--beacon-surface-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  min-width: 320px;
+}
+
+/* ===== Shell States ===== */
+.beacon-shell-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  font-size: var(--beacon-text-lg);
+  color: var(--beacon-text-muted);
+}
+
+.beacon-shell-body {
+  min-height: 100vh;
+}
+
+.ant-card {
+  border-radius: 18px;
+}
+
+.ant-table-wrapper .ant-table {
+  border-radius: 14px;
+}
+
+.ant-table-wrapper .ant-table-thead > tr > th {
+  background: #f8fafc;
+  color: var(--beacon-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ant-table-wrapper .ant-table-tbody > tr > td {
+  color: var(--beacon-text-default);
+}
+
+/* ===== Global Dark Mode Overrides ===== */
+
+/* Ant Design Card */
+[data-theme="dark"] .ant-card {
+  background: var(--beacon-surface-panel);
+  border-color: var(--beacon-border-soft);
+  color: var(--beacon-text-default);
+}
+
+[data-theme="dark"] .ant-card .ant-card-head {
+  border-bottom-color: var(--beacon-border-soft);
+  color: var(--beacon-text-strong);
+}
+
+/* Ant Design Tag */
+[data-theme="dark"] .ant-tag {
+  border-color: var(--beacon-border-soft);
+}
+
+/* Ant Design Alert */
+[data-theme="dark"] .ant-alert {
+  border-radius: var(--beacon-radius-lg);
+}
+
+/* Ant Design Descriptions */
+[data-theme="dark"] .ant-descriptions .ant-descriptions-item-label {
+  color: var(--beacon-text-muted);
+}
+
+/* Ant Design Statistic */
+[data-theme="dark"] .ant-statistic-title {
+  color: var(--beacon-text-muted);
+}
+
+[data-theme="dark"] .ant-statistic-content {
+  color: var(--beacon-text-strong);
+}
+
+/* Ant Design Collapse */
+[data-theme="dark"] .ant-collapse {
+  background: var(--beacon-surface-panel);
+  border-color: var(--beacon-border-soft);
+}
+
+[data-theme="dark"] .ant-collapse > .ant-collapse-item {
+  border-bottom-color: var(--beacon-border-soft);
+}
+
+/* Ant Design Tabs */
+[data-theme="dark"] .ant-tabs .ant-tabs-tab {
+  color: var(--beacon-text-muted);
+}
+
+[data-theme="dark"] .ant-tabs .ant-tabs-tab-active {
+  color: var(--beacon-text-strong);
+}
+
+/* Ant Design Form */
+[data-theme="dark"] .ant-form-item-label > label {
+  color: var(--beacon-text-default);
+}
+
+/* Ant Design Typography */
+[data-theme="dark"] .ant-typography {
+  color: var(--beacon-text-default);
+}
+
+[data-theme="dark"] .ant-typography.ant-typography-secondary {
+  color: var(--beacon-text-muted);
+}
+
+/* Ant Design Divider */
+[data-theme="dark"] .ant-divider {
+  border-color: var(--beacon-border-soft);
+}
+
+/* Ant Design List */
+[data-theme="dark"] .ant-list-item {
+  border-bottom-color: var(--beacon-border-muted);
+}
+
+/* Ant Design Empty */
+[data-theme="dark"] .ant-empty-description {
+  color: var(--beacon-text-faint);
+}
+
+/* Ant Design Progress */
+[data-theme="dark"] .ant-progress-text {
+  color: var(--beacon-text-muted);
+}
+
+/* Scrollbar for dark mode */
+[data-theme="dark"] ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-track {
+  background: var(--beacon-surface-body);
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: var(--beacon-border-strong);
+  border-radius: var(--beacon-radius-pill);
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: var(--beacon-text-faint);
+}

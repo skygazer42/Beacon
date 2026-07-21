@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <defs>
+    <linearGradient id="beaconGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea"/>
+      <stop offset="100%" style="stop-color:#764ba2"/>
+    </linearGradient>
+    <linearGradient id="glowGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ed8936"/>
+      <stop offset="100%" style="stop-color:#dd6b20"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background circle -->
+  <circle cx="60" cy="60" r="56" fill="url(#beaconGrad)" opacity="0.1"/>
+  <circle cx="60" cy="60" r="56" fill="none" stroke="url(#beaconGrad)" stroke-width="2"/>
+
+  <!-- Beacon tower base -->
+  <path d="M45 95 L50 55 L70 55 L75 95 Z" fill="url(#beaconGrad)"/>
+
+  <!-- Beacon light house -->
+  <rect x="48" y="40" width="24" height="18" rx="2" fill="url(#beaconGrad)"/>
+
+  <!-- Beacon dome -->
+  <path d="M48 40 Q60 28 72 40" fill="url(#beaconGrad)"/>
+
+  <!-- Light rays -->
+  <g filter="url(#glow)">
+    <path d="M60 35 L40 20 L45 25 L60 35" fill="url(#glowGrad)" opacity="0.8"/>
+    <path d="M60 35 L60 12 L60 12 L60 35" fill="url(#glowGrad)" opacity="0.9"/>
+    <path d="M60 35 L80 20 L75 25 L60 35" fill="url(#glowGrad)" opacity="0.8"/>
+
+    <path d="M60 35 L30 30 L38 32 L60 35" fill="url(#glowGrad)" opacity="0.6"/>
+    <path d="M60 35 L90 30 L82 32 L60 35" fill="url(#glowGrad)" opacity="0.6"/>
+  </g>
+
+  <!-- Eye/lens in beacon -->
+  <circle cx="60" cy="48" r="6" fill="#fff" opacity="0.9"/>
+  <circle cx="60" cy="48" r="4" fill="url(#glowGrad)"/>
+  <circle cx="58" cy="46" r="1.5" fill="#fff" opacity="0.8"/>
+
+  <!-- Platform lines -->
+  <rect x="44" y="54" width="32" height="3" rx="1" fill="url(#beaconGrad)"/>
+
+  <!-- Window details on tower -->
+  <rect x="56" y="62" width="8" height="10" rx="1" fill="#fff" opacity="0.3"/>
+  <rect x="56" y="76" width="8" height="8" rx="1" fill="#fff" opacity="0.2"/>
+</svg>

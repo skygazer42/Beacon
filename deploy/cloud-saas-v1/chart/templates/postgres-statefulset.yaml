@@ -1,0 +1,75 @@
+{{- if .Values.postgres.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "beacon-cloud-saas-v1.postgresName" . }}
+  labels:
+    {{- include "beacon-cloud-saas-v1.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "beacon-cloud-saas-v1.postgresName" . }}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "beacon-cloud-saas-v1.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: postgres
+  template:
+    metadata:
+      labels:
+        {{- include "beacon-cloud-saas-v1.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: postgres
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: postgres
+          image: "{{ .Values.postgres.image.repository }}:{{ .Values.postgres.image.tag }}"
+          imagePullPolicy: {{ .Values.postgres.image.pullPolicy }}
+          ports:
+            - name: postgres
+              containerPort: {{ .Values.postgres.service.port }}
+          env:
+            - name: POSTGRES_DB
+              value: {{ .Values.postgres.auth.database | quote }}
+            - name: POSTGRES_USER
+              value: {{ .Values.postgres.auth.username | quote }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "beacon-cloud-saas-v1.fullname" . }}-secret
+                  key: postgres-password
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              cpu: {{ .Values.postgres.resources.requests.cpu | default "100m" | quote }}
+              memory: {{ .Values.postgres.resources.requests.memory | default "256Mi" | quote }}
+              ephemeral-storage: {{ .Values.postgres.resources.requests.ephemeralStorage | default "1Gi" | quote }}
+            limits:
+              cpu: {{ .Values.postgres.resources.limits.cpu | default "1000m" | quote }}
+              memory: {{ .Values.postgres.resources.limits.memory | default "1Gi" | quote }}
+              ephemeral-storage: {{ .Values.postgres.resources.limits.ephemeralStorage | default "2Gi" | quote }}
+  volumeClaimTemplates:
+    {{- if .Values.postgres.persistence.enabled }}
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          {{- range .Values.postgres.persistence.accessModes }}
+          - {{ . }}
+          {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.postgres.persistence.size }}
+        {{- if .Values.postgres.persistence.storageClassName }}
+        storageClassName: {{ .Values.postgres.persistence.storageClassName | quote }}
+        {{- end }}
+    {{- else }}
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
+    {{- end }}
+{{- end }}

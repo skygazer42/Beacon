@@ -1,0 +1,104 @@
+/* Beacon Documentation - Custom Styles */
+
+/* Hero section on home page */
+.md-typeset .beacon-hero {
+  text-align: center;
+  padding: 2rem 0;
+}
+
+.md-typeset .beacon-hero h1 {
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+/* Feature grid */
+.md-typeset .grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.md-typeset .grid .card {
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.5rem;
+  padding: 1.2rem;
+  transition: box-shadow 0.2s, border-color 0.2s;
+}
+
+.md-typeset .grid .card:hover {
+  border-color: var(--md-primary-fg-color);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.md-typeset .grid .card h3 {
+  margin-top: 0;
+}
+
+/* Badge styles */
+.md-typeset .badge {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.md-typeset .badge-get {
+  background-color: #61affe;
+  color: #111827;
+}
+
+.md-typeset .badge-post {
+  background-color: #49cc90;
+  color: #111827;
+}
+
+.md-typeset .badge-put {
+  background-color: #fca130;
+  color: #111827;
+}
+
+.md-typeset .badge-delete {
+  background-color: #f93e3e;
+  color: #111827;
+}
+
+/* Performance bar chart */
+.md-typeset .perf-bar {
+  display: flex;
+  align-items: center;
+  margin: 0.3rem 0;
+}
+
+.md-typeset .perf-bar .bar {
+  height: 1.2rem;
+  border-radius: 0.25rem;
+  background: linear-gradient(90deg, var(--md-primary-fg-color), var(--md-accent-fg-color));
+  margin-right: 0.5rem;
+  min-width: 2rem;
+}
+
+/* API endpoint styling */
+.md-typeset .endpoint {
+  background: var(--md-code-bg-color);
+  border-radius: 0.3rem;
+  padding: 0.8rem 1rem;
+  margin: 0.5rem 0;
+  font-family: var(--md-code-font-family);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Version badge */
+.md-typeset .version-badge {
+  display: inline-block;
+  padding: 0.15rem 0.6rem;
+  border-radius: 1rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: var(--md-primary-fg-color);
+  color: white;
+  vertical-align: middle;
+}

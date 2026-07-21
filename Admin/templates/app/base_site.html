@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <link rel="shortcut icon" href="/static/images/favicon.ico">
+    <link rel="icon" type="image/png" href="/static/images/logo.png">
+    <link rel="apple-touch-icon" href="/static/images/logo.png">
+    <title>{{ site_title|default:"Beacon 新一代 AI 视频分析系统" }} | {% block title %}{% endblock %}</title>
+
+    {% block stylesheets %}{% endblock stylesheets %}
+    {% if custom_css %}
+      <link rel="stylesheet" href="{{ custom_css }}">
+    {% endif %}
+    {% if theme_color %}
+      <style>:root { --beacon-accent: {{ theme_color }}; }</style>
+    {% endif %}
+  </head>
+
+  <body class="{% block body_class %}{% endblock body_class %}">
+    <script>
+      (function () {
+        let theme;
+        try {
+          theme = localStorage.getItem("beacon-theme");
+        } catch {}
+        if (theme === "system") {
+          theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        } else if (theme !== "light") {
+          theme = "dark";
+        }
+        document.documentElement.setAttribute("data-theme", theme);
+      })();
+    </script>
+
+    {% block body %}{% endblock body %}
+
+    {% block javascripts %}{% endblock javascripts %}
+    {% if custom_script %}
+      <script src="{{ custom_script }}"></script>
+    {% endif %}
+  </body>
+</html>

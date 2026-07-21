@@ -1,0 +1,146 @@
+# OS / IDE
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+.vscode/
+.idea/
+.worktrees/
+.beads/
+.superpowers/
+nul
+
+# Sonar (local/CI analysis artifacts)
+.scannerwork/
+sonar-cfamily-reproducer.tar.*
+sonar-cfamily.reproducer
+Analyzer/build-sonar/
+
+# Local dev secrets (generated or provided out-of-band)
+Admin/.beacon_dev_secret_key
+deploy/cloud-saas-v1/.env
+*.key
+*.pem
+*.p12
+*.pfx
+!MediaServer/source/3rdpart/ZLToolKit/tests/ssl.p12
+
+# Python cache / build
+__pycache__/
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+*.py[cod]
+*.pyo
+*.pyd
+*.log
+*.tmp
+*.temp
+*.bak
+
+# Virtual environments
+venv/
+venv*/
+env/
+.env/
+.venv/
+.venv*/
+.env
+.env.*
+!.env.example
+!.env.production.example
+
+# Django / SQLite databases
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+db.sqlite3
+
+# Runtime logs / locks
+log/
+
+# Local runtime / operator artifacts
+.codex
+.codex/
+.playwright-mcp/
+.playwright-cli/
+.interface-design/
+.impeccable.md
+.runtime/
+site/
+html/
+deploy/local-cloud-edge/local-cloud-edge.env
+Admin/static/upload/
+
+# CMake / build output
+build/
+dist/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+Testing/
+Makefile
+CTestTestfile.cmake
+install_manifest.txt
+
+# Visual Studio / MSVC
+.vs/
+*.vcxproj.user
+*.vcxproj.filters
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Compiled binaries / libraries
+*.exe
+*.dll
+*.lib
+*.pdb
+*.ilk
+*.exp
+*.obj
+*.o
+*.so
+*.a
+*.dylib
+
+# Third-party archives and large libs
+Analyzer-lib/
+*.zip
+*.7z
+*.tar
+*.tar.gz
+*.tgz
+third_party/localdeps/*
+!third_party/localdeps/README.md
+
+# Analyzer build and large assets
+Analyzer/.vs/
+Analyzer/x64/
+Analyzer/**/x64/
+Analyzer/3rdparty/
+Analyzer/models/
+*.pt
+*.onnx
+*.engine
+*.rknn
+*.om
+*.blob
+
+# Sample / large data
+data/
+
+# MediaServer runtime binaries
+MediaServer/bin/
+
+# Admin local files
+Admin/*.sqlite3
+Admin/Admin.sqlite3
+
+# Runtime UI/branding settings (generated/updated by system settings page)
+settings.json
+
+# Frontend local dependencies
+Admin/frontend/node_modules/

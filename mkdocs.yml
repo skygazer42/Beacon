@@ -1,0 +1,217 @@
+site_name: Beacon 文档
+site_url: https://skygazer42.github.io/Beacon
+site_description: Beacon - 基于深度学习的实时视频流智能分析与异常行为检测平台
+site_author: Beacon Team
+repo_name: skygazer42/Beacon
+repo_url: https://github.com/skygazer42/Beacon
+edit_uri: edit/main/docs/
+copyright: Copyright &copy; 2024-2026 Beacon Team
+not_in_nav: |
+  CHANGELOG.md
+  TAGS.md
+  deploy/**
+  deployment/build-and-package.md
+
+theme:
+  name: material
+  language: zh
+  custom_dir: docs/overrides
+  logo: assets/branding/logo-icon.png
+  favicon: assets/branding/logo-icon.png
+  icon:
+    repo: fontawesome/brands/github
+  font:
+    text: Noto Sans SC
+    code: JetBrains Mono
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: 切换到暗色模式
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: 切换到亮色模式
+  features:
+    - navigation.instant
+    - navigation.instant.progress
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.path
+    - navigation.top
+    - navigation.indexes
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - toc.follow
+    - announce.dismiss
+
+plugins:
+  - search:
+      separator: '[\s\u200b\-]'
+      lang:
+        - zh
+        - en
+  - minify:
+      minify_html: true
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      toc_depth: 3
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/skygazer42/Beacon
+  generator: false
+  version:
+    provider: mike
+
+extra_css:
+  - assets/css/custom.css
+
+nav:
+  - 首页: index.md
+  - 快速开始:
+    - getting-started/index.md
+    - 环境要求: getting-started/requirements.md
+    - 安装指南: getting-started/installation.md
+    - 5 分钟体验: getting-started/quickstart.md
+    - 第一条视频流接入实战: getting-started/first-stream.md
+  - 系统架构:
+    - architecture/index.md
+    - Admin 管理后台: architecture/admin.md
+    - Analyzer 分析引擎: architecture/analyzer.md
+    - MediaServer 流媒体: architecture/mediaserver.md
+  - 部署总览:
+    - deployment/index.md
+    - Linux:
+      - Linux 本机开发: deployment/local-linux.md
+      - Linux 构建与打包: deployment/build-and-package-linux.md
+      - Linux 运行库参考: deployment/linux-runtime-libs.md
+      - Linux 用户部署: deployment/linux.md
+    - Windows:
+      - Windows 本机开发: deployment/local-windows.md
+      - Windows 构建与打包: deployment/build-and-package-windows.md
+      - Windows 运行库参考: deployment/windows-runtime-libs.md
+      - Windows 用户部署: deployment/windows.md
+    - 容器与集群:
+      - Docker 部署: deployment/docker.md
+      - Kubernetes 部署: deployment/kubernetes.md
+      - 集群部署: deployment/cluster.md
+    - 数字人运行时接入: deployment/digital-human-runtime.md
+  - 配置参考:
+    - configuration/index.md
+    - config.json 参考: configuration/config-json.md
+    - 环境变量: configuration/env-vars.md
+  - 使用指南:
+    - guide/index.md
+    - 页面与路由导览: guide/ui-pages.md
+    - 视频流管理: guide/streams.md
+    - 布控管理: guide/controls.md
+    - 告警管理: guide/alarms.md
+    - 算法管理: guide/algorithms.md
+    - 人脸识别: guide/face.md
+    - 大屏展示: guide/screen.md
+    - 数字人监管: guide/digital-human.md
+    - 系统管理: guide/system.md
+  - API 文档:
+    - api/index.md
+    - 认证鉴权: api/authentication.md
+    - 视频流接口: api/streams.md
+    - 布控接口: api/controls.md
+    - 告警接口: api/alarms.md
+    - 系统接口: api/system.md
+    - 错误码: api/errors.md
+    - API 变更记录: api/changelog.md
+  - SDK:
+    - sdk/index.md
+    - Python SDK: sdk/python.md
+    - JavaScript SDK: sdk/javascript.md
+    - Go SDK: sdk/go.md
+  - 算法与模型:
+    - algorithms/index.md
+    - 内置算法: algorithms/builtin.md
+    - 模型格式: algorithms/models.md
+    - 插件 SDK 开发指南: algorithms/plugin-sdk.md
+    - 算法 Pipeline: algorithms/pipeline.md
+    - 算法故障排查: algorithms/troubleshooting.md
+    - 算法参数详解: ALGORITHM_CONFIG_GUIDE.md
+  - 集成对接:
+    - integration/index.md
+    - Webhook: integration/webhook.md
+    - 告警事件总线 — 架构: integration/alarm-bus.md
+    - 告警事件总线 — 事件规范: integration/alarm-event-bus.md
+    - 算法 API 协议 v2: integration/algorithm-api-protocol-v2.md
+    - 插件 SDK v2 协议规范: integration/algorithm-plugin-sdk-v2.md
+    - Cloud SaaS v1: integration/cloud-saas-v1.md
+    - 云远程控制面: integration/cloud-remote-control-plane.md
+    - GB28181 Provider TCP 模式: integration/gb28181-provider-tcp-mode.md
+    - PSIM 事件对接契约: integration/psim.md
+    - LDAP/AD 认证: integration/ldap.md
+    - OIDC SSO: integration/oidc.md
+  - 运维手册:
+    - operations/index.md
+    - 监控告警: operations/monitoring.md
+    - 安全加固: operations/security.md
+    - 备份恢复: deploy/database-and-backup.md
+    - Failover 与故障演练: operations/failover.md
+    - 故障排除: operations/troubleshooting.md
+    - 性能调优: operations/performance.md
+  - 开发者:
+    - developer/index.md
+    - 项目结构: developer/structure.md
+    - 贡献指南: developer/contributing.md
+  - 速查与参考:
+    - 快速参考手册: QUICK_REFERENCE.md
+  - 更新日志: CHANGELOG.md
+  - FAQ: faq.md

@@ -1,0 +1,27 @@
+# ========== 核心依赖 ==========
+# Web 框架
+Django==5.2.16
+
+# 系统监控
+psutil==6.1.1
+
+# HTTP 请求 (ONVIF, API调用)
+requests==2.34.2
+
+# Safe parsing for device-supplied ONVIF XML
+defusedxml==0.7.1
+
+# Self-contained static file serving for production WSGI deployments
+whitenoise==6.12.0
+
+# Image processing (used by Algorithm view for uploads/previews)
+Pillow==12.3.0
+
+# 授权签名校验（License Manager / Ed25519）
+cryptography==49.0.0
+
+# 视频处理和截图
+opencv-python==4.10.0.84
+
+# 数组计算 (opencv-python 的依赖)
+numpy==1.26.4
