@@ -77,6 +77,7 @@ class DigitalHumanAppShellApiTests(TestCase):
     def test_shared_post_parser_rejects_empty_or_non_object_json(self):
         requests = [
             self.rf.get("/api/app-shell/digital-human/device/action/update-window"),
+            self.rf.post("/probe", data={}),
             self.rf.post("/probe", data="{", content_type="application/json"),
             self.rf.post("/probe", data="[]", content_type="application/json"),
         ]

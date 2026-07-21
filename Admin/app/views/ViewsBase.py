@@ -15,7 +15,7 @@ from app.utils.Config import Config
 from app.utils.Gb28181Providers import get_gb28181_provider, parse_gb28181_url
 from app.utils.SafeLog import truncate_text
 from app.models import Stream
-from django.http import HttpResponse
+from django.http import HttpResponse, RawPostDataException
 
 
 logger = logging.getLogger(__name__)
@@ -310,8 +310,9 @@ def f_parse_post_params(request):
     # 接收json方式上传的参数
     if not params:
         try:
-            params = json.loads(request.body.decode('utf-8')) if request.body else {}
-        except (UnicodeDecodeError, json.JSONDecodeError):
+            body = request.body
+            params = json.loads(body.decode('utf-8')) if body else {}
+        except (RawPostDataException, UnicodeDecodeError, json.JSONDecodeError):
             params = {}
         if not isinstance(params, dict):
             params = {}
