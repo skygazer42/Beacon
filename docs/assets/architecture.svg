@@ -1,0 +1,201 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 520" width="900" height="520">
+  <defs>
+    <linearGradient id="adminGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea"/>
+      <stop offset="100%" style="stop-color:#5a67d8"/>
+    </linearGradient>
+    <linearGradient id="mediaGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#48bb78"/>
+      <stop offset="100%" style="stop-color:#38a169"/>
+    </linearGradient>
+    <linearGradient id="analyzerGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#ed8936"/>
+      <stop offset="100%" style="stop-color:#dd6b20"/>
+    </linearGradient>
+    <linearGradient id="cameraGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#e53e3e"/>
+      <stop offset="100%" style="stop-color:#c53030"/>
+    </linearGradient>
+    <linearGradient id="dbGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#9f7aea"/>
+      <stop offset="100%" style="stop-color:#805ad5"/>
+    </linearGradient>
+    <linearGradient id="bgGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a2e"/>
+      <stop offset="100%" style="stop-color:#16213e"/>
+    </linearGradient>
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="900" height="520" fill="url(#bgGrad2)" rx="12"/>
+
+  <!-- Title -->
+  <text x="450" y="38" font-family="'Segoe UI', sans-serif" font-size="18" fill="#e2e8f0" text-anchor="middle" font-weight="600">System Architecture</text>
+
+  <!-- ========== Camera Sources ========== -->
+  <g transform="translate(50, 70)" filter="url(#shadow)">
+    <rect width="160" height="60" rx="8" fill="url(#cameraGrad)"/>
+    <text x="80" y="28" font-family="'Segoe UI', sans-serif" font-size="13" fill="#fff" text-anchor="middle" font-weight="600">Video Sources</text>
+    <text x="80" y="46" font-family="'Segoe UI', sans-serif" font-size="10" fill="#fed7d7" text-anchor="middle">RTSP / RTMP / GB28181 adapter</text>
+  </g>
+
+  <!-- Arrow: Camera -> MediaServer -->
+  <g>
+    <line x1="210" y1="100" x2="295" y2="180" stroke="#e53e3e" stroke-width="2" opacity="0.6"/>
+    <polygon points="295,180 285,172 289,182" fill="#e53e3e" opacity="0.8"/>
+    <text x="235" y="135" font-family="'Segoe UI', sans-serif" font-size="9" fill="#a0aec0" transform="rotate(20, 235, 135)">video stream</text>
+  </g>
+
+  <!-- ========== Three main services ========== -->
+
+  <!-- Admin Service -->
+  <g transform="translate(50, 190)" filter="url(#shadow)">
+    <rect width="220" height="180" rx="10" fill="#1e1e3f" stroke="url(#adminGrad)" stroke-width="2"/>
+    <rect width="220" height="36" rx="10" fill="url(#adminGrad)"/>
+    <rect x="0" y="26" width="220" height="10" fill="url(#adminGrad)"/>
+    <text x="110" y="24" font-family="'Segoe UI', sans-serif" font-size="14" fill="#fff" text-anchor="middle" font-weight="700">Admin (Django)</text>
+    <text x="110" y="58" font-family="'Segoe UI', sans-serif" font-size="10" fill="#a0aec0" text-anchor="middle">Port 9991</text>
+    <g transform="translate(20, 72)">
+      <circle cx="6" cy="6" r="4" fill="#667eea" opacity="0.6"/>
+      <text x="16" y="10" font-family="'Segoe UI', sans-serif" font-size="10" fill="#cbd5e0">Web Management UI</text>
+    </g>
+    <g transform="translate(20, 94)">
+      <circle cx="6" cy="6" r="4" fill="#667eea" opacity="0.6"/>
+      <text x="16" y="10" font-family="'Segoe UI', sans-serif" font-size="10" fill="#cbd5e0">Task Scheduling</text>
+    </g>
+    <g transform="translate(20, 116)">
+      <circle cx="6" cy="6" r="4" fill="#667eea" opacity="0.6"/>
+      <text x="16" y="10" font-family="'Segoe UI', sans-serif" font-size="10" fill="#cbd5e0">Alarm Management</text>
+    </g>
+    <g transform="translate(20, 138)">
+      <circle cx="6" cy="6" r="4" fill="#667eea" opacity="0.6"/>
+      <text x="16" y="10" font-family="'Segoe UI', sans-serif" font-size="10" fill="#cbd5e0">REST API + OpenAPI Gateway</text>
+    </g>
+  </g>
+
+  <!-- MediaServer Service -->
+  <g transform="translate(320, 160)" filter="url(#shadow)">
+    <rect width="220" height="180" rx="10" fill="#1e1e3f" stroke="url(#mediaGrad)" stroke-width="2"/>
+    <rect width="220" height="36" rx="10" fill="url(#mediaGrad)"/>
+    <rect x="0" y="26" width="220" height="10" fill="url(#mediaGrad)"/>
+    <text x="110" y="24" font-family="'Segoe UI', sans-serif" font-size="14" fill="#fff" text-anchor="middle" font-weight="700">MediaServer (ZLM)</text>
+    <text x="110" y="58" font-family="'Segoe UI', sans-serif" font-size="10" fill="#a0aec0" text-anchor="middle">Port 9992 / 9994</text>
+    <g transform="translate(20, 72)">
+      <circle cx="6" cy="6" r="4" fill="#48bb78" opacity="0.6"/>
+      <text x="16" y="10" font-family="'Segoe UI', sans-serif" font-size="10" fill="#cbd5e0">Protocol Conversion</text>
+    </g>
+    <g transform="translate(20, 94)">
+      <circle cx="6" cy="6" r="4" fill="#48bb78" opacity="0.6"/>
+      <text x="16" y="10" font-family="'Segoe UI', sans-serif" font-size="10" fill="#cbd5e0">Stream Distribution</text>
+    </g>
+    <g transform="translate(20, 116)">
+      <circle cx="6" cy="6" r="4" fill="#48bb78" opacity="0.6"/>
+      <text x="16" y="10" font-family="'Segoe UI', sans-serif" font-size="10" fill="#cbd5e0">Recording &amp; Snapshot</text>
+    </g>
+    <g transform="translate(20, 138)">
+      <circle cx="6" cy="6" r="4" fill="#48bb78" opacity="0.6"/>
+      <text x="16" y="10" font-family="'Segoe UI', sans-serif" font-size="10" fill="#cbd5e0">WebRTC / RTSP Re-stream</text>
+    </g>
+  </g>
+
+  <!-- Analyzer Service -->
+  <g transform="translate(590, 190)" filter="url(#shadow)">
+    <rect width="250" height="180" rx="10" fill="#1e1e3f" stroke="url(#analyzerGrad)" stroke-width="2"/>
+    <rect width="250" height="36" rx="10" fill="url(#analyzerGrad)"/>
+    <rect x="0" y="26" width="250" height="10" fill="url(#analyzerGrad)"/>
+    <text x="125" y="24" font-family="'Segoe UI', sans-serif" font-size="14" fill="#fff" text-anchor="middle" font-weight="700">Analyzer Engine (C++)</text>
+    <text x="125" y="58" font-family="'Segoe UI', sans-serif" font-size="10" fill="#a0aec0" text-anchor="middle">Port 9993</text>
+    <g transform="translate(20, 72)">
+      <circle cx="6" cy="6" r="4" fill="#ed8936" opacity="0.6"/>
+      <text x="16" y="10" font-family="'Segoe UI', sans-serif" font-size="10" fill="#cbd5e0">YOLO v8/v11 Inference</text>
+    </g>
+    <g transform="translate(20, 94)">
+      <circle cx="6" cy="6" r="4" fill="#ed8936" opacity="0.6"/>
+      <text x="16" y="10" font-family="'Segoe UI', sans-serif" font-size="10" fill="#cbd5e0">Behavior Analysis Engine</text>
+    </g>
+    <g transform="translate(20, 116)">
+      <circle cx="6" cy="6" r="4" fill="#ed8936" opacity="0.6"/>
+      <text x="16" y="10" font-family="'Segoe UI', sans-serif" font-size="10" fill="#cbd5e0">ONNX / OpenVINO / Optional Plugins</text>
+    </g>
+    <g transform="translate(20, 138)">
+      <circle cx="6" cy="6" r="4" fill="#ed8936" opacity="0.6"/>
+      <text x="16" y="10" font-family="'Segoe UI', sans-serif" font-size="10" fill="#cbd5e0">Smart Resource Scheduling</text>
+    </g>
+  </g>
+
+  <!-- ========== Connections between services ========== -->
+
+  <!-- Admin <-> MediaServer -->
+  <line x1="270" y1="280" x2="320" y2="260" stroke="#667eea" stroke-width="1.5" stroke-dasharray="6,3" opacity="0.5"/>
+  <text x="280" y="262" font-family="'Segoe UI', sans-serif" font-size="8" fill="#718096">API</text>
+
+  <!-- Admin <-> Analyzer -->
+  <line x1="270" y1="310" x2="590" y2="310" stroke="#667eea" stroke-width="1.5" stroke-dasharray="6,3" opacity="0.5"/>
+  <text x="420" y="304" font-family="'Segoe UI', sans-serif" font-size="8" fill="#718096">Control Commands / Status</text>
+
+  <!-- MediaServer -> Analyzer -->
+  <line x1="540" y1="270" x2="590" y2="280" stroke="#48bb78" stroke-width="1.5" stroke-dasharray="6,3" opacity="0.5"/>
+  <text x="552" y="268" font-family="'Segoe UI', sans-serif" font-size="8" fill="#718096">media stream</text>
+
+  <!-- ========== Config ========== -->
+  <g transform="translate(340, 400)" filter="url(#shadow)">
+    <rect width="180" height="50" rx="8" fill="#1e1e3f" stroke="url(#dbGrad)" stroke-width="1.5"/>
+    <text x="90" y="22" font-family="'Segoe UI', monospace" font-size="12" fill="#d6bcfa" text-anchor="middle" font-weight="600">config.json</text>
+    <text x="90" y="38" font-family="'Segoe UI', sans-serif" font-size="9" fill="#718096" text-anchor="middle">Unified Configuration</text>
+  </g>
+
+  <!-- Config connections -->
+  <line x1="160" y1="370" x2="380" y2="410" stroke="#9f7aea" stroke-width="1" stroke-dasharray="4,3" opacity="0.4"/>
+  <line x1="430" y1="340" x2="430" y2="400" stroke="#9f7aea" stroke-width="1" stroke-dasharray="4,3" opacity="0.4"/>
+  <line x1="715" y1="370" x2="480" y2="410" stroke="#9f7aea" stroke-width="1" stroke-dasharray="4,3" opacity="0.4"/>
+
+  <!-- ========== SDK/External ========== -->
+  <g transform="translate(620, 420)" filter="url(#shadow)">
+    <rect width="210" height="70" rx="8" fill="#1e1e3f" stroke="#4a5568" stroke-width="1"/>
+    <text x="105" y="22" font-family="'Segoe UI', sans-serif" font-size="11" fill="#a0aec0" text-anchor="middle" font-weight="600">SDKs &amp; Integration</text>
+    <g transform="translate(15, 34)">
+      <rect width="50" height="20" rx="4" fill="#3182ce" opacity="0.3"/>
+      <text x="25" y="14" font-family="'Segoe UI', monospace" font-size="9" fill="#63b3ed" text-anchor="middle">Python</text>
+    </g>
+    <g transform="translate(75, 34)">
+      <rect width="30" height="20" rx="4" fill="#ecc94b" opacity="0.2"/>
+      <text x="15" y="14" font-family="'Segoe UI', monospace" font-size="9" fill="#ecc94b" text-anchor="middle">JS</text>
+    </g>
+    <g transform="translate(115, 34)">
+      <rect width="30" height="20" rx="4" fill="#48bb78" opacity="0.2"/>
+      <text x="15" y="14" font-family="'Segoe UI', monospace" font-size="9" fill="#48bb78" text-anchor="middle">Go</text>
+    </g>
+    <g transform="translate(155, 34)">
+      <rect width="40" height="20" rx="4" fill="#e53e3e" opacity="0.2"/>
+      <text x="20" y="14" font-family="'Segoe UI', monospace" font-size="9" fill="#fc8181" text-anchor="middle">REST</text>
+    </g>
+  </g>
+
+  <!-- Webhook / External -->
+  <g transform="translate(50, 420)" filter="url(#shadow)">
+    <rect width="200" height="70" rx="8" fill="#1e1e3f" stroke="#4a5568" stroke-width="1"/>
+    <text x="100" y="22" font-family="'Segoe UI', sans-serif" font-size="11" fill="#a0aec0" text-anchor="middle" font-weight="600">Alarm Delivery</text>
+    <g transform="translate(10, 34)">
+      <rect width="55" height="20" rx="4" fill="#e53e3e" opacity="0.2"/>
+      <text x="27" y="14" font-family="'Segoe UI', monospace" font-size="9" fill="#fc8181" text-anchor="middle">Webhook</text>
+    </g>
+    <g transform="translate(72, 34)">
+      <rect width="40" height="20" rx="4" fill="#48bb78" opacity="0.2"/>
+      <text x="20" y="14" font-family="'Segoe UI', monospace" font-size="9" fill="#48bb78" text-anchor="middle">Cloud</text>
+    </g>
+    <g transform="translate(119, 34)">
+      <rect width="40" height="20" rx="4" fill="#667eea" opacity="0.2"/>
+      <text x="20" y="14" font-family="'Segoe UI', monospace" font-size="9" fill="#a3bffa" text-anchor="middle">Outbox</text>
+    </g>
+    <g transform="translate(166, 34)">
+      <rect width="28" height="20" rx="4" fill="#ed8936" opacity="0.2"/>
+      <text x="14" y="14" font-family="'Segoe UI', monospace" font-size="8" fill="#fbd38d" text-anchor="middle">API</text>
+    </g>
+  </g>
+
+  <!-- Border -->
+  <rect width="900" height="520" fill="none" stroke="#2d3748" stroke-width="1" rx="12"/>
+</svg>

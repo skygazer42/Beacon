@@ -1,0 +1,461 @@
+{% extends "app/base_site.html" %}
+
+{% block title %} 登录 {% endblock title %}
+
+{% block stylesheets %}
+  {{ block.super }}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Calistoga&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --radius-xl: 24px;
+      
+      --color-bg: #09090b;
+      --color-surface: #121215;
+      --color-border: rgba(255, 255, 255, 0.08);
+      --color-text-main: #ffffff;
+      --color-text-muted: rgba(255, 255, 255, 0.6);
+      --color-accent: #3b82f6;
+      --color-accent-soft: rgba(59, 130, 246, 0.1);
+      
+      --space-section: 112px;
+    }
+
+    body.login {
+      min-height: 100vh;
+      background-color: var(--color-bg);
+      background-image: 
+        radial-gradient(circle at 50% -20%, rgba(59, 130, 246, 0.15), transparent 60%),
+        radial-gradient(circle at 0% 100%, rgba(59, 130, 246, 0.05), transparent 40%);
+      color: var(--color-text-main);
+      font-family: "Inter", system-ui, -apple-system, sans-serif;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow-x: hidden;
+    }
+
+    .login-container {
+      width: min(100%, 1280px);
+      padding: 40px;
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 80px;
+      align-items: center;
+      animation: fade-in 0.8s ease-out;
+    }
+
+    /* Left Side: Brand & Value */
+    .brand-section {
+      display: flex;
+      flex-direction: column;
+      gap: 40px;
+    }
+
+    .brand-logo {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .logo-box {
+      width: 48px;
+      height: 48px;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+    }
+
+    .logo-box img {
+      width: 28px;
+      height: 28px;
+    }
+
+    .brand-name {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    .hero-title {
+      font-family: "Inter", sans-serif;
+      font-size: clamp(3rem, 5vw, 4.5rem);
+      font-weight: 800;
+      line-height: 1.1;
+      letter-spacing: -0.04em;
+      margin: 0;
+      color: #ffffff;
+      background: linear-gradient(135deg, #ffffff 0%, #93c5fd 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-shadow: 0 0 40px rgba(147, 197, 253, 0.25);
+    }
+
+    .hero-subtitle {
+      font-size: 1.125rem;
+      line-height: 1.6;
+      color: var(--color-text-muted);
+      max-width: 480px;
+      margin: 0;
+    }
+
+    .feature-tags {
+      display: flex;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .tag {
+      padding: 6px 14px;
+      background: var(--color-accent-soft);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      border-radius: var(--radius-full);
+      color: var(--color-accent);
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* Right Side: Login Card */
+    .login-card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-xl);
+      padding: 48px;
+      box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .login-card::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+    }
+
+    .card-header {
+      margin-bottom: 32px;
+    }
+
+    .card-header h2 {
+      font-size: 24px;
+      font-weight: 700;
+      margin: 0 0 8px 0;
+    }
+
+    .card-header p {
+      color: var(--color-text-muted);
+      font-size: 14px;
+      margin: 0;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: var(--color-text-muted);
+      margin-bottom: 8px;
+      letter-spacing: 0.05em;
+    }
+
+    .input-wrapper {
+      position: relative;
+    }
+
+    .form-input {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: 14px 16px;
+      color: white;
+      font-size: 15px;
+      transition: all 0.2s ease;
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: var(--color-accent);
+      background: rgba(255, 255, 255, 0.05);
+      box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
+    }
+
+    .captcha-container {
+      display: grid;
+      grid-template-columns: 1fr 120px;
+      gap: 12px;
+    }
+
+    .captcha-img {
+      height: 48px;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      border: 1px solid var(--color-border);
+      background: #fff;
+    }
+
+    .btn-primary {
+      width: 100%;
+      background: var(--color-accent);
+      color: white;
+      border: none;
+      border-radius: var(--radius-md);
+      padding: 16px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      margin-top: 12px;
+    }
+
+    .btn-primary:hover {
+      background: #2563eb;
+      transform: translateY(-1px);
+      box-shadow: 0 8px 20px rgba(59, 130, 246, 0.3);
+    }
+
+    .btn-primary:active {
+      transform: translateY(0);
+    }
+
+    .btn-secondary {
+      width: 100%;
+      background: transparent;
+      color: white;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      padding: 14px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      text-align: center;
+      text-decoration: none;
+      display: block;
+      margin-top: 12px;
+      transition: all 0.2s ease;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .footer-note {
+      margin-top: 32px;
+      padding-top: 24px;
+      border-top: 1px solid var(--color-border);
+      text-align: center;
+      font-size: 13px;
+      color: var(--color-text-muted);
+    }
+
+    .login-notice {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      z-index: 20;
+      max-width: min(90vw, 440px);
+      padding: 12px 18px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: var(--radius-md);
+      background: #18181b;
+      color: #fff;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+      transform: translateX(-50%);
+    }
+
+    .login-notice[data-kind="success"] { border-color: rgba(34, 197, 94, 0.55); }
+    .login-notice[data-kind="error"] { border-color: rgba(239, 68, 68, 0.65); }
+
+    @keyframes fade-in {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Mobile Adapt */
+    @media (max-width: 1024px) {
+      .login-container {
+        grid-template-columns: 1fr;
+        gap: 60px;
+        padding: 20px;
+      }
+      .brand-section {
+        text-align: center;
+        align-items: center;
+      }
+      .hero-title {
+        font-size: 3rem;
+      }
+    }
+  </style>
+{% endblock stylesheets %}
+
+{% block body_class %}login{% endblock body_class %}
+
+{% block body %}
+  <div class="login-container">
+    <section class="brand-section">
+      <div class="brand-logo">
+        <div class="logo-box">
+          <img src="{{ site_logo|default:'/static/images/logo.png' }}" alt="Logo">
+        </div>
+        <span class="brand-name">{{ site_name|default:"Beacon" }}</span>
+      </div>
+
+      <div>
+        <h1 class="hero-title">边缘智能<br>触手可及</h1>
+        <p class="hero-subtitle">
+          下一代边缘视频分析中控台。为园区、工业及商业现场提供高性能、可信赖的 AI 推理与流媒体调度方案。
+        </p>
+      </div>
+
+      <div class="feature-tags">
+        <span class="tag">MediaServer</span>
+        <span class="tag">Analyzer</span>
+        <span class="tag">Admin</span>
+      </div>
+    </section>
+
+    <section class="login-card">
+      <div class="card-header">
+        <h2>欢迎回来</h2>
+        <p>请输入您的凭据以访问控制台</p>
+      </div>
+
+      <form id="login-form" method="post">
+        {% csrf_token %}
+        <div class="form-group">
+          <label for="username">用户名 / 邮箱</label>
+          <div class="input-wrapper">
+            <input type="text" id="username" name="username" class="form-input" placeholder="admin@example.com" required autofocus>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="password">密码</label>
+          <div class="input-wrapper">
+            <input type="password" id="password" name="password" class="form-input" placeholder="••••••••" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="totp_code">TOTP 验证码 (可选)</label>
+          <div class="input-wrapper">
+            <input type="text" id="totp_code" name="totp_code" class="form-input" placeholder="6位数字">
+          </div>
+        </div>
+
+        {% if captcha_enabled %}
+        <div class="form-group">
+          <label for="verify_code">验证码</label>
+          <div class="captcha-container">
+            <input type="text" id="verify_code" name="verify_code" class="form-input" placeholder="验证码" maxlength="4">
+            <img id="verify-code-img" src="/getVerifyCode?action=login" class="captcha-img" alt="Captcha">
+          </div>
+        </div>
+        {% endif %}
+
+        <button type="submit" id="login-submit" class="btn-primary">进入控制台</button>
+        
+        {% if oidc_enabled %}
+          <a href="/login/oidc/start" class="btn-secondary">企业单点登录 (SSO)</a>
+        {% endif %}
+      </form>
+
+      <div class="footer-note">
+        受审计链路保护的可信访问。
+      </div>
+    </section>
+  </div>
+
+  {% block javascripts %}
+    <script>
+      (function () {
+        const form = document.getElementById('login-form');
+        const submitButton = document.getElementById('login-submit');
+        const captchaImage = document.getElementById('verify-code-img');
+        const captchaEnabled = {% if captcha_enabled %}true{% else %}false{% endif %};
+
+        function refreshCaptcha() {
+          if (captchaEnabled && captchaImage) {
+            captchaImage.src = '/getVerifyCode?action=login&t=' + Date.now();
+          }
+        }
+
+        function showNotice(text, kind) {
+          document.querySelector('.login-notice')?.remove();
+          const notice = document.createElement('div');
+          notice.className = 'login-notice';
+          notice.dataset.kind = kind;
+          notice.role = 'status';
+          notice.textContent = text;
+          document.body.appendChild(notice);
+          window.setTimeout(() => notice.remove(), 3000);
+        }
+
+        captchaImage?.addEventListener('click', refreshCaptcha);
+
+        form.addEventListener('submit', async function (event) {
+          event.preventDefault();
+          if (submitButton.disabled) return;
+
+          const formData = new FormData(form);
+          formData.set('username', formData.get('username').trim());
+          formData.set('totp_code', formData.get('totp_code').trim());
+          const csrfToken = formData.get('csrfmiddlewaretoken');
+
+          submitButton.disabled = true;
+          submitButton.textContent = '验证中...';
+
+          try {
+            const response = await fetch('/login', {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+                'X-CSRFToken': csrfToken
+              },
+              body: new URLSearchParams(formData)
+            });
+            const result = await response.json();
+            if (response.ok && result.code === 1000) {
+              showNotice(result.msg || '登录成功', 'success');
+              window.setTimeout(() => { window.location.href = '/'; }, 500);
+              return;
+            }
+            showNotice(result.msg || '登录失败', 'error');
+          } catch {
+            showNotice('系统响应异常', 'error');
+          }
+
+          submitButton.disabled = false;
+          submitButton.textContent = '进入控制台';
+          refreshCaptcha();
+          const captchaInput = document.getElementById('verify_code');
+          if (captchaInput) captchaInput.value = '';
+        });
+      })();
+    </script>
+  {% endblock javascripts %}
+{% endblock body %}

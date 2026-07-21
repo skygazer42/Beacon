@@ -1,0 +1,49 @@
+{{- if .Values.minio.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "beacon-cloud-saas-v1.minioInitName" . }}
+  labels:
+    {{- include "beacon-cloud-saas-v1.labels" . | nindent 4 }}
+spec:
+  template:
+    metadata:
+      labels:
+        {{- include "beacon-cloud-saas-v1.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: minio-init
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      containers:
+        - name: minio-init
+          image: "{{ .Values.minio.mcImage.repository }}:{{ .Values.minio.mcImage.tag }}"
+          imagePullPolicy: {{ .Values.minio.mcImage.pullPolicy }}
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+              ephemeral-storage: 128Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+              ephemeral-storage: 256Mi
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              until mc alias set local http://{{ include "beacon-cloud-saas-v1.minioName" . }}:{{ .Values.minio.service.apiPort }} "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"; do
+                sleep 2
+              done
+              mc mb -p "local/{{ .Values.minio.bucket }}" || true
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "beacon-cloud-saas-v1.fullname" . }}-secret
+                  key: minio-root-user
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "beacon-cloud-saas-v1.fullname" . }}-secret
+                  key: minio-root-password
+{{- end }}

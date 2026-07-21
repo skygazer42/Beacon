@@ -1,0 +1,12 @@
+title = "Beacon secret scanning"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Unchanged upstream test fixtures and API examples"
+paths = [
+  '''(?:^|/)MediaServer/source/3rdpart/ZLToolKit/tests/ssl\.p12$''',
+  '''(?:^|/)MediaServer/source/3rdpart/media-server/librtsp/source/client/rtsp-client-auth\.c$''',
+  '''(?:^|/)MediaServer/source/postman/ZLMediaKit\.postman_collection\.json$''',
+]

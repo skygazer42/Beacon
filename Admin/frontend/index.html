@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-Hans">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Beacon App Shell</title>
+  </head>
+  <body>
+    <div id="beacon-app-root"></div>
+    <script id="beacon-bootstrap" type="application/json"></script>
+    <script>
+      const bootstrapEl = document.getElementById('beacon-bootstrap');
+      if (bootstrapEl) {
+        bootstrapEl.textContent = JSON.stringify({
+          path: window.location.pathname || '/',
+          queryString: window.location.search.replace(/^\?/, ''),
+          siteName: 'Beacon',
+          siteTitle: 'Beacon 新一代 AI 视频分析系统',
+          siteLogo: '/static/images/logo.png',
+          themeColor: '',
+          docsUrl: '',
+          downloadUrl: '',
+          debugEnabled: true,
+          user: { id: '', username: 'dev' },
+        });
+      }
+    </script>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

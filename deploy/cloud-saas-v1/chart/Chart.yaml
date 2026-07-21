@@ -1,0 +1,6 @@
+apiVersion: v2
+name: beacon-cloud-saas-v1
+description: Helm chart for the Beacon Cloud SaaS v1 deployment
+type: application
+version: 0.1.0
+appVersion: "v4.753"

@@ -1,0 +1,39 @@
+/* ===== StatusBadge Dot Variant ===== */
+
+.beacon-status-dot {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--beacon-text-sm, 13px);
+}
+
+.beacon-status-dot__circle {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.beacon-status-dot__circle--pulse {
+  animation: beacon-status-pulse 2s ease-in-out infinite;
+}
+
+.beacon-status-dot__label {
+  color: var(--beacon-text-default);
+}
+
+@keyframes beacon-status-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 currentColor; }
+  50% { opacity: 0.7; box-shadow: 0 0 0 4px transparent; }
+}
+
+/* Dark mode tag refinement */
+[data-theme="dark"] .ant-tag {
+  border-color: var(--beacon-border-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .beacon-status-dot__circle--pulse {
+    animation: none;
+  }
+}

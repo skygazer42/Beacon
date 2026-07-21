@@ -1,0 +1,73 @@
+# OpenTelemetry Collector (contrib) config for Beacon local/dev tracing.
+#
+# Receivers:
+# - OTLP gRPC :4317
+# - OTLP HTTP :4318
+# - Zipkin    :9411
+#
+# Exporters:
+# - OTLP -> Jaeger (all-in-one OTLP receiver)
+# - OTLP -> Tempo
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+  zipkin:
+    endpoint: 0.0.0.0:9411
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+  batch:
+    timeout: 1s
+    send_batch_size: 1024
+
+exporters:
+  # Jaeger (OTLP ingestion). We keep Jaeger OTLP ports internal and ship from the collector.
+  otlp/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+    sending_queue:
+      enabled: true
+      num_consumers: 4
+      queue_size: 2048
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+  # Tempo (OTLP ingestion).
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+    sending_queue:
+      enabled: true
+      num_consumers: 4
+      queue_size: 2048
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp, zipkin]
+      processors: [memory_limiter, batch]
+      exporters: [otlp/jaeger, otlp/tempo]
+

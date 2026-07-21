@@ -1,0 +1,954 @@
+{% extends "app/base_react_shell.html" %}
+{% block title %} {% if  "add" == handle %}添加{% else %}编辑{% endif %}算法 {% endblock title %}
+{% block body_class %}nav-md{% if popup_mode %} algorithm-popup-mode{% endif %}{% endblock body_class %}
+{% block stylesheets %}
+  {{ block.super }}
+<style>
+    /* ── Algorithm type cards ── */
+    .bcn-algo-type-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+    }
+    @media (max-width: 768px) {
+        .bcn-algo-type-grid { grid-template-columns: 1fr; }
+    }
+    .algorithm-type-card {
+        border: 2px solid var(--beacon-border-1);
+        border-radius: var(--beacon-radius-lg);
+        padding: 20px;
+        cursor: pointer;
+        transition: all var(--beacon-transition);
+        background: var(--beacon-surface-1);
+    }
+    .algorithm-type-card:hover {
+        border-color: var(--beacon-accent);
+        box-shadow: var(--beacon-shadow-md);
+    }
+    .algorithm-type-card.active {
+        border-color: var(--beacon-accent);
+        background: var(--beacon-accent-bg);
+    }
+    .algorithm-type-card .card-icon {
+        width: 50px;
+        height: 50px;
+        border-radius: var(--beacon-radius-lg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 22px;
+        color: #fff;
+        margin-bottom: 12px;
+        background: var(--beacon-gradient);
+    }
+    .algorithm-type-card .card-icon.icon-behavior {
+        background: var(--beacon-warning);
+    }
+    .algorithm-type-card .card-icon.icon-business {
+        background: var(--beacon-success);
+    }
+    .algorithm-type-card .card-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--beacon-text-1);
+        margin-bottom: 6px;
+    }
+    .algorithm-type-card .card-desc {
+        font-size: 12px;
+        color: var(--beacon-text-3);
+    }
+
+    /* ── Source cards (smaller variant) ── */
+    .bcn-source-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+    }
+    @media (max-width: 768px) {
+        .bcn-source-grid { grid-template-columns: 1fr; }
+    }
+    .basic-source-card .card-icon {
+        width: 40px;
+        height: 40px;
+        font-size: 18px;
+    }
+    .basic-source-card .card-icon.icon-model {
+        background: var(--beacon-success);
+    }
+    .basic-source-card .card-icon.icon-api {
+        background: var(--beacon-accent);
+    }
+    .basic-source-card .card-title {
+        font-size: 14px;
+    }
+    .basic-source-card {
+        padding: 15px;
+    }
+    .basic-source-card.disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+        pointer-events: none;
+        filter: grayscale(0.2);
+    }
+
+    /* ── Section panels ── */
+    .section-panel {
+        background: var(--beacon-surface-2);
+        border-radius: var(--beacon-radius-lg);
+        padding: 20px;
+        margin-bottom: 20px;
+        display: none;
+    }
+    .section-panel.active {
+        display: block;
+    }
+    .section-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--beacon-text-2);
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid var(--beacon-border-1);
+    }
+
+    /* ── File upload ── */
+    .file-upload-area {
+        border: 2px dashed var(--beacon-border-2);
+        border-radius: var(--beacon-radius-lg);
+        padding: 30px;
+        text-align: center;
+        background: var(--beacon-surface-1);
+        transition: all var(--beacon-transition);
+        cursor: pointer;
+    }
+    .file-upload-area:hover {
+        border-color: var(--beacon-accent);
+        background: var(--beacon-accent-bg);
+    }
+    .file-upload-area.has-file {
+        border-color: var(--beacon-success);
+        background: var(--beacon-success-bg);
+    }
+    .file-upload-area .upload-icon {
+        font-size: 36px;
+        color: var(--beacon-text-3);
+        margin-bottom: 10px;
+    }
+    .file-upload-area .upload-text {
+        color: var(--beacon-text-3);
+        font-size: 14px;
+    }
+    .file-upload-area .file-name {
+        color: var(--beacon-success);
+        font-weight: 600;
+        margin-top: 10px;
+    }
+
+    /* ── Behavior select ── */
+    .behavior-select-card {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .behavior-option {
+        padding: 10px 16px;
+        border: 1px solid var(--beacon-border-1);
+        border-radius: var(--beacon-radius-md);
+        cursor: pointer;
+        transition: all var(--beacon-transition);
+        font-size: 13px;
+    }
+    .behavior-option:hover {
+        border-color: var(--beacon-accent);
+    }
+    .behavior-option.selected {
+        background: var(--beacon-gradient);
+        color: #fff;
+        border-color: transparent;
+    }
+
+    /* ── Existing file badge ── */
+    .existing-file {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 14px;
+        background: var(--beacon-surface-2);
+        border-radius: var(--beacon-radius-sm);
+        font-size: 12px;
+        color: var(--beacon-text-2);
+        margin-bottom: 10px;
+    }
+    .existing-file i {
+        color: var(--beacon-success);
+    }
+
+    /* ── Form layout ── */
+    .bcn-form-grid {
+        display: grid;
+        grid-template-columns: 200px 1fr;
+        gap: 16px 20px;
+        align-items: start;
+    }
+    @media (max-width: 768px) {
+        .bcn-form-grid { grid-template-columns: 1fr; }
+    }
+    .bcn-form-grid > label,
+    .bcn-form-grid > .bcn-form-label {
+        text-align: right;
+        padding-top: 7px;
+        font-weight: 500;
+        color: var(--beacon-text-2);
+        font-size: 13px;
+    }
+    @media (max-width: 768px) {
+        .bcn-form-grid > label,
+        .bcn-form-grid > .bcn-form-label { text-align: left; padding-top: 0; }
+    }
+    .bcn-form-grid .bcn-form-field-wide {
+        grid-column: 1 / -1;
+    }
+    .bcn-inline-fields {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+    }
+    .bcn-form-actions {
+        display: flex;
+        gap: 10px;
+        padding-top: 16px;
+        border-top: 1px solid var(--beacon-border-1);
+        margin-top: 8px;
+    }
+    .required-star { color: var(--beacon-danger); }
+
+    /* ── Popup mode ── */
+    body.algorithm-popup-mode .left_col,
+    body.algorithm-popup-mode .top_nav,
+    body.algorithm-popup-mode .sidebar-footer,
+    body.algorithm-popup-mode .nav_title,
+    body.algorithm-popup-mode .profile,
+    body.algorithm-popup-mode #sidebar-menu,
+    body.algorithm-popup-mode footer {
+        display: none !important;
+    }
+    body.algorithm-popup-mode,
+    body.algorithm-popup-mode .container.body,
+    body.algorithm-popup-mode .main_container,
+    body.algorithm-popup-mode .right_col {
+        background: var(--beacon-surface-1) !important;
+    }
+    body.algorithm-popup-mode.nav-md .container.body .right_col,
+    body.algorithm-popup-mode.nav-sm .container.body .right_col,
+    body.algorithm-popup-mode .right_col {
+        margin-left: 0 !important;
+        width: 100% !important;
+        min-height: 0 !important;
+        padding: 12px !important;
+    }
+</style>
+{% endblock stylesheets %}
+{% block content %}
+
+  <div class="right_col" role="main">
+    <div class="bcn-page" {% if popup_mode %}data-popup-mode="1"{% endif %}>
+
+      <div class="bcn-page-header">
+        <h2>
+          <i class="fa fa-eye" style="color: var(--beacon-warning);"></i>
+          {% if  "add" == handle %}添加{% else %}编辑{% endif %}算法
+          <span id="top_msg" style="color: var(--beacon-success); font-size: 12px; margin-left: 10px;">{{top_msg}}</span>
+        </h2>
+      </div>
+
+      <div class="bcn-card">
+        <form id="algorithmForm" class="form-horizontal form-label-left" method="post" enctype="multipart/form-data" data-parsley-validate>
+
+          <input type="hidden" name="handle" value="{{ handle }}">
+          {% if popup_mode %}<input type="hidden" name="popup" value="1">{% endif %}
+          <input type="hidden" name="algorithm_type" id="algorithm_type" value="{{ obj.algorithm_type|default:0 }}">
+          <input type="hidden" name="basic_source" id="basic_source" value="{{ obj.basic_source|default:'model' }}">
+          <input type="hidden" name="algorithm_subtype" id="algorithm_subtype" value="{{ obj.algorithm_subtype|default:'detection' }}">
+
+          <div class="bcn-form-grid">
+
+            <!-- 算法类型选择 -->
+            <div class="bcn-form-label">算法类型 <span class="required-star">*</span></div>
+            <div>
+              <div class="bcn-algo-type-grid">
+                <div class="algorithm-type-card {% if obj.algorithm_type == 0 or obj.algorithm_type == None %}active{% endif %}" data-type="0">
+                  <div class="card-icon"><i class="fa fa-cube"></i></div>
+                  <div class="card-title">基础算法</div>
+                  <div class="card-desc">上传自己训练的模型文件（YOLO、ONNX等），用于目标检测</div>
+                </div>
+                <div class="algorithm-type-card {% if obj.algorithm_type == 1 %}active{% endif %}" data-type="1">
+                  <div class="card-icon icon-behavior"><i class="fa fa-sitemap"></i></div>
+                  <div class="card-title">行为算法</div>
+                  <div class="card-desc">使用内置行为分析算法，或通过API/动态库扩展自定义行为</div>
+                </div>
+                <div class="algorithm-type-card {% if obj.algorithm_type == 2 %}active{% endif %}" data-type="2">
+                  <div class="card-icon icon-business"><i class="fa fa-briefcase"></i></div>
+                  <div class="card-title">业务算法</div>
+                  <div class="card-desc">面向业务场景的自定义算法（可通过API/动态库扩展）</div>
+                </div>
+              </div>
+            </div>
+
+{% if  "add" == handle %}
+            <label for="code">编号 <span class="required-star">*</span></label>
+            <div>
+              <input type="text" id="code" name="code" value="{{ obj.code }}" required="required" class="form-control" placeholder="算法唯一标识符">
+            </div>
+{% else %}
+            <label for="code">编号 <span class="required-star">*</span></label>
+            <div>
+              <input type="text" id="code" name="code" readonly value="{{ obj.code }}" required="required" class="form-control">
+            </div>
+{% endif %}
+
+            <label for="name">名称 <span class="required-star">*</span></label>
+            <div>
+              <input type="text" id="name" name="name" value="{{ obj.name }}" required="required" class="form-control" placeholder="算法显示名称">
+            </div>
+
+            <label for="license_package">授权算法包 <span class="required-star">*</span></label>
+            <div>
+              <input type="text" id="license_package" name="license_package" list="license_package_list" value="{{ obj.license_package|default:'core' }}" required="required" class="form-control" placeholder="core/ppe/behavior_pro">
+              <datalist id="license_package_list">
+                {% for p in license_packages %}
+                  <option value="{{ p.code }}">{{ p.name }}</option>
+                {% endfor %}
+              </datalist>
+              <span class="help-block" style="margin-bottom:0; color: var(--beacon-text-3); font-size: 12px;">用于 License Manager 按 SKU 售卖授权（如 core/ppe/behavior_pro）</span>
+            </div>
+
+          </div><!-- end bcn-form-grid top -->
+
+          <!-- ══════ 基础算法配置 ══════ -->
+          <div class="section-panel" id="basic_section">
+            <div class="section-title"><i class="fa fa-cube" style="margin-right: 8px;"></i>基础算法配置</div>
+
+            <div class="bcn-form-grid">
+
+              <!-- 算法子类型 -->
+              <label for="algorithm_subtype_select" id="algorithm_subtype_group_label">算法子类型 <span class="required-star">*</span></label>
+              <div id="algorithm_subtype_group">
+                <select id="algorithm_subtype_select" class="form-control">
+                  <option value="detection" {% if obj.algorithm_subtype == 'detection' or not obj.algorithm_subtype %}selected{% endif %}>检测（Detection）</option>
+                  <option value="classification" {% if obj.algorithm_subtype == 'classification' %}selected{% endif %}>分类（Classification）</option>
+                  <option value="ocr" {% if obj.algorithm_subtype == 'ocr' %}selected{% endif %}>OCR（XcOCR/文本识别）</option>
+                  <option value="tracking" {% if obj.algorithm_subtype == 'tracking' %}selected{% endif %}>追踪（Tracking / ReID）</option>
+                  <option value="speech" {% if obj.algorithm_subtype == 'speech' %}selected{% endif %}>语音/ASR（Speech / ASR）</option>
+                </select>
+                <small class="text-muted">追踪模型不需要"检测目标"类别列表；OCR 通常输出文本（如车牌号）；语音/ASR 在 Wave 1 仅支持 API 接口方式。</small>
+              </div>
+
+              <!-- 基础算法来源选择 -->
+              <div class="bcn-form-label">算法来源 <span class="required-star">*</span></div>
+              <div>
+                <div class="bcn-source-grid">
+                  <div class="algorithm-type-card basic-source-card {% if obj.basic_source == 'model' or obj.basic_source == None %}active{% endif %}" data-source="model">
+                    <div class="card-icon icon-model"><i class="fa fa-cube"></i></div>
+                    <div class="card-title">本地模型</div>
+                    <div class="card-desc">上传YOLO、ONNX等模型文件进行本地推理</div>
+                  </div>
+                  <div class="algorithm-type-card basic-source-card {% if obj.basic_source == 'api' %}active{% endif %}" data-source="api">
+                    <div class="card-icon icon-api"><i class="fa fa-cloud"></i></div>
+                    <div class="card-title">API接口</div>
+                    <div class="card-desc">调用远程API服务进行算法推理</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 本地模型配置 -->
+              <div class="bcn-form-field-wide" id="basic_model_config">
+                <div class="bcn-form-grid">
+                  <label for="model_file">模型文件</label>
+                  <div>
+                    {% if obj.model_path %}
+                    <div class="existing-file">
+                      <i class="fa fa-check-circle"></i>
+                      <span>已上传: {{ obj.model_path }}</span>
+                    </div>
+                    {% endif %}
+                    <div class="file-upload-area" id="model_upload_area">
+                      <div class="upload-icon"><i class="fa fa-cloud-upload"></i></div>
+                      <div class="upload-text">点击上传模型文件<br><small id="model_upload_hint">支持 .pt / .pth / .onnx / .xml / .engine / .trt / .weights 等格式</small></div>
+                      <div class="file-name" id="model_file_name"></div>
+                      <input type="file" name="model_file" id="model_file" style="display: none;" accept=".pt,.pth,.onnx,.xml,.engine,.trt,.plan,.pb,.weights,.tflite,.h5,.rknn,.om,.enc">
+                    </div>
+                  </div>
+
+                  <label for="paired_file" id="paired_file_label" style="display:none;">配套文件</label>
+                  <div id="paired_file_group" style="display:none;">
+                    <div class="file-upload-area" id="paired_upload_area">
+                      <div class="upload-icon"><i class="fa fa-files-o"></i></div>
+                      <div class="upload-text">点击上传配套文件<br><small>OpenVINO：.xml 需要 .bin；YOLO：.weights 需要 .cfg</small></div>
+                      <div class="file-name" id="paired_file_name"></div>
+                      <input type="file" name="paired_file" id="paired_file" style="display: none;" accept=".bin,.cfg,.enc">
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- API接口配置 -->
+              <div class="bcn-form-field-wide" id="basic_api_config" style="display: none;">
+                <div class="bcn-form-grid">
+                  <label for="api_url_basic">API地址 <span class="required-star">*</span></label>
+                  <div>
+                    <input type="text" name="api_url" id="api_url_basic" value="{{ obj.api_url }}" class="form-control" placeholder="http://localhost:8000/detect">
+                    <small class="text-muted">填写远程算法推理服务的API地址</small>
+                  </div>
+                </div>
+              </div>
+
+              <label for="object_str" id="object_str_label">检测目标</label>
+              <div id="object_str_group">
+                <input type="text" id="object_str" name="object_str" value="{{ obj.object_str }}" class="form-control" placeholder="多个目标用逗号分隔，如: person,car,dog">
+                <small class="text-muted">填写模型可检测的目标类别，多个用逗号分隔</small>
+              </div>
+
+              <label for="model_precision">模型精度</label>
+              <div>
+                <select id="model_precision" name="model_precision" class="form-control">
+                  {% for value, label in model_precisions %}
+                    <option value="{{ value }}" {% if obj.model_precision == value %}selected{% elif not obj.model_precision and value == 'FP32' %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+                <small class="text-muted">基础算法本地推理有效；不同硬件对 FP16/INT8 支持不同</small>
+              </div>
+
+              <div class="bcn-form-label">预处理尺寸</div>
+              <div class="bcn-inline-fields">
+                <div>
+                  <input type="number" id="input_width" name="input_width" value="{{ obj.input_width|default:640 }}" min="1" class="form-control" placeholder="宽" aria-label="输入宽度">
+                  <small class="text-muted">输入宽度</small>
+                </div>
+                <div>
+                  <input type="number" id="input_height" name="input_height" value="{{ obj.input_height|default:640 }}" min="1" class="form-control" placeholder="高" aria-label="输入高度">
+                  <small class="text-muted">输入高度</small>
+                </div>
+              </div>
+
+              <div class="bcn-form-label">推理阈值</div>
+              <div class="bcn-inline-fields">
+                <div>
+                  <input type="number" id="conf_thresh" step="0.01" min="0" max="1" name="conf_thresh" value="{{ obj.conf_thresh|default:0.25 }}" class="form-control" placeholder="0.25" aria-label="置信度阈值">
+                  <small class="text-muted">置信度阈值</small>
+                </div>
+                <div>
+                  <input type="number" id="nms_thresh" step="0.01" min="0" max="1" name="nms_thresh" value="{{ obj.nms_thresh|default:0.45 }}" class="form-control" placeholder="0.45" aria-label="NMS阈值">
+                  <small class="text-muted">NMS阈值</small>
+                </div>
+              </div>
+
+            </div><!-- end bcn-form-grid basic -->
+          </div><!-- end basic_section -->
+
+          <!-- ══════ 行为/业务算法配置 ══════ -->
+          <div class="section-panel" id="behavior_section">
+            <div class="section-title"><i class="fa fa-sitemap" style="margin-right: 8px;"></i>行为/业务算法配置</div>
+
+            <div class="bcn-form-grid">
+
+              <div class="bcn-form-label">直接API模式</div>
+              <div>
+                <label for="support_direct_api" style="margin-top: 6px;">
+                  <input type="checkbox" name="support_direct_api" id="support_direct_api"
+                         {% if obj.support_direct_api %}checked="checked"{% endif %}>
+                  支持直接 API 调用（流程模式 5）
+                </label>
+                <small class="text-muted" style="display:block;">启用后可在布控"流程模式 5：行为（直接API）"中直接调用该算法的 API。</small>
+              </div>
+
+              <label for="behavior_api_version">API类型</label>
+              <div>
+                <select name="behavior_api_version" id="behavior_api_version" class="form-control">
+                  <option value="1" {% if obj.behavior_api_version == 1 or not obj.behavior_api_version %}selected{% endif %}>APIv1（API 完整返回 happen/happenScore）</option>
+                  <option value="2" {% if obj.behavior_api_version == 2 %}selected{% endif %}>APIv2（API 返回 detects，本地内置行为判定）</option>
+                </select>
+                <small class="text-muted">APIv2 适用于"API做检测，本地做行为规则/后处理"（例如入侵/人数等）。</small>
+              </div>
+
+              <div class="bcn-form-label">内置行为算法</div>
+              <div>
+                <div class="behavior-select-card">
+                  {% for value, label in builtin_behaviors %}
+                  {% if value %}
+                  <div class="behavior-option {% if obj.builtin_behavior == value %}selected{% endif %}" data-value="{{ value }}">
+                    <i class="fa fa-{% if value == 'intrusion' %}shield{% elif value == 'loitering' %}street-view{% elif value == 'crossing' %}arrows-h{% elif value == 'crowd' %}users{% elif value == 'absence' %}user-times{% elif value == 'unattended' %}user-secret{% elif value == 'fight' %}hand-rock-o{% elif value == 'fall' %}arrow-down{% elif value == 'smoke' %}fire{% elif value == 'phone' %}phone{% else %}cog{% endif %}" style="margin-right: 6px;"></i>
+                    {{ label }}
+                  </div>
+                  {% endif %}
+                  {% endfor %}
+                </div>
+                <input type="hidden" name="builtin_behavior" id="builtin_behavior" value="{{ obj.builtin_behavior }}">
+              </div>
+
+              <label for="api_url_behavior">自定义API (可选)</label>
+              <div>
+                <input type="text" name="api_url_behavior" id="api_url_behavior" value="{{ obj.api_url }}" class="form-control" placeholder="http://localhost:8000/behavior">
+                <small class="text-muted">如果使用自定义行为分析API，请填写地址</small>
+              </div>
+
+              <div class="bcn-form-label">动态库 (可选)</div>
+              <div>
+                {% if obj.dll_path %}
+                <div class="existing-file">
+                  <i class="fa fa-check-circle"></i>
+                  <span>已上传: {{ obj.dll_path }}</span>
+                </div>
+                {% endif %}
+                <div class="file-upload-area" id="dll_upload_area">
+                  <div class="upload-icon"><i class="fa fa-puzzle-piece"></i></div>
+                  <div class="upload-text">点击上传动态库<br><small>支持 .dll / .so / .dylib 格式</small></div>
+                  <div class="file-name" id="dll_file_name"></div>
+                  <input type="file" name="dll_file" id="dll_file" style="display: none;" accept=".dll,.so,.dylib">
+                </div>
+              </div>
+
+            </div><!-- end bcn-form-grid behavior -->
+          </div><!-- end behavior_section -->
+
+          <!-- ══════ Common fields ══════ -->
+          <div class="bcn-form-grid" style="margin-top: 20px;">
+
+            <label for="remark">备注</label>
+            <div>
+              <textarea id="remark" name="remark" class="form-control" rows="3" placeholder="算法说明或备注信息">{{ obj.remark }}</textarea>
+            </div>
+
+            <label for="max_control_count">布控数量上限</label>
+            <div>
+              <input type="number" id="max_control_count" name="max_control_count" value="{{ obj.max_control_count|default:0 }}" min="0" class="form-control" placeholder="0">
+              <small class="text-muted">限制使用该算法的布控数量，0表示不限制</small>
+            </div>
+
+            <label for="model_concurrency">模型并发数</label>
+            <div>
+              <input type="number" id="model_concurrency" name="model_concurrency" value="{{ obj.model_concurrency|default:1 }}" min="1" class="form-control" placeholder="1">
+              <small class="text-muted">基础算法本地推理有效（CPU/GPU/TRT/OpenVINO）；建议按硬件能力设置，例如 2-8</small>
+            </div>
+
+            <div class="bcn-form-field-wide">
+              <div class="bcn-form-actions">
+                <button type="button" onclick="window.history.go(-1)" class="btn btn-default"><i class="fa fa-arrow-left"></i> 返回</button>
+                <button type="submit" class="btn btn-success"><i class="fa fa-check"></i> 提交</button>
+              </div>
+            </div>
+
+          </div><!-- end bcn-form-grid common -->
+
+        </form>
+
+        {% if handle != "add" %}
+        <!-- ========== v4.18 算法接入验收：一次性推理测试 ========== -->
+        <div class="section-panel active" style="margin-top: 20px;">
+          <div class="section-title"><i class="fa fa-flask" style="margin-right: 8px;"></i>算法测试（一次推理）</div>
+
+          <form id="testInferForm" class="form-horizontal form-label-left" method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <input type="hidden" name="code" value="{{ obj.code }}">
+
+            <div class="bcn-form-grid">
+              <label for="test_infer_device">推理设备</label>
+              <div>
+                <select id="test_infer_device" name="device" class="form-control">
+                  <option value="CPU">CPU</option>
+                  <option value="GPU">GPU</option>
+                  <option value="TRT">TRT</option>
+                  <option value="AUTO">AUTO</option>
+                  <option value="NPU">NPU</option>
+                </select>
+                <small class="text-muted">本地模型/插件有效；API 推理会忽略该值</small>
+              </div>
+
+              <label for="test_infer_image">测试图片</label>
+              <div>
+                <input type="file" id="test_infer_image" name="image" accept="image/*" class="form-control" required>
+                <small class="text-muted">上传任意图片，后台会做一次推理并返回 detects</small>
+              </div>
+
+              <div class="bcn-form-field-wide">
+                <div class="bcn-form-actions">
+                  <button type="submit" id="testInferBtn" class="btn btn-primary">
+                    <i class="fa fa-play"></i> 开始测试
+                  </button>
+                  <span class="text-muted" id="testInferHint" style="line-height: 36px;"></span>
+                </div>
+              </div>
+
+              <div class="bcn-form-field-wide" style="margin-top: 10px;">
+                <pre id="testInferResult" style="max-height:320px;overflow:auto;">等待测试...</pre>
+              </div>
+            </div>
+          </form>
+        </div>
+        {% endif %}
+
+      </div><!-- end bcn-card -->
+    </div><!-- end bcn-page -->
+  </div><!-- end right_col -->
+{% endblock content %}
+
+{% block javascripts %}
+  {{ block.super }}
+<div
+    id="algorithmPageConfig"
+    hidden
+    data-handle="{{ handle }}"
+    data-current-type="{{ obj.algorithm_type|default:0 }}"
+    data-current-basic-source="{{ obj.basic_source|default:'model' }}"
+    data-current-subtype="{{ obj.algorithm_subtype|default:'detection' }}"
+></div>
+<script>
+const algorithmPageConfig = document.getElementById("algorithmPageConfig");
+
+let handle = (algorithmPageConfig && algorithmPageConfig.dataset.handle) || "";
+let currentType = Number.parseInt((algorithmPageConfig && algorithmPageConfig.dataset.currentType) || "0", 10);
+let currentBasicSource = (algorithmPageConfig && algorithmPageConfig.dataset.currentBasicSource) || "model";
+let currentSubtype = ((algorithmPageConfig && algorithmPageConfig.dataset.currentSubtype) || "detection").trim().toLowerCase();
+if (currentSubtype !== "detection" && currentSubtype !== "classification" && currentSubtype !== "ocr" && currentSubtype !== "tracking" && currentSubtype !== "speech" && currentSubtype !== "behavior") {
+    currentSubtype = "detection";
+}
+
+$(document).ready(function () {
+    // 初始化显示对应的配置区域
+    updateSectionVisibility();
+    updateBasicSourceVisibility();
+    updateSubtypeVisibility();
+    updatePairedFileVisibility();
+
+    // 算法类型卡片点击
+    $(".algorithm-type-card:not(.basic-source-card)").click(function() {
+        $(".algorithm-type-card:not(.basic-source-card)").removeClass("active");
+        $(this).addClass("active");
+        currentType = Number.parseInt($(this).data("type"), 10);
+        $("#algorithm_type").val(currentType);
+        updateSectionVisibility();
+    });
+
+    // 算法子类型选择
+    $("#algorithm_subtype_select").on("change", function () {
+        currentSubtype = ($(this).val() || "detection").toLowerCase();
+        updateSubtypeVisibility();
+    });
+
+    // 基础算法来源卡片点击
+    $(".basic-source-card").click(function() {
+        $(".basic-source-card").removeClass("active");
+        $(this).addClass("active");
+        currentBasicSource = $(this).data("source");
+        $("#basic_source").val(currentBasicSource);
+        updateBasicSourceVisibility();
+        updateSubtypeVisibility();
+    });
+
+    // 内置行为选项点击
+    $(".behavior-option").click(function() {
+        $(".behavior-option").removeClass("selected");
+        $(this).addClass("selected");
+        $("#builtin_behavior").val($(this).data("value"));
+    });
+
+    // 模型文件上传
+    $("#model_upload_area").click(function() {
+        $("#model_file").click();
+    });
+    $("#model_file").change(function() {
+        if (this.files && this.files[0]) {
+            $("#model_file_name").text(this.files[0].name);
+            $("#model_upload_area").addClass("has-file");
+        }
+        updatePairedFileVisibility();
+    });
+
+    // 配套文件上传
+    $("#paired_upload_area").click(function() {
+        $("#paired_file").click();
+    });
+    $("#paired_file").change(function() {
+        if (this.files && this.files[0]) {
+            $("#paired_file_name").text(this.files[0].name);
+            $("#paired_upload_area").addClass("has-file");
+        }
+    });
+
+    // 动态库上传
+    $("#dll_upload_area").click(function() {
+        $("#dll_file").click();
+    });
+    $("#dll_file").change(function() {
+        if (this.files && this.files[0]) {
+            $("#dll_file_name").text(this.files[0].name);
+            $("#dll_upload_area").addClass("has-file");
+        }
+    });
+
+    function inputHasFile(selector) {
+        let el = $(selector)[0];
+        return !!(el && el.files && el.files.length > 0);
+    }
+
+    function validateTrackingConstraints(subtype) {
+        if (currentType !== 0 || subtype !== "tracking") {
+            return null;
+        }
+
+        if (currentBasicSource !== "model") {
+            return "追踪(Tracking)算法仅支持"本地模型"方式";
+        }
+
+        if (handle === "add" && !inputHasFile("#model_file")) {
+            return "请上传追踪模型文件（.onnx 或 OpenVINO .xml + .bin）";
+        }
+
+        let ext = getSelectedModelExt();
+        if (ext && ext !== ".onnx" && ext !== ".xml") {
+            return "追踪(Tracking)算法仅支持 .onnx 或 OpenVINO .xml + .bin";
+        }
+
+        if (ext === ".xml" && handle === "add" && !inputHasFile("#paired_file")) {
+            return "OpenVINO .xml 需要同时上传配套的 .bin 文件";
+        }
+
+        return null;
+    }
+
+    function validateBasicApiUrl() {
+        if (currentType !== 0 || currentBasicSource !== "api") {
+            return null;
+        }
+
+        let apiUrl = $("#api_url_basic").val().trim();
+        if (!apiUrl) {
+            return "API接口方式必须填写API地址";
+        }
+        return null;
+    }
+
+    function syncBehaviorApiUrl() {
+        if (currentType === 1 || currentType === 2) {
+            $("#api_url_basic").val($("#api_url_behavior").val() || "");
+        }
+    }
+
+    function validateBehaviorApiV2BuiltinBehavior() {
+        if (currentType !== 1 && currentType !== 2) {
+            return null;
+        }
+
+        let v = Number.parseInt($("#behavior_api_version").val() || "1", 10);
+        if (v !== 2) {
+            return null;
+        }
+
+        let bb = ($("#builtin_behavior").val() || "").trim();
+        if (!bb) {
+            return "APIv2 类型必须选择内置行为算法（用于本地后处理）";
+        }
+        return null;
+    }
+
+    // 表单提交验证
+    $("#algorithmForm").submit(function () {
+        let name = $("input[name='name']").val().trim();
+        let subtype = ($("#algorithm_subtype").val() || "detection").toLowerCase();
+
+        syncBehaviorApiUrl();
+
+        const validations = [
+            validateAlgorithmName(name),
+            validateTrackingConstraints(subtype),
+            validateSpeechConstraints(subtype),
+            validateBasicApiUrl(),
+            validateBehaviorApiV2BuiltinBehavior(),
+        ];
+
+        for (const msg of validations) {
+            if (msg) {
+                myAlert(msg, "error");
+                return false;
+            }
+        }
+
+        return true;
+    });
+
+    // v4.18：算法测试（一次性推理）
+    $("#testInferForm").on("submit", function (e) {
+        e.preventDefault();
+        var $btn = $("#testInferBtn");
+        var $hint = $("#testInferHint");
+        var $out = $("#testInferResult");
+
+        var formData = new FormData(this);
+        $btn.prop("disabled", true);
+        $hint.text("测试中...");
+        $out.text("请求中...");
+
+        $.ajax({
+            url: "/api/app-shell/algorithm/action/openTestInfer",
+            type: "POST",
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function (res) {
+                try {
+                    $out.text(JSON.stringify(res, null, 2));
+                } catch {
+                    $out.text(String(res || ""));
+                }
+                if (res && res.code === 1000) {
+                    myAlert("测试成功", "success");
+                } else {
+                    myAlert((res && res.msg) ? res.msg : "测试失败", "error");
+                }
+            },
+            error: function (xhr) {
+                $out.text("HTTP error: " + xhr.status);
+                myAlert("测试失败: HTTP " + xhr.status, "error");
+            },
+            complete: function () {
+                $btn.prop("disabled", false);
+                $hint.text("");
+            }
+        });
+    });
+});
+
+function updateSectionVisibility() {
+    if (currentType === 0) {
+        $("#basic_section").addClass("active");
+        $("#behavior_section").removeClass("active");
+    } else {
+        $("#basic_section").removeClass("active");
+        $("#behavior_section").addClass("active");
+    }
+    updateSubtypeVisibility();
+}
+
+function updateBasicSourceVisibility() {
+    if (currentBasicSource === 'model') {
+        $("#basic_model_config").show();
+        $("#basic_api_config").hide();
+    } else {
+        $("#basic_model_config").hide();
+        $("#basic_api_config").show();
+    }
+}
+
+function validateAlgorithmName(name) {
+    if (!name) {
+        return "请输入算法名称";
+    }
+    return null;
+}
+
+function validateSpeechConstraints(subtype) {
+    if (currentType === 0 && subtype === "speech" && currentBasicSource !== "api") {
+        return "语音/ASR 算法在 Wave 1 仅支持"API接口"方式";
+    }
+    return null;
+}
+
+function getSelectedModelExt() {
+    let input = $("#model_file")[0];
+    if (input && input.files && input.files[0] && input.files[0].name) {
+        let name = String(input.files[0].name || "");
+        let lower = name.toLowerCase();
+        if (lower.endsWith(".enc")) {
+            name = name.substring(0, name.length - 4);
+        }
+        let idx = name.lastIndexOf(".");
+        if (idx >= 0) {
+            return name.substring(idx).toLowerCase();
+        }
+    }
+    return "";
+}
+
+function updatePairedFileVisibility() {
+    let ext = getSelectedModelExt();
+    if (ext === ".xml" || ext === ".weights") {
+        $("#paired_file_group").show();
+        $("#paired_file_label").show();
+    } else {
+        $("#paired_file_group").hide();
+        $("#paired_file_label").hide();
+        const pairedFileInput = $("#paired_file").get(0);
+        if (pairedFileInput) {
+            pairedFileInput.value = "";
+        }
+        $("#paired_file_name").text("");
+        $("#paired_upload_area").removeClass("has-file");
+    }
+}
+
+function updateSubtypeVisibility() {
+    if (currentType === 1 || currentType === 2) {
+        currentSubtype = "behavior";
+        $("#algorithm_subtype").val("behavior");
+        $("#algorithm_subtype_group").hide();
+        $("#algorithm_subtype_group_label").hide();
+        $("#object_str_group").show();
+        $("#object_str_label").show();
+        $(".basic-source-card").removeClass("disabled");
+        $("#model_upload_hint").text("支持 .pt / .pth / .onnx / .xml / .engine / .trt / .weights 等格式");
+        updatePairedFileVisibility();
+        return;
+    }
+
+    $("#algorithm_subtype_group").show();
+    $("#algorithm_subtype_group_label").show();
+    if (currentSubtype !== "detection" && currentSubtype !== "classification" && currentSubtype !== "ocr" && currentSubtype !== "tracking" && currentSubtype !== "speech") {
+        currentSubtype = "detection";
+    }
+    $("#algorithm_subtype_select").val(currentSubtype);
+    $("#algorithm_subtype").val(currentSubtype);
+
+    if (currentSubtype === "tracking") {
+        $("#object_str_group").hide();
+        $("#object_str_label").hide();
+        $(".basic-source-card[data-source='model']").removeClass("disabled");
+        $(".basic-source-card[data-source='api']").addClass("disabled");
+        if (currentBasicSource !== "model") {
+            currentBasicSource = "model";
+            $("#basic_source").val("model");
+            $(".basic-source-card").removeClass("active");
+            $(".basic-source-card[data-source='model']").addClass("active");
+            updateBasicSourceVisibility();
+        }
+        $("#model_upload_hint").text("Tracking：支持 .onnx 或 OpenVINO .xml + .bin（不需要检测目标类别）");
+    } else if (currentSubtype === "speech") {
+        $("#object_str_group").show();
+        $("#object_str_label").show();
+        $(".basic-source-card[data-source='model']").addClass("disabled");
+        $(".basic-source-card[data-source='api']").removeClass("disabled");
+        if (currentBasicSource !== "api") {
+            currentBasicSource = "api";
+            $("#basic_source").val("api");
+            $(".basic-source-card").removeClass("active");
+            $(".basic-source-card[data-source='api']").addClass("active");
+            updateBasicSourceVisibility();
+        }
+        $("#model_upload_hint").text("Speech/ASR：Wave 1 仅支持 API 接口方式；本地语音模型接入将在后续波次补齐。");
+    } else if (currentSubtype === "ocr") {
+        $("#object_str_group").show();
+        $("#object_str_label").show();
+        $(".basic-source-card[data-source='model']").removeClass("disabled");
+        $(".basic-source-card[data-source='api']").removeClass("disabled");
+        $("#model_upload_hint").text("OCR：建议模型输出"字符检测框"，并在检测目标(object_str)中按模型 labels 顺序填写字符集（如 0-9/A-Z/省份等）");
+    } else {
+        $("#object_str_group").show();
+        $("#object_str_label").show();
+        $(".basic-source-card[data-source='model']").removeClass("disabled");
+        $(".basic-source-card[data-source='api']").removeClass("disabled");
+        $("#model_upload_hint").text("支持 .pt / .pth / .onnx / .xml / .engine / .trt / .weights 等格式");
+    }
+
+    updatePairedFileVisibility();
+}
+</script>
+
+{% endblock javascripts %}

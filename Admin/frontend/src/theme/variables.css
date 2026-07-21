@@ -1,0 +1,226 @@
+/* ===== Beacon Design System — CSS Custom Properties ===== */
+
+/* --- Shared scales --- */
+:root {
+  /* Layout dimensions */
+  --beacon-sider-width: 236px;
+  --beacon-sider-collapsed-width: 64px;
+  --beacon-header-height: 64px;
+  --beacon-page-padding: clamp(18px, 2vw, 28px);
+  --beacon-card-gap: 16px;
+
+  /* Spacing scale */
+  --beacon-space-1: 4px;
+  --beacon-space-2: 8px;
+  --beacon-space-3: 12px;
+  --beacon-space-4: 16px;
+  --beacon-space-5: 20px;
+  --beacon-space-6: 24px;
+  --beacon-space-7: 28px;
+  --beacon-space-8: 32px;
+
+  /* Border radius scale */
+  --beacon-radius-sm: 6px;
+  --beacon-radius-md: 8px;
+  --beacon-radius-lg: 12px;
+  --beacon-radius-xl: 16px;
+  --beacon-radius-pill: 999px;
+
+  /* Font size scale */
+  --beacon-text-xs: 11px;
+  --beacon-text-sm: 12px;
+  --beacon-text-base: 14px;
+  --beacon-text-md: 15px;
+  --beacon-text-lg: 16px;
+  --beacon-text-xl: 20px;
+  --beacon-text-2xl: 24px;
+  --beacon-text-display: clamp(2rem, 4vw, 2.5rem);
+}
+
+/* ===== LIGHT THEME ===== */
+[data-theme="light"] {
+  /* Surface */
+  --beacon-surface-body: #f7f9fc;
+  --beacon-surface-panel: #ffffff;
+  --beacon-surface-muted: #f4f7fb;
+  --beacon-surface-elevated: #ffffff;
+  --beacon-surface-sider: #fbfcff;
+
+  /* Border */
+  --beacon-border-soft: #e5e7eb;
+  --beacon-border-muted: #eef1f5;
+  --beacon-border-strong: #cfd6e3;
+
+  /* Text */
+  --beacon-text-strong: #0f1115;
+  --beacon-text-default: #334155;
+  --beacon-text-muted: #64748b;
+  --beacon-text-faint: #94a3b8;
+
+  /* Shadow */
+  --beacon-shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.03);
+  --beacon-shadow-sm: 0 8px 24px rgba(15, 23, 42, 0.04);
+  --beacon-shadow-md: 0 12px 32px rgba(15, 23, 42, 0.05);
+  --beacon-shadow-lg: 0 18px 40px rgba(15, 23, 42, 0.08);
+  --beacon-shadow-xl: 0 24px 56px rgba(15, 23, 42, 0.1);
+  --beacon-shadow-panel: 0 1px 2px rgba(15, 23, 42, 0.03), 0 10px 30px rgba(15, 23, 42, 0.04);
+
+  /* Glassmorphism */
+  --beacon-glass-bg: rgba(255, 255, 255, 0.8);
+  --beacon-glass-border: rgba(148, 163, 184, 0.18);
+
+  /* JSON / code blocks */
+  --beacon-code-bg: #f8fafc;
+  --beacon-code-text: #334155;
+
+  /* Alarm severity */
+  --color-alarm-critical: #dc2626;
+  --color-alarm-critical-bg: #fef2f2;
+  --color-alarm-high: #ea580c;
+  --color-alarm-high-bg: #fff7ed;
+  --color-alarm-medium: #d97706;
+  --color-alarm-medium-bg: #fffbeb;
+  --color-alarm-low: #3964fe;
+  --color-alarm-low-bg: #eef3ff;
+
+  /* Status */
+  --color-status-online: #16a34a;
+  --color-status-online-bg: #f0fdf4;
+  --color-status-offline: #9ca3af;
+  --color-status-offline-bg: #f9fafb;
+  --color-status-running: #3964fe;
+  --color-status-running-bg: #eef3ff;
+  --color-status-stopped: #dc2626;
+  --color-status-stopped-bg: #fef2f2;
+  --color-status-warning: #d97706;
+  --color-status-warning-bg: #fffbeb;
+
+  /* Tone cards */
+  --beacon-tone-slate-head: #f2f5f8;
+  --beacon-tone-slate-icon-bg: #e9eef5;
+  --beacon-tone-slate-icon-border: #d7dee8;
+  --beacon-tone-slate-icon-color: #475569;
+
+  --beacon-tone-blue-head: #eef3ff;
+  --beacon-tone-blue-icon-bg: #e3eaff;
+  --beacon-tone-blue-icon-border: #cbd7ff;
+  --beacon-tone-blue-icon-color: #3964fe;
+
+  --beacon-tone-cyan-head: #ecfeff;
+  --beacon-tone-cyan-icon-bg: #cffafe;
+  --beacon-tone-cyan-icon-border: #a5f3fc;
+  --beacon-tone-cyan-icon-color: #0891b2;
+
+  --beacon-tone-green-head: #effdf5;
+  --beacon-tone-green-icon-bg: #dcfce7;
+  --beacon-tone-green-icon-border: #bbf7d0;
+  --beacon-tone-green-icon-color: #15803d;
+
+  --beacon-tone-orange-head: #fff7ed;
+  --beacon-tone-orange-icon-bg: #ffedd5;
+  --beacon-tone-orange-icon-border: #fed7aa;
+  --beacon-tone-orange-icon-color: #c2410c;
+
+  /* Shell */
+  --beacon-shell-sidebar-bg: rgba(251, 252, 255, 0.95);
+  --beacon-shell-sidebar-hover: #f0f4ff;
+  --beacon-shell-sidebar-active: linear-gradient(135deg, #3157e8 0%, #4d6bfe 100%);
+  --beacon-shell-sidebar-active-text: #ffffff;
+  --beacon-shell-sidebar-section: #8a97ab;
+  --beacon-shell-header-bg: var(--beacon-surface-muted);
+  --beacon-shell-action-hover: #f1f4f9;
+}
+
+/* ===== DARK THEME ===== */
+[data-theme="dark"] {
+  /* Surface */
+  --beacon-surface-body: #0f1115;
+  --beacon-surface-panel: #181b22;
+  --beacon-surface-muted: #14171d;
+  --beacon-surface-elevated: #20242d;
+  --beacon-surface-sider: #0b0d12;
+
+  /* Border */
+  --beacon-border-soft: #2a2f3a;
+  --beacon-border-muted: #222731;
+  --beacon-border-strong: #3a4250;
+
+  /* Text */
+  --beacon-text-strong: #f4f6fa;
+  --beacon-text-default: #dce2ec;
+  --beacon-text-muted: #98a2b2;
+  --beacon-text-faint: #687386;
+
+  /* Shadow */
+  --beacon-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --beacon-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --beacon-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
+  --beacon-shadow-lg: 0 10px 24px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.2);
+  --beacon-shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.25);
+  --beacon-shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.2), 0 10px 24px rgba(0, 0, 0, 0.15);
+
+  /* Glassmorphism */
+  --beacon-glass-bg: rgba(24, 27, 34, 0.82);
+  --beacon-glass-border: rgba(255, 255, 255, 0.06);
+
+  /* JSON / code blocks */
+  --beacon-code-bg: #14171d;
+  --beacon-code-text: #cbd5e1;
+
+  /* Alarm severity — keep hue, brighten for dark bg */
+  --color-alarm-critical: #f87171;
+  --color-alarm-critical-bg: rgba(220, 38, 38, 0.12);
+  --color-alarm-high: #fb923c;
+  --color-alarm-high-bg: rgba(234, 88, 12, 0.12);
+  --color-alarm-medium: #fbbf24;
+  --color-alarm-medium-bg: rgba(217, 119, 6, 0.12);
+  --color-alarm-low: #7b96ff;
+  --color-alarm-low-bg: rgba(57, 100, 254, 0.12);
+
+  /* Status — brighten for dark bg */
+  --color-status-online: #4ade80;
+  --color-status-online-bg: rgba(22, 163, 74, 0.12);
+  --color-status-offline: #6b7280;
+  --color-status-offline-bg: rgba(107, 114, 128, 0.08);
+  --color-status-running: #7b96ff;
+  --color-status-running-bg: rgba(57, 100, 254, 0.12);
+  --color-status-stopped: #f87171;
+  --color-status-stopped-bg: rgba(220, 38, 38, 0.12);
+  --color-status-warning: #fbbf24;
+  --color-status-warning-bg: rgba(217, 119, 6, 0.12);
+
+  /* Tone cards — dark variants */
+  --beacon-tone-slate-head: #1c2130;
+  --beacon-tone-slate-icon-bg: #222731;
+  --beacon-tone-slate-icon-border: #2a2f3a;
+  --beacon-tone-slate-icon-color: #98a2b2;
+
+  --beacon-tone-blue-head: rgba(57, 100, 254, 0.12);
+  --beacon-tone-blue-icon-bg: rgba(57, 100, 254, 0.18);
+  --beacon-tone-blue-icon-border: rgba(57, 100, 254, 0.3);
+  --beacon-tone-blue-icon-color: #7b96ff;
+
+  --beacon-tone-cyan-head: rgba(8, 145, 178, 0.1);
+  --beacon-tone-cyan-icon-bg: rgba(8, 145, 178, 0.15);
+  --beacon-tone-cyan-icon-border: rgba(8, 145, 178, 0.25);
+  --beacon-tone-cyan-icon-color: #22d3ee;
+
+  --beacon-tone-green-head: rgba(21, 128, 61, 0.1);
+  --beacon-tone-green-icon-bg: rgba(21, 128, 61, 0.15);
+  --beacon-tone-green-icon-border: rgba(21, 128, 61, 0.25);
+  --beacon-tone-green-icon-color: #4ade80;
+
+  --beacon-tone-orange-head: rgba(194, 65, 12, 0.1);
+  --beacon-tone-orange-icon-bg: rgba(194, 65, 12, 0.15);
+  --beacon-tone-orange-icon-border: rgba(194, 65, 12, 0.25);
+  --beacon-tone-orange-icon-color: #fb923c;
+
+  /* Shell */
+  --beacon-shell-sidebar-bg: rgba(11, 13, 18, 0.96);
+  --beacon-shell-sidebar-hover: rgba(57, 100, 254, 0.1);
+  --beacon-shell-sidebar-active: linear-gradient(135deg, rgba(49, 87, 232, 0.84) 0%, rgba(77, 107, 254, 0.96) 100%);
+  --beacon-shell-sidebar-active-text: #ffffff;
+  --beacon-shell-sidebar-section: #64748b;
+  --beacon-shell-header-bg: var(--beacon-surface-muted);
+  --beacon-shell-action-hover: rgba(255, 255, 255, 0.06);
+}

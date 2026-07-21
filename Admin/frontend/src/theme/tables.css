@@ -1,0 +1,55 @@
+/* ===== Beacon Table Styles ===== */
+
+.ant-table-wrapper .ant-table-cell {
+  word-break: break-all;
+}
+
+.ant-table-wrapper .ant-table-thead > tr > th {
+  font-weight: 600;
+  font-size: var(--beacon-text-sm);
+}
+
+/* Dark mode alternating rows */
+[data-theme="dark"] .ant-table-wrapper .ant-table-tbody > tr:nth-child(even) > td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* Dark mode header gradient */
+[data-theme="dark"] .ant-table-wrapper .ant-table-thead > tr > th {
+  background: linear-gradient(180deg, #1e2235 0%, #1a1d27 100%);
+  border-bottom-color: var(--beacon-border-soft);
+}
+
+/* Pagination pill style */
+.ant-table-wrapper .ant-pagination .ant-pagination-item {
+  border-radius: var(--beacon-radius-md);
+}
+
+.ant-table-wrapper .ant-pagination .ant-pagination-item-active {
+  border-color: var(--beacon-tone-blue-icon-color, #2563eb);
+}
+
+/* Table row hover left accent (subtle) */
+.ant-table-wrapper .ant-table-tbody > tr {
+  position: relative;
+}
+
+.ant-table-wrapper .ant-table-tbody > tr > td:first-child {
+  position: relative;
+}
+
+.ant-table-wrapper .ant-table-tbody > tr > td:first-child::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: transparent;
+  transition: background var(--beacon-duration-fast) var(--beacon-ease-out);
+}
+
+.ant-table-wrapper .ant-table-tbody > tr:hover > td:first-child::before {
+  background: var(--beacon-tone-blue-icon-color, #2563eb);
+}

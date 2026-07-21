@@ -1,0 +1,35 @@
+{{- if .Values.beaconCloud.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "beacon-cloud-saas-v1.fullname" . }}
+  labels:
+    {{- include "beacon-cloud-saas-v1.labels" . | nindent 4 }}
+  {{- with .Values.beaconCloud.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.beaconCloud.ingress.className }}
+  ingressClassName: {{ .Values.beaconCloud.ingress.className }}
+  {{- end }}
+  rules:
+    {{- range .Values.beaconCloud.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ include "beacon-cloud-saas-v1.fullname" $ }}
+                port:
+                  number: {{ $.Values.beaconCloud.service.port }}
+          {{- end }}
+    {{- end }}
+  {{- with .Values.beaconCloud.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}

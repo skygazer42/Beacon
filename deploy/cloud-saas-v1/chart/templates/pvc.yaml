@@ -1,0 +1,19 @@
+{{- if .Values.demoVolume.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "beacon-cloud-saas-v1.demoPVCName" . }}
+  labels:
+    {{- include "beacon-cloud-saas-v1.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    {{- range .Values.demoVolume.accessModes }}
+    - {{ . }}
+    {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.demoVolume.size }}
+  {{- if .Values.demoVolume.storageClassName }}
+  storageClassName: {{ .Values.demoVolume.storageClassName | quote }}
+  {{- end }}
+{{- end }}

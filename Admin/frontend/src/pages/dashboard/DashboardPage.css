@@ -1,0 +1,491 @@
+.beacon-dashboard-v2 {
+  min-width: 0;
+}
+
+.beacon-dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.44fr) minmax(320px, 0.82fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.beacon-dashboard-grid__main,
+.beacon-dashboard-grid__side {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.beacon-dashboard-side-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.beacon-dashboard-overview-card > .ant-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.beacon-dashboard-overview-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.beacon-dashboard-overview-fact {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid var(--beacon-border-muted);
+  border-radius: 16px;
+  background: linear-gradient(180deg, var(--beacon-surface-panel) 0%, var(--beacon-surface-muted) 100%);
+}
+
+.beacon-dashboard-overview-fact__label {
+  color: var(--beacon-text-faint);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.beacon-dashboard-overview-fact__value {
+  color: var(--beacon-text-strong);
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.beacon-dashboard-overview-fact__meta {
+  color: var(--beacon-text-muted);
+  font-size: 12px;
+}
+
+.beacon-dashboard-overview-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.beacon-dashboard-metric-tile {
+  display: flex;
+  min-height: 208px;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--beacon-border-muted);
+  border-radius: 18px;
+  background: linear-gradient(180deg, var(--beacon-surface-panel) 0%, var(--beacon-surface-muted) 100%);
+}
+
+.beacon-dashboard-metric-tile__head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.beacon-dashboard-metric-tile__label {
+  color: var(--beacon-text-default);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.beacon-dashboard-metric-tile__delta {
+  color: var(--beacon-text-muted);
+  font-size: 12px;
+}
+
+.beacon-dashboard-metric-tile__value {
+  color: var(--beacon-text-strong);
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.beacon-dashboard-metric-tile__spark {
+  display: flex;
+  flex: 1;
+  align-items: flex-end;
+}
+
+.beacon-dashboard-metric-tile__spark svg {
+  display: block;
+}
+
+.beacon-dashboard-metric-tile--network {
+  min-height: 208px;
+}
+
+.beacon-dashboard-network-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.beacon-dashboard-network-empty {
+  color: var(--beacon-text-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.beacon-dashboard-network-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--beacon-text-default);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.beacon-dashboard-network-legend__item i {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  flex: none;
+}
+
+.beacon-dashboard-network-bars {
+  display: flex;
+  flex: 1;
+  align-items: flex-end;
+  gap: 8px;
+  padding-top: 12px;
+}
+
+.beacon-dashboard-network-placeholder {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  border: 1px dashed var(--beacon-border-muted);
+  border-radius: 14px;
+  background: linear-gradient(180deg, var(--beacon-surface-muted) 0%, var(--beacon-surface-body) 100%);
+  color: var(--beacon-text-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.beacon-dashboard-network-bars__item {
+  display: grid;
+  flex: 1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+  gap: 4px;
+  min-height: 120px;
+}
+
+.beacon-dashboard-network-bars__bar {
+  border-radius: 10px 10px 4px 4px;
+  min-height: 10%;
+}
+
+.beacon-dashboard-network-bars__bar--upload {
+  background: linear-gradient(180deg, rgba(139, 92, 246, 0.3) 0%, #8b5cf6 100%);
+}
+
+.beacon-dashboard-network-bars__bar--download {
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.3) 0%, #2563eb 100%);
+}
+
+.beacon-dashboard-side-card .ant-card-head-title {
+  padding: 10px 0;
+}
+
+.beacon-dashboard-side-card .ant-card-extra {
+  display: flex;
+  align-items: center;
+  padding: 10px 0;
+}
+
+.beacon-dashboard-side-card--list .beacon-summary-kv__row {
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 10px;
+  padding: 6px 0;
+}
+
+.beacon-dashboard-side-card--list .beacon-summary-kv__label {
+  color: var(--beacon-text-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.beacon-dashboard-side-card--list .beacon-summary-kv__value {
+  color: var(--beacon-text-strong);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.beacon-status-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 58px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.beacon-status-chip--success {
+  background: var(--color-status-online-bg);
+  color: var(--color-status-online);
+}
+
+.beacon-status-chip--danger {
+  background: var(--color-status-stopped-bg);
+  color: var(--color-status-stopped);
+}
+
+.beacon-status-chip--warning {
+  background: var(--color-status-warning-bg);
+  color: var(--color-status-warning);
+}
+
+.beacon-status-chip--neutral {
+  background: var(--color-status-offline-bg);
+  color: var(--color-status-offline);
+}
+
+.beacon-dashboard-donut-card {
+  display: grid;
+  grid-template-columns: 148px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.beacon-dashboard-donut-card__chart {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+
+.beacon-dashboard-donut-card__center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.beacon-dashboard-donut-card__center strong {
+  color: var(--beacon-text-strong);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.beacon-dashboard-donut-card__center span {
+  color: var(--beacon-text-muted);
+  font-size: 12px;
+  margin-top: 6px;
+}
+
+.beacon-dashboard-donut-card__content {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.beacon-dashboard-donut-card__summary {
+  color: var(--beacon-text-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.beacon-dashboard-donut-card__legend {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.beacon-dashboard-donut-card__legend-item {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  color: var(--beacon-text-default);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.beacon-dashboard-donut-card__legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.beacon-dashboard-donut-card__legend-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.beacon-dashboard-device-status {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.beacon-dashboard-device-status__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 8px;
+  border-radius: 16px;
+  border: 1px solid var(--beacon-border-muted);
+  background: linear-gradient(180deg, var(--beacon-surface-panel) 0%, var(--beacon-surface-muted) 100%);
+}
+
+.beacon-dashboard-device-status__icon {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid;
+  border-radius: 14px;
+}
+
+.beacon-dashboard-device-status__dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+}
+
+.beacon-dashboard-device-status__label {
+  color: var(--beacon-text-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.beacon-dashboard-device-status__value {
+  color: var(--beacon-text-strong);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.beacon-dashboard-table-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.beacon-dashboard-table-card .ant-table-wrapper {
+  overflow: hidden;
+  border-radius: 0 0 18px 18px;
+}
+
+.beacon-dashboard-table-card .ant-table-tbody > tr > td,
+.beacon-dashboard-table-card .ant-table-thead > tr > th {
+  padding: 12px 16px;
+}
+
+.beacon-dashboard-alarm-card__body {
+  display: grid;
+  grid-template-columns: minmax(0, 360px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: end;
+}
+
+.beacon-dashboard-alarm-card__stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.beacon-dashboard-alarm-card__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.beacon-dashboard-alarm-card__stat span {
+  color: var(--beacon-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.beacon-dashboard-alarm-card__stat strong {
+  color: var(--beacon-text-strong);
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.beacon-dashboard-alarm-card__stat--danger strong {
+  color: #ef4444;
+}
+
+.beacon-dashboard-alarm-card__stat--warning strong {
+  color: #f97316;
+}
+
+.beacon-dashboard-alarm-card__stat--info strong {
+  color: #2563eb;
+}
+
+.beacon-dashboard-alarm-card__chart {
+  align-self: stretch;
+}
+
+.beacon-dashboard-alarm-card__chart svg {
+  display: block;
+}
+
+@media (max-width: 1399px) {
+  .beacon-dashboard-overview-facts,
+  .beacon-dashboard-overview-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .beacon-dashboard-alarm-card__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1199px) {
+  .beacon-dashboard-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .beacon-dashboard-side-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .beacon-dashboard-table-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 767px) {
+  .beacon-dashboard-side-grid,
+  .beacon-dashboard-overview-facts,
+  .beacon-dashboard-overview-metrics,
+  .beacon-dashboard-device-status,
+  .beacon-dashboard-alarm-card__stats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .beacon-dashboard-metric-tile {
+    min-height: 180px;
+  }
+
+  .beacon-dashboard-donut-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .beacon-dashboard-donut-card__chart {
+    justify-content: flex-start;
+  }
+}

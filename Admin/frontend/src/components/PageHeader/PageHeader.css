@@ -1,0 +1,77 @@
+/* ===== Beacon PageHeader Component ===== */
+
+.beacon-page-header {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 18px;
+  animation: beacon-slide-up var(--beacon-duration-normal) var(--beacon-ease-out);
+}
+
+.beacon-page-header__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+}
+
+.beacon-page-header__left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* --- Icon container: circular gradient background 36x36 --- */
+.beacon-page-header__icon {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--beacon-tone-blue-icon-border);
+  border-radius: 14px;
+  background: linear-gradient(180deg, var(--beacon-tone-blue-head) 0%, var(--beacon-tone-blue-icon-bg) 100%);
+  color: var(--beacon-tone-blue-icon-color);
+  font-size: 18px;
+}
+
+/* --- Title text --- */
+.beacon-page-header__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--beacon-text-strong);
+  line-height: 1.3;
+}
+
+/* Display variant: Fraunces font */
+.beacon-page-header__title--display {
+  font-family: 'Fraunces', serif;
+  font-size: var(--beacon-text-xl);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* --- Description (subtitle) --- */
+.beacon-page-header__description {
+  margin: 0;
+  font-size: 13px;
+  color: var(--beacon-text-muted);
+  line-height: 1.5;
+}
+
+/* --- Right slot --- */
+.beacon-page-header__extra {
+  display: flex;
+  align-items: center;
+  gap: var(--beacon-space-2);
+  flex: none;
+}
+
+/* --- Bottom gradient divider --- */
+.beacon-page-header__divider {
+  display: none;
+}
