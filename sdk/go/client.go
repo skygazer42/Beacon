@@ -226,7 +226,7 @@ func (c *Client) UploadAlarm(payload UploadAlarmRequest) (*APIResponse, error) {
 
 func (c *Client) CheckVersion(params map[string]string) (map[string]any, error) {
 	data := map[string]any{}
-	if _, err := c.getDataWithQuery("/open/checkVersion", params, "", &data); err != nil {
+	if _, err := c.getDataWithQuery("/open/checkVersion", params, c.openAPIToken, &data); err != nil {
 		return nil, err
 	}
 	return data, nil

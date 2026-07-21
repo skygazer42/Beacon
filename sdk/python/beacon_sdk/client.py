@@ -166,7 +166,7 @@ class BeaconClient:
         return self._post_open_json("/open/alarm/upload", dict(payload or {}))
 
     def check_version(self, **params):
-        payload = self._get_with_params("/open/checkVersion", params=dict(params or {}), headers={})
+        payload = self._get_with_params("/open/checkVersion", params=dict(params or {}), headers=self._open_headers())
         return payload.get("data")
 
     def get_license_info(self):

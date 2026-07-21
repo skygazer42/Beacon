@@ -243,7 +243,7 @@ export class BeaconClient {
   }
 
   async checkVersion(params = {}) {
-    return this._getData("/open/checkVersion", { headers: {}, query: params });
+    return this._getData("/open/checkVersion", { headers: this._openHeaders(), query: params });
   }
 
   async getLicenseInfo() {

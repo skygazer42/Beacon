@@ -200,6 +200,7 @@ func TestNonSuccessResponseReturnsAPIError(t *testing.T) {
 
 func TestCheckVersionForwardsQueryParamsAndReturnsData(t *testing.T) {
 	var gotQuery url.Values
+	var gotToken string
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/open/checkVersion" {
@@ -207,6 +208,7 @@ func TestCheckVersionForwardsQueryParamsAndReturnsData(t *testing.T) {
 			return
 		}
 		gotQuery = r.URL.Query()
+		gotToken = r.Header.Get(headerBeaconToken)
 		writeJSON(t, w, map[string]any{
 			"code": 1000,
 			"msg":  "success",
@@ -215,7 +217,7 @@ func TestCheckVersionForwardsQueryParamsAndReturnsData(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := NewClient(server.URL)
+	client, err := NewClient(server.URL, WithOpenAPIToken("token-open-001"))
 	if err != nil {
 		t.Fatalf(newClientErrFmt, err)
 	}
@@ -235,6 +237,9 @@ func TestCheckVersionForwardsQueryParamsAndReturnsData(t *testing.T) {
 	}
 	if got := gotQuery.Get("infer_engine_version"); got != "2024.4" {
 		t.Fatalf("infer_engine_version = %q, want 2024.4", got)
+	}
+	if gotToken != "token-open-001" {
+		t.Fatalf("X-Beacon-Token = %q, want token-open-001", gotToken)
 	}
 }
 

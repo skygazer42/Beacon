@@ -207,7 +207,7 @@ class BeaconClientSdkTest(unittest.TestCase):
             "msg": "success",
             "data": {"currentVersion": "4.22.0", "hasUpdate": False},
         }
-        client = BeaconClient("http://localhost:9991", session=session)
+        client = BeaconClient("http://localhost:9991", session=session, open_api_token="token-open-001")
 
         result = client.check_version(infer_engine="openvino", infer_engine_version="2024.4")
 
@@ -220,7 +220,7 @@ class BeaconClientSdkTest(unittest.TestCase):
                     "http://localhost:9991/open/checkVersion",
                     {
                         "params": {"infer_engine": "openvino", "infer_engine_version": "2024.4"},
-                        "headers": {},
+                        "headers": {"X-Beacon-Token": "token-open-001"},
                         "timeout": 10.0,
                     },
                 )

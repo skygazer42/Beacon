@@ -211,7 +211,7 @@ test("checkVersion forwards query params and returns data payload", async () => 
     calls.push({ url, options });
     return makeResponse({ code: 1000, msg: "success", data: { currentVersion: "4.22.0", hasUpdate: false } });
   };
-  const client = new BeaconClient("http://localhost:9991", { fetchImpl });
+  const client = new BeaconClient("http://localhost:9991", { fetchImpl, openApiToken: "token-open-001" });
 
   const payload = await client.checkVersion({ infer_engine: "openvino", infer_engine_version: "2024.4" });
 
@@ -221,7 +221,7 @@ test("checkVersion forwards query params and returns data payload", async () => 
       url: "http://localhost:9991/open/checkVersion?infer_engine=openvino&infer_engine_version=2024.4",
       options: {
         method: "GET",
-        headers: {},
+        headers: { "x-beacon-token": "token-open-001" },
         credentials: "include",
       },
     },
