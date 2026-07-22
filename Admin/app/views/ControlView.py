@@ -1000,8 +1000,8 @@ def _fetch_control_rows(where_sql: str, where_params, *, page: int, page_size: i
     """获取控制记录。"""
     skip = (page - 1) * page_size
     return g_djangoSql.select(
-        "select * from av_control%s order by id desc limit %d,%d" % (where_sql, skip, page_size),
-        where_params,
+        "select * from av_control%s order by id desc limit %%s offset %%s" % where_sql,
+        [*where_params, page_size, skip],
     )
 
 

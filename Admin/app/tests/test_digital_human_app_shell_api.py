@@ -116,6 +116,7 @@ class DigitalHumanAppShellApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"beacon-app-root", response.content)
         self.assertIn(b'"isStaff": true', response.content)
+        self.assertIn("数字人监管".encode(), response.content)
 
     @mock.patch("app.services.digital_human.requests.post")
     def test_dashboard_endpoint_reads_local_digital_human_models(self, mocked_post):

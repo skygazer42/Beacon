@@ -381,8 +381,7 @@ def api_open_index(request):
         page_size = 10
 
     skip = (page - 1) * page_size
-    sql_data = "select * from av_stream order by id desc limit %d,%d " % (
-        skip, page_size)
+    sql_data = "select * from av_stream order by id desc limit %s offset %s"
     sql_data_num = "select count(id) as count from av_stream "
 
     count = g_djangoSql.select(sql_data_num)
@@ -390,7 +389,7 @@ def api_open_index(request):
     if len(count) > 0:
         count = int(count[0]["count"])
 
-        __data = g_djangoSql.select(sql_data)
+        __data = g_djangoSql.select(sql_data, [page_size, skip])
         for d in __data:
             d["camera_device_id"] = d["nickname"]
             d["pull_stream_type"] = 1

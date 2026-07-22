@@ -135,6 +135,8 @@ class OidcSsoLoginTest(TestCase):
         res = self.client.get("/login")
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.content.count(b"form.addEventListener('submit'"), 1)
+        self.assertIn(b'autocomplete="username"', res.content)
+        self.assertIn(b'autocomplete="current-password"', res.content)
 
     def test_oidc_start_rejects_invalid_provider_id(self):
         res = self.client.get("/login/oidc/start?provider=../bad")

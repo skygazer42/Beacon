@@ -12,7 +12,7 @@ hide:
 
 [![GitHub](https://img.shields.io/badge/GitHub-Beacon-181717?style=for-the-badge&logo=github)](https://github.com/skygazer42/Beacon)
 [![License](https://img.shields.io/badge/License-Beacon%20MIT-green?style=for-the-badge)](https://github.com/skygazer42/Beacon/blob/main/LICENSE)
-[![Version](https://img.shields.io/badge/Version-v4.753-667eea?style=for-the-badge)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-v5.0.0-667eea?style=for-the-badge)](CHANGELOG.md)
 
 </div>
 

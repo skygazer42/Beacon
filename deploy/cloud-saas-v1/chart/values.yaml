@@ -33,7 +33,7 @@ beaconCloud:
   replicaCount: 1
   image:
     repository: beacon-cloud-saas-v1
-    tag: v4.753
+    tag: v5.0.0
     pullPolicy: IfNotPresent
   service:
     type: ClusterIP
@@ -149,7 +149,7 @@ edgeSimulator:
   enabled: false
   image:
     repository: beacon-cloud-saas-v1
-    tag: v4.753
+    tag: v5.0.0
     pullPolicy: IfNotPresent
   cloudBaseURL: ""
   restartPolicy: OnFailure

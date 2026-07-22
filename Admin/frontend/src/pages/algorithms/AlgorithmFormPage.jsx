@@ -59,6 +59,7 @@ const hintStyle = {
   color: '#64748b',
   fontSize: 12,
   lineHeight: 1.5,
+  overflowWrap: 'anywhere',
 };
 
 const compactButtonsStyle = {

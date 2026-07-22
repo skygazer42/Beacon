@@ -18,7 +18,7 @@ def _admin_user_or_response(request):
     return db_user, None
 
 
-def _render_react_shell(request):
+def _render_react_shell(request, page_title):
     """渲染数字人监管 React 页面壳。"""
     db_user, response = _admin_user_or_response(request)
     if response:
@@ -29,6 +29,7 @@ def _render_react_shell(request):
         "app/base_react_shell.html",
         {
             "user": getUser(request),
+            "page_title": page_title,
             "bootstrap_is_staff": bool(getattr(db_user, "is_staff", False)),
             "bootstrap_is_superuser": bool(getattr(db_user, "is_superuser", False)),
         },
@@ -37,32 +38,32 @@ def _render_react_shell(request):
 
 def dashboard(request):
     """渲染数字人监管大盘。"""
-    return _render_react_shell(request)
+    return _render_react_shell(request, "数字人监管")
 
 
 def device_monitor(request):
     """渲染数字人设备监控页。"""
-    return _render_react_shell(request)
+    return _render_react_shell(request, "终端设备监控")
 
 
 def alert_center(request):
     """渲染数字人告警中心页。"""
-    return _render_react_shell(request)
+    return _render_react_shell(request, "数字人告警中心")
 
 
 def monitor_logs(request):
     """渲染数字人监管日志页。"""
-    return _render_react_shell(request)
+    return _render_react_shell(request, "数字人监管日志")
 
 
 def ops_report(request):
     """渲染数字人运维报告页。"""
-    return _render_react_shell(request)
+    return _render_react_shell(request, "数字人运维报告")
 
 
 def system_settings(request):
     """渲染数字人系统设置页。"""
-    return _render_react_shell(request)
+    return _render_react_shell(request, "数字人系统设置")
 
 
 def device_screenshot(request):

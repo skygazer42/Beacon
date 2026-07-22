@@ -75,3 +75,16 @@
 .beacon-page-header__divider {
   display: none;
 }
+
+@media (max-width: 640px) {
+  .beacon-page-header__row {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .beacon-page-header__extra {
+    flex: 1 1 100%;
+    min-width: 0;
+    overflow-x: auto;
+  }
+}

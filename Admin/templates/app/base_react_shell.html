@@ -9,7 +9,7 @@
     <link rel="shortcut icon" href="/static/images/favicon.ico">
     <link rel="icon" type="image/png" href="/static/images/logo.png">
     <link rel="apple-touch-icon" href="/static/images/logo.png">
-    <title>{{ site_title|default:"Beacon 新一代 AI 视频分析系统" }} | {% block title %}{% endblock %}</title>
+    <title>{{ site_title|default:"Beacon 新一代 AI 视频分析系统" }} | {% block title %}{{ page_title|default:"" }}{% endblock %}</title>
     <link href="/static/app-shell/beacon-shell.css?v={{ project_version|urlencode }}" rel="stylesheet">
   </head>
   <body class="beacon-shell-body">

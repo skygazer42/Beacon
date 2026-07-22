@@ -347,21 +347,21 @@
         <div class="form-group">
           <label for="username">用户名 / 邮箱</label>
           <div class="input-wrapper">
-            <input type="text" id="username" name="username" class="form-input" placeholder="admin@example.com" required autofocus>
+            <input type="text" id="username" name="username" class="form-input" placeholder="admin@example.com" autocomplete="username" required autofocus>
           </div>
         </div>
 
         <div class="form-group">
           <label for="password">密码</label>
           <div class="input-wrapper">
-            <input type="password" id="password" name="password" class="form-input" placeholder="••••••••" required>
+            <input type="password" id="password" name="password" class="form-input" placeholder="••••••••" autocomplete="current-password" required>
           </div>
         </div>
 
         <div class="form-group">
           <label for="totp_code">TOTP 验证码 (可选)</label>
           <div class="input-wrapper">
-            <input type="text" id="totp_code" name="totp_code" class="form-input" placeholder="6位数字">
+            <input type="text" id="totp_code" name="totp_code" class="form-input" placeholder="6位数字" autocomplete="one-time-code" inputmode="numeric">
           </div>
         </div>
 

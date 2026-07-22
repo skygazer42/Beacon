@@ -263,6 +263,7 @@ export default function OnvifPage() {
             columns={deviceColumns}
             dataSource={devices}
             pagination={false}
+            scroll={{ x: 'max-content' }}
           />
         </Card>
 

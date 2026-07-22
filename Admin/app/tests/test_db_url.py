@@ -1,6 +1,9 @@
-from django.test import SimpleTestCase
+from unittest import mock
+
+from django.test import RequestFactory, SimpleTestCase
 
 from app.utils.DbUrl import parse_database_url
+from app.views import ControlView, StreamView
 
 
 class DatabaseUrlTest(SimpleTestCase):
@@ -35,3 +38,39 @@ class DatabaseUrlTest(SimpleTestCase):
     def test_rejects_invalid_port(self):
         with self.assertRaisesRegex(ValueError, "invalid port"):
             parse_database_url("postgresql://beacon:secret@db.internal:not-a-port/beacon")
+
+
+class CrossDatabasePaginationTest(SimpleTestCase):
+    def test_control_query_uses_portable_limit_offset_syntax(self):
+        database = mock.Mock()
+        database.select.return_value = []
+
+        with mock.patch.object(ControlView, "g_djangoSql", database):
+            ControlView._fetch_control_rows(
+                " where stream_app = %s",
+                ["live"],
+                page=2,
+                page_size=20,
+            )
+
+        database.select.assert_called_once_with(
+            "select * from av_control where stream_app = %s order by id desc limit %s offset %s",
+            ["live", 20, 20],
+        )
+
+    def test_stream_query_uses_portable_limit_offset_syntax(self):
+        database = mock.Mock()
+        database.select.side_effect = [[{"count": 1}], []]
+        request = RequestFactory().get("/stream/openIndex", {"p": 2, "ps": 20})
+
+        with mock.patch.object(StreamView, "g_djangoSql", database):
+            response = StreamView.api_open_index(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            database.select.call_args_list[1],
+            mock.call(
+                "select * from av_stream order by id desc limit %s offset %s",
+                [20, 20],
+            ),
+        )
