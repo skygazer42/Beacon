@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="#cloud-poc">Cloud POC</a> ·
+  <a href="#快速开始">快速开始</a> ·
   <a href="#系统架构">系统架构</a> ·
   <a href="docs/deploy/README.md">部署文档</a> ·
   <a href="docs/api/index.md">API</a> ·
@@ -64,31 +64,59 @@ Beacon 由 Admin、MediaServer 和 Analyzer 三个独立进程组成。当前版
 
 实现边界和进程关系见 [系统架构说明](docs/architecture/index.md)。
 
-## Cloud POC
+## 快速开始
 
-Docker Cloud POC 用于验证登录、边缘节点注册、对象存储和云端告警流程：
+Beacon 的完整视频分析链路由 MediaServer、Analyzer 和 Admin 共同提供。以下流程适用于 Linux 源码部署；首次安装应先按 [Linux 本机开发](docs/deployment/local-linux.md) 准备系统依赖、ONNX Runtime、OpenVINO 和模型文件。
+
+初始化 Admin 并构建两个 C++ 进程：
 
     git clone https://github.com/skygazer42/Beacon.git
-    cd Beacon/deploy/cloud-saas-v1
-    cp .env.example .env
-    # 替换 .env 中所有 CHANGE_ME 占位值，并确保各密钥互不重复
-    docker compose up -d --build
+    cd Beacon
 
-启动完成后访问 <code>http://localhost:9991/login</code>。默认管理员用户名为 <code>admin</code>，密码由 <code>.env</code> 中的 <code>BEACON_BOOTSTRAP_ADMIN_PASSWORD</code> 配置。
+    python3 -m venv Admin/venv
+    source Admin/venv/bin/activate
+    python -m pip install -r Admin/requirements-linux.txt
+    python Admin/manage.py migrate --noinput
+    python Admin/manage.py createsuperuser
 
-> Cloud POC 仅包含云端管理与模拟边缘告警链路，不启动 MediaServer 或 Analyzer。摄像头接入和模型推理需要按 [Edge 全栈部署](docs/deploy/edge-full-stack.md) 准备原生依赖、模型和运行时。
+    cmake -S MediaServer/source -B MediaServer/source/build -DCMAKE_BUILD_TYPE=Release
+    cmake --build MediaServer/source/build -j
+    bash tools/build_analyzer_local.sh
+
+启动前应确认根目录 <code>config.json</code> 与 MediaServer 生成的 <code>config.ini</code> 使用相同的媒体密钥，并将 HTTP、RTSP、RTMP 端口分别配置为 <code>9992</code>、<code>9994</code>、<code>9995</code>。随后在三个终端中依次启动：
+
+**终端 1：MediaServer**
+
+    cd MediaServer/source/release/linux/Release
+    ./MediaServer -c ./config.ini
+
+**终端 2：Analyzer**
+
+    bash tools/run_analyzer_local.sh
+
+**终端 3：Admin**
+
+    source Admin/venv/bin/activate
+    python Admin/manage.py runserver 0.0.0.0:9991
+
+验证三个进程：
+
+    curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:9991/login
+    curl -sS "http://127.0.0.1:9992/index/api/getServerConfig?secret=<mediaSecret>" | head
+    curl -sS http://127.0.0.1:9993/api/health
+
+Admin 登录页应返回 HTTP <code>200</code>，MediaServer 应返回包含 <code>code: 0</code> 的配置数据，Analyzer 应返回包含 <code>code: 1000</code> 的健康状态。配置 <code>openApiToken</code> 后，Analyzer 健康检查还需携带 <code>X-Beacon-Token</code> 请求头。完整配置与摄像头验收流程见 [Edge 全栈部署](docs/deploy/edge-full-stack.md) 和 [端到端验收](docs/deploy/e2e-acceptance.md)。
 
 ## 部署选择
 
 | 部署形态 | 运行内容 | 前置条件 | 文档 |
 |---|---|---|---|
-| Cloud POC | Admin、PostgreSQL、MinIO、边缘模拟器 | Docker Compose、独立强密钥 | [Cloud POC](docs/deploy/README.md) |
 | Edge 源码部署 | Admin、MediaServer、Analyzer | 原生依赖、模型、匹配的推理运行时 | [Edge 全栈](docs/deploy/edge-full-stack.md) |
 | 本机开发 | 按需启动三个进程 | Python、Node.js 和 C++ 构建环境 | [Linux](docs/deployment/local-linux.md) · [Windows](docs/deployment/local-windows.md) |
 | 二进制私有化交付 | 已编译程序、配置、模型与授权 | 由交付方另行提供完整交付包 | [交付包规范](docs/deploy/delivery-layout.md) |
 | Kubernetes 云端部署 | Beacon Cloud、PostgreSQL、MinIO | 自建应用镜像、镜像仓库、Secret 和持久化存储 | [Kubernetes](docs/deployment/kubernetes.md) |
 
-生产环境应通过反向代理统一暴露 Admin。Analyzer、MediaServer、PostgreSQL 和 MinIO 应限制在受信网络；Cloud POC 的 MinIO 端口映射仅用于本地验证。详见 [端口与防火墙](docs/deploy/ports-and-firewall.md)。
+生产环境应通过反向代理统一暴露 Admin。Analyzer、MediaServer、PostgreSQL 和 MinIO 应限制在受信网络。详见 [端口与防火墙](docs/deploy/ports-and-firewall.md)。
 
 ## 模型与硬件边界
 
