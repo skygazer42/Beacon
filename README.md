@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="#快速体验">快速体验</a> ·
+  <a href="#cloud-poc">Cloud POC</a> ·
   <a href="#系统架构">系统架构</a> ·
   <a href="docs/deploy/README.md">部署文档</a> ·
   <a href="docs/api/index.md">API</a> ·
@@ -26,7 +26,7 @@
   <img src="docs/assets/readme/product-overview.png" alt="Beacon 产品总览" width="100%">
 </p>
 
-<p align="center"><sub>Edge 管理控制台实拍；主机标识已匿名化，运行数据仅用于界面展示。</sub></p>
+<p align="center"><sub>Edge 管理控制台界面示例；主机标识已匿名化，运行数据仅用于功能展示。</sub></p>
 
 ## 核心能力
 
@@ -45,7 +45,7 @@
   <img src="docs/assets/readme/architecture-overview.png" alt="Beacon 系统架构" width="100%">
 </p>
 
-Beacon 是三个可独立启动的进程，不是无状态微服务集群：
+Beacon 由 Admin、MediaServer 和 Analyzer 三个独立进程组成。当前版本不以无状态微服务架构为部署目标。
 
 | 组件 | 技术栈 | 默认端口 | 职责 |
 |---|---|---:|---|
@@ -53,7 +53,7 @@ Beacon 是三个可独立启动的进程，不是无状态微服务集群：
 | **MediaServer** | C++ / ZLMediaKit 体系 | <code>9992</code> / <code>9994</code> / <code>9995</code> | 流接入、协议分发、播放、录像与截图 |
 | **Analyzer** | C++17 | <code>9993</code> | 解码、模型推理、追踪、行为分析与告警生成 |
 
-一条完整链路：
+典型数据链路如下：
 
     摄像头 / NVR / 推流端
             │ RTSP / RTMP
@@ -64,41 +64,41 @@ Beacon 是三个可独立启动的进程，不是无状态微服务集群：
 
 实现边界和进程关系见 [系统架构说明](docs/architecture/index.md)。
 
-## 快速体验
+## Cloud POC
 
-最快入口是 Docker Cloud POC，适合查看登录、云边接入和云端告警流程：
+Docker Cloud POC 用于验证登录、边缘节点注册、对象存储和云端告警流程：
 
     git clone https://github.com/skygazer42/Beacon.git
     cd Beacon/deploy/cloud-saas-v1
     cp .env.example .env
-    # 将 .env 中所有 CHANGE_ME 替换为你自己的强随机值
+    # 替换 .env 中所有 CHANGE_ME 占位值，并确保各密钥互不重复
     docker compose up -d --build
 
-浏览器打开 <code>http://localhost:9991/login</code>，账号由 <code>.env</code> 中的 bootstrap 配置创建。
+启动完成后访问 <code>http://localhost:9991/login</code>。默认管理员用户名为 <code>admin</code>，密码由 <code>.env</code> 中的 <code>BEACON_BOOTSTRAP_ADMIN_PASSWORD</code> 配置。
 
-> Cloud POC 不包含真实 MediaServer / Analyzer 推理链路。接入摄像头并运行模型，请使用 [Edge 全栈部署](docs/deploy/edge-full-stack.md)。
+> Cloud POC 仅包含云端管理与模拟边缘告警链路，不启动 MediaServer 或 Analyzer。摄像头接入和模型推理需要按 [Edge 全栈部署](docs/deploy/edge-full-stack.md) 准备原生依赖、模型和运行时。
 
 ## 部署选择
 
-| 场景 | 运行内容 | 文档 |
-|---|---|---|
-| 快速体验云端流程 | Admin + PostgreSQL + MinIO | [Cloud POC](docs/deploy/README.md) |
-| 真实视频分析 | Admin + MediaServer + Analyzer | [Edge 全栈](docs/deploy/edge-full-stack.md) |
-| 本机源码开发 | 按需启动三个进程 | [Linux](docs/deployment/local-linux.md) · [Windows](docs/deployment/local-windows.md) |
-| 二进制私有化交付 | 已编译程序、配置、模型与授权 | [交付包规范](docs/deploy/delivery-layout.md) |
-| Kubernetes 云端部署 | Beacon Cloud + PostgreSQL + MinIO | [Kubernetes](docs/deployment/kubernetes.md) |
+| 部署形态 | 运行内容 | 前置条件 | 文档 |
+|---|---|---|---|
+| Cloud POC | Admin、PostgreSQL、MinIO、边缘模拟器 | Docker Compose、独立强密钥 | [Cloud POC](docs/deploy/README.md) |
+| Edge 源码部署 | Admin、MediaServer、Analyzer | 原生依赖、模型、匹配的推理运行时 | [Edge 全栈](docs/deploy/edge-full-stack.md) |
+| 本机开发 | 按需启动三个进程 | Python、Node.js 和 C++ 构建环境 | [Linux](docs/deployment/local-linux.md) · [Windows](docs/deployment/local-windows.md) |
+| 二进制私有化交付 | 已编译程序、配置、模型与授权 | 由交付方另行提供完整交付包 | [交付包规范](docs/deploy/delivery-layout.md) |
+| Kubernetes 云端部署 | Beacon Cloud、PostgreSQL、MinIO | 自建应用镜像、镜像仓库、Secret 和持久化存储 | [Kubernetes](docs/deployment/kubernetes.md) |
 
-默认只应对外开放 Admin <code>9991</code>；MediaServer 和 Analyzer 端口优先限制在本机或内网。详见 [端口与防火墙](docs/deploy/ports-and-firewall.md)。
+生产环境应通过反向代理统一暴露 Admin。Analyzer、MediaServer、PostgreSQL 和 MinIO 应限制在受信网络；Cloud POC 的 MinIO 端口映射仅用于本地验证。详见 [端口与防火墙](docs/deploy/ports-and-firewall.md)。
 
 ## 模型与硬件边界
 
-仓库不分发模型权重、厂商 SDK 或需要单独授权的硬件运行时。Analyzer 包含 ONNX Runtime、OpenVINO 和插件接入路径；CUDA、TensorRT、NPU 等能力取决于实际链接的运行时、插件和硬件。
+仓库不包含模型权重、厂商 SDK 或需要单独授权的硬件运行时。Analyzer 提供 ONNX Runtime、OpenVINO 和算法插件接入路径；CUDA、TensorRT 和 NPU 能力取决于部署环境中的硬件、驱动、运行时及插件。
 
-算法名称中的 <code>GPU</code>、<code>TRT</code> 或 <code>NPU</code> 只表达选择意图，不代表当前机器已经具备对应算力。
+算法名称中的 <code>GPU</code>、<code>TRT</code> 或 <code>NPU</code> 为调度标识，不构成硬件可用性声明。
 
 ## SDK
 
-面向 OpenAPI 集成提供三种客户端：
+仓库提供以下 OpenAPI 客户端：
 
 - [Python SDK](sdk/python/README.md)
 - [JavaScript SDK](sdk/javascript/README.md)
@@ -108,7 +108,7 @@ Beacon 是三个可独立启动的进程，不是无状态微服务集群：
 
 | 主题 | 文档 |
 |---|---|
-| 从零部署 | [部署总入口](docs/deploy/README.md) |
+| 部署说明 | [部署总入口](docs/deploy/README.md) |
 | 视频、布控与告警 | [使用指南](docs/guide/index.md) |
 | API 与鉴权 | [API 文档](docs/api/index.md) |
 | 配置项 | [配置参考](docs/deploy/config-reference.md) |
@@ -128,6 +128,6 @@ Beacon 是三个可独立启动的进程，不是无状态微服务集群：
 | <code>deploy/</code> | Docker Compose、Helm 与运维资源 |
 | <code>docs/</code> | 架构、部署、使用和 API 文档 |
 
-## License
+## 许可证
 
-Beacon 自研代码使用 [MIT License](LICENSE)。<code>MediaServer/source/</code> 和其他引入代码保留各自的上游许可与署名；分发前请阅读 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+Beacon 自研代码采用 [MIT License](LICENSE)。<code>MediaServer/source/</code> 及其他第三方代码保留各自的上游许可和署名要求；分发前应阅读 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
