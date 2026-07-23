@@ -1,10 +1,7 @@
 <p align="center">
-  <img src="docs/assets/logo.svg" alt="Beacon Logo" width="92">
+  <img src="docs/assets/readme/hero.png" alt="Beacon 新一代 AI 视频分析系统" width="1080">
 </p>
 
-<h1 align="center">Beacon</h1>
-
-<p align="center"><strong>新一代 AI 视频分析系统</strong></p>
 <p align="center">统一管理视频接入、AI 推理、布控告警、云边协同与平台运维，面向边缘和私有化部署。</p>
 
 <p align="center">
@@ -26,7 +23,7 @@
 ## 产品预览
 
 <p align="center">
-  <img src="docs/assets/readme/product-dashboard.png" alt="Beacon 系统总览" width="100%">
+  <img src="docs/assets/readme/product-overview.png" alt="Beacon 产品总览" width="100%">
 </p>
 
 <p align="center"><sub>Edge 管理控制台实拍；主机标识已匿名化，运行数据仅用于界面展示。</sub></p>
@@ -45,7 +42,7 @@
 ## 系统架构
 
 <p align="center">
-  <img src="docs/assets/architecture.svg" alt="Beacon 系统架构" width="900">
+  <img src="docs/assets/readme/architecture-overview.png" alt="Beacon 系统架构" width="100%">
 </p>
 
 Beacon 是三个可独立启动的进程，不是无状态微服务集群：

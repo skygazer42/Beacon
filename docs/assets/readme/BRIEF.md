@@ -6,14 +6,16 @@
 
 | 素材 | 用途 |
 |---|---|
-| <code>product-dashboard.png</code> | 当前 Edge 控制台实拍，主机标识与运行值已匿名化 |
-| <code>hero-candidate.png</code> | 横向品牌首图候选；确认 Logo 细节后再用于 README |
+| <code>hero.png</code> | README 正式品牌首图 |
+| <code>product-overview.png</code> | README 正式产品总览图 |
+| <code>architecture-overview.png</code> | README 正式系统架构图 |
+| <code>product-dashboard.png</code> | 匿名化的 Edge 控制台原始截图参考 |
 | <code>../architecture.svg</code> | 当前三进程架构参考 |
 | <code>../logo.svg</code> | 可编辑矢量 Logo 参考 |
 | <code>../branding/readme-brand.png</code> | 现有横向品牌图参考 |
 | <code>../branding/logo-icon.png</code> | 当前产品图标参考，不应把透明棋盘格画进新图 |
 
-## 需要重新制作的三类图
+## 三类图的内容口径
 
 ### 1. 品牌首图
 
@@ -44,11 +46,5 @@
 - “20+ 路”“亚秒级”“100% 准确率”等未经统一基准验证的数字。
 - 模型权重、客户数据、真实主机名、Token、密码或授权密钥。
 
-## 推荐交付文件名
-
-    docs/assets/readme/hero.webp
-    docs/assets/readme/product-overview.webp
-    docs/assets/readme/architecture.svg
-    docs/assets/readme/logo.svg
-
-新图验收后再替换 README 引用；当前 README 继续使用仓库内可验证的 Logo、实拍产品图和架构 SVG。
+README 当前只引用本目录内的 `hero.png`、`product-overview.png` 和
+`architecture-overview.png`；修改图片时保持文件名不变即可。
