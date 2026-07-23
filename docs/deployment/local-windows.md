@@ -35,7 +35,7 @@ icon: material/monitor
 |------|------|------|
 | Python 3.10–3.12 | `Admin` 本机 venv | 使用当前 `requirements-windows.txt` 从空 venv 安装 |
 | Git | 拉源码 | 任意可用版本 |
-| Node.js 18+ / npm 9+ | 前端构建 | 只改后台接口时可先不装 |
+| Node.js 20.19+ 或 22.12+ | 前端构建 | 只改后台接口时可先不装 |
 | Visual Studio 2019+ / 2022 | 编译 `Analyzer.exe` | 需要 C++ 桌面开发工作负载 |
 | CMake 3.16+ | 编译 `MediaServer` | 仅原生构建需要 |
 | Visual C++ Redistributable 2019+ | 运行原生 EXE | 最终包已附 `VC_redist.x64.exe` |

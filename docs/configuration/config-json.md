@@ -562,7 +562,7 @@ GB/T 28181 国标视频流接入相关配置。
   "saveAlarmType": 2,
   "alarmOutboxEnabled": false,
   "alarmWebhookEnabled": false,
-  "alarmHttpReportUrl": "https://cloud.example.com/ingest/alarm"
+  "saveAlarmUrl": "https://cloud.example.com/ingest/alarm"
 }
 ```
 
@@ -574,7 +574,7 @@ GB/T 28181 国标视频流接入相关配置。
 
 !!! note "关于 `gpuId` / `decoder`"
     旧示例里常见的 `gpuId`、`decoder` 并不是当前 `config.json` 全局字段。
-    以当前实现为准，系统级部署时应优先关注 `tensorrtEnginePluginPath`、`compatLibPath`、`rknpuPreprocessMode`、`hardwareDecoderType`、`hardwareEncoderType` 这些真实会被 `Analyzer/Core/Config.cpp` 读取的键。
+    以当前实现为准，系统级部署时应优先关注 `tensorrtEnginePluginPath`、`compatLibPath`、`rknpuPreprocessMode`、`hardwareDecoderType`、`hardwareEncoderType` 这些真实会被 `Analyzer/Analyzer/Core/Config.cpp` 读取的键。
 
 ---
 

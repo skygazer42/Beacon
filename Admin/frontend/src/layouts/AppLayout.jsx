@@ -41,8 +41,6 @@ import useThemeStore from '../stores/themeStore';
 import './AppLayout.css';
 
 const { Header, Sider, Content } = Layout;
-const APP_VERSION_TAG = String(import.meta.env.VITE_BEACON_VERSION || '').trim() || 'dev';
-const APP_VERSION = `Beacon ${APP_VERSION_TAG}`;
 
 const PRIMARY_ITEMS = [
   { key: 'overview', label: '系统总览', href: '/', match: ['/'], icon: <HomeOutlined /> },
@@ -236,6 +234,7 @@ export default function AppLayout({ currentPath, children }) {
   );
 
   const branding = getSiteBranding();
+  const appVersion = `Beacon ${branding.version}`;
   const popupMode = isBootstrapPopupMode();
   const themeMode = useThemeStore((state) => state.mode);
   const toggleTheme = useThemeStore((state) => state.toggle);
@@ -444,7 +443,7 @@ export default function AppLayout({ currentPath, children }) {
       {brandArea}
       <div className="beacon-sider-scroll">{renderSidebarNav(desktopCompact)}</div>
       <div className={`beacon-sider-footer${desktopCompact ? ' beacon-sider-footer--compact' : ''}`}>
-        <span className="beacon-sider-footer__version">{desktopCompact ? APP_VERSION_TAG : APP_VERSION}</span>
+        <span className="beacon-sider-footer__version">{desktopCompact ? branding.version : appVersion}</span>
       </div>
     </div>
   );
@@ -480,7 +479,7 @@ export default function AppLayout({ currentPath, children }) {
             </div>
             <div className="beacon-sider-scroll">{renderSidebarNav(false)}</div>
             <div className="beacon-sider-footer">
-              <span className="beacon-sider-footer__version">{APP_VERSION}</span>
+              <span className="beacon-sider-footer__version">{appVersion}</span>
             </div>
           </div>
         </Drawer>

@@ -24,8 +24,6 @@ import AppLayout from './AppLayout';
 import { resetBootstrapCache } from '../bootstrap';
 import { API } from '../api/endpoints';
 
-const APP_VERSION_TAG = String(import.meta.env.VITE_BEACON_VERSION || '').trim() || 'dev';
-
 const { mockUseApi } = vi.hoisted(() => ({
   mockUseApi: vi.fn(),
 }));
@@ -43,6 +41,7 @@ function mountBootstrap(queryString = '', userOverrides = {}, deploymentMode = '
         siteName: 'Beacon',
         siteTitle: 'Beacon 智能边缘平台',
         siteLogo: '/static/images/logo.png',
+        projectVersion: 'v1.0.0',
         deploymentMode,
         user: { id: '1', username: 'admin', isStaff: true, isSuperuser: false, ...userOverrides },
       })}
@@ -104,7 +103,7 @@ describe('AppLayout', () => {
     expect(screen.getByText('系统管理')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /算法管理/ })).toHaveAttribute('aria-current', 'page');
     expect(screen.queryByRole('button', { name: /系统设置/ })).not.toBeInTheDocument();
-    expect(screen.getByText(`Beacon ${APP_VERSION_TAG}`)).toBeInTheDocument();
+    expect(screen.getByText('Beacon v1.0.0')).toBeInTheDocument();
     expect(screen.getByLabelText('通知中心')).toBeInTheDocument();
     expect(screen.getByText('admin')).toBeInTheDocument();
     expect(screen.getByText('algorithm form')).toBeInTheDocument();
@@ -114,7 +113,7 @@ describe('AppLayout', () => {
     consoleErrorSpy.mockRestore();
   });
 
-  it('uses the latest git tag in the compact sidebar version', () => {
+  it('uses the backend project version in the compact sidebar', () => {
     mountBootstrap('');
 
     render(
@@ -125,7 +124,7 @@ describe('AppLayout', () => {
 
     fireEvent.click(screen.getByLabelText('折叠侧边栏'));
 
-    expect(screen.getByText(APP_VERSION_TAG)).toBeInTheDocument();
+    expect(screen.getByText('v1.0.0')).toBeInTheDocument();
     expect(screen.queryByText('v2.3')).not.toBeInTheDocument();
     expect(document.querySelectorAll('.beacon-shell-nav__item')).toHaveLength(6);
     expect(screen.queryByText('视频与算法')).not.toBeInTheDocument();

@@ -115,7 +115,7 @@ Analyzer/build/Analyzer
 ```
 
 不使用 `localdeps` 时，也可以手动执行 CMake，但这里不是“只装几个包再试试”。
-当前仓库的 `Analyzer/CMakeLists.txt` 已经写死了一部分默认搜索路径，必须先把依赖放到它能找到的位置，或者自行改 CMake。
+当前 `Analyzer/CMakeLists.txt` 为 ONNX Runtime、OpenVINO 和 FFmpeg 提供了明确的 CMake 缓存参数；手工构建时应传入实际路径，而不是修改源码或依赖固定目录。
 
 ### 不使用 `localdeps` 时，当前 CMake 默认会去哪里找
 
@@ -124,12 +124,12 @@ Analyzer/build/Analyzer
 | 依赖 | 默认查找位置 | 说明 |
 |------|--------------|------|
 | OpenCV | `find_package(OpenCV REQUIRED)` | 依赖系统 CMake / pkg-config 环境 |
-| FFmpeg | `/usr/local/ffmpeg/include`、`/usr/local/ffmpeg/lib` | 需要头文件和库都齐全 |
+| FFmpeg | `BEACON_FFMPEG_ROOT`，默认 `/usr/local/ffmpeg` | 需要头文件和库都齐全 |
 | jsoncpp 头文件 | `MediaServer/source/3rdpart/jsoncpp/include` | 仓库里自带一份头文件 |
 | jsoncpp 动态库 | 系统链接库 `jsoncpp` | 仍然需要系统 `libjsoncpp.so` |
-| ONNX Runtime | `/usr/local/onnxruntime/include`、`/usr/local/onnxruntime/lib` | 当前 CMake 直接写死 |
-| OpenVINO | `/usr/local/openvino/include`、`/usr/local/openvino/lib/intel64` 或 `/usr/local/openvino/lib/aarch64` | 按架构区分 |
-| TBB | `/usr/local/openvino/3rdparty/tbb/include`、`/usr/local/openvino/3rdparty/tbb/lib` | 默认按 OpenVINO 自带 TBB 目录查找 |
+| ONNX Runtime | `BEACON_ONNXRUNTIME_DIR/include`、`BEACON_ONNXRUNTIME_DIR/lib` | 通过环境变量或 `-D` 参数指定包根目录 |
+| OpenVINO | `BEACON_OPENVINO_RUNTIME_DIR/include`、`BEACON_OPENVINO_RUNTIME_DIR/lib/<arch>` | 通过环境变量或 `-D` 参数指定 runtime 根目录 |
+| TBB | `BEACON_OPENVINO_RUNTIME_DIR/3rdparty/tbb` | 默认使用 OpenVINO runtime 自带 TBB |
 | libevent / libcurl / FFmpeg / jsoncpp 系统库 | 由系统链接器解析 | 需要开发头文件和 `.so` 都已安装 |
 
 ### Ubuntu / Debian 最少先装哪些系统包
@@ -504,32 +504,28 @@ bash tools/beacon_localdeps_env.sh
 bash tools/build_analyzer_local.sh
 ```
 
-#### 路线 B：不使用 `localdeps`，但仍然先拿官方包，再映射到 `/usr/local`
+#### 路线 B：不使用 `localdeps`，直接把官方包路径交给 CMake
 
-这条路线也可行，本质上仍然不是“apt 一把梭”，而是先把官方运行时包拿到手，再整理成当前 CMake 认识的目录。
-
-仍以前面的当前仓库示例版本为例：
+这条路线不需要创建 `/usr/local` 符号链接。先解压官方运行时包，再把包根目录传给当前 CMake 已提供的参数：
 
 ```bash
-ROOT_DIR="$(pwd)"
-sudo ln -sfn "$ROOT_DIR/third_party/localdeps/src/onnxruntime-linux-x64-1.17.3" /usr/local/onnxruntime
-sudo ln -sfn "$ROOT_DIR/third_party/localdeps/src/l_openvino_toolkit_ubuntu20_2024.4.0.16579.c3152d32c9c_x86_64/runtime" /usr/local/openvino
+ORT_DIR="$PWD/third_party/localdeps/src/onnxruntime-linux-x64-1.17.3"
+OPENVINO_RUNTIME_DIR="$PWD/third_party/localdeps/src/l_openvino_toolkit_ubuntu20_2024.4.0.16579.c3152d32c9c_x86_64/runtime"
+
+test -f "$ORT_DIR/include/onnxruntime_cxx_api.h" && echo "ort_header=ok"
+test -f "$ORT_DIR/lib/libonnxruntime.so" && echo "ort_lib=ok"
+test -f "$OPENVINO_RUNTIME_DIR/include/openvino/openvino.hpp" && echo "openvino_header=ok"
+find "$OPENVINO_RUNTIME_DIR/lib" -maxdepth 2 -type f -name 'libopenvino.so*' | head
+find "$OPENVINO_RUNTIME_DIR/3rdparty/tbb/lib" -maxdepth 1 -type f -name 'libtbb.so*' | head
+
+cmake -S Analyzer -B Analyzer/build \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DBEACON_ONNXRUNTIME_DIR="$ORT_DIR" \
+  -DBEACON_OPENVINO_RUNTIME_DIR="$OPENVINO_RUNTIME_DIR"
+cmake --build Analyzer/build -j
 ```
 
-然后检查：
-
-```bash
-test -f /usr/local/onnxruntime/include/onnxruntime_cxx_api.h && echo "ort_usr_local=ok"
-test -f /usr/local/onnxruntime/lib/libonnxruntime.so.1.17.3 && echo "ort_usr_local_lib=ok"
-test -f /usr/local/openvino/include/openvino/openvino.hpp && echo "openvino_usr_local=ok"
-test -f /usr/local/openvino/lib/intel64/libopenvino.so.2024.4.0 && echo "openvino_usr_local_lib=ok"
-test -f /usr/local/openvino/3rdparty/tbb/lib/libtbb.so.12.13 && echo "tbb_usr_local_lib=ok"
-```
-
-这条路的重点不是符号链接本身，而是：
-
-- `/usr/local/onnxruntime` 最终必须有 `include/` 和 `lib/`
-- `/usr/local/openvino` 最终必须有 `include/`、`lib/<arch>/`、`3rdparty/tbb/`
+两个目录分别需要包含 `include/`、`lib/`，OpenVINO runtime 还需要 `3rdparty/tbb/`。
 
 #### 路线 C：确实要自己源码编译时，分别怎么来
 
@@ -553,11 +549,11 @@ git checkout v1.17.3
 
 需要特别注意两件事：
 
-1. 上面命令只是把 ONNX Runtime 编出来，不会自动变成本项目期待的 `/usr/local/onnxruntime` 目录结构
+1. 上面命令只是把 ONNX Runtime 编出来，不会自动形成可直接传给 `BEACON_ONNXRUNTIME_DIR` 的包目录
 2. 编译完成后，仍然需要人工整理出至少下面这套目录：
 
 ```text
-/usr/local/onnxruntime/
+<ORT_DIR>/
   include/
     onnxruntime_cxx_api.h
   lib/
@@ -594,28 +590,28 @@ cmake --install .
 ```
 
 编译完成后，还不能直接结束。
-因为当前项目默认找的是：
+因为当前项目会在 `BEACON_OPENVINO_RUNTIME_DIR` 指向的 runtime 下查找：
 
 ```text
-/usr/local/openvino/3rdparty/tbb/include
-/usr/local/openvino/3rdparty/tbb/lib
+<OPENVINO_RUNTIME_DIR>/3rdparty/tbb/include
+<OPENVINO_RUNTIME_DIR>/3rdparty/tbb/lib
 ```
 
 所以单独编好的 oneTBB 还需要二选一：
 
-1. 把安装结果再整理进 `/usr/local/openvino/3rdparty/tbb/`
-2. 修改 `Analyzer/CMakeLists.txt`，让它去新的 TBB 路径查找
+1. 把安装结果整理进 `<OPENVINO_RUNTIME_DIR>/3rdparty/tbb/`
+2. 在配置 CMake 前通过 `CPATH`、`LIBRARY_PATH` 和 `LD_LIBRARY_PATH` 暴露自定义 TBB
 
 如果没有这一步，单独编好 oneTBB 对当前项目也没有意义。
 
 如果不走 `localdeps`，这三类依赖至少要满足下面的目录结构：
 
 ```text
-/usr/local/onnxruntime/
+<ORT_DIR>/
   include/
   lib/
 
-/usr/local/openvino/
+<OPENVINO_RUNTIME_DIR>/
   include/
   lib/intel64/        # x86_64
   lib/aarch64/        # aarch64
@@ -627,14 +623,14 @@ cmake --install .
 
 - `ONNX Runtime` 不是“系统里有个 Python 包”就算准备好了，必须有 C++ 头文件和 `libonnxruntime.so`
 - `OpenVINO` 不是“命令能跑 `ovc`”就算准备好了，必须有 C++ 头文件、`libopenvino.so` 和对应插件库
-- `TBB` 在当前 CMake 里默认按 OpenVINO 自带目录找，不是随便装个 `libtbb-dev` 就一定能被当前路径识别
+- `TBB` 在当前 CMake 里按 OpenVINO runtime 自带目录找，不是随便装个 `libtbb-dev` 就一定能被识别
 
 ### 建议直接整理成这个目录样板
 
-如果决定不用 `localdeps`，建议至少把系统和手工安装目录整理成下面这种可预期结构：
+如果决定不用 `localdeps`，所选目录至少应具备下面的结构；目录本身不要求位于 `/usr/local`：
 
 ```text
-/usr/local/ffmpeg/
+<FFMPEG_ROOT>/
   include/
     libavcodec/
     libavformat/
@@ -648,13 +644,13 @@ cmake --install .
     libswscale.so
     libswresample.so
 
-/usr/local/onnxruntime/
+<ORT_DIR>/
   include/
     onnxruntime_cxx_api.h
   lib/
     libonnxruntime.so
 
-/usr/local/openvino/
+<OPENVINO_RUNTIME_DIR>/
   include/
     openvino/
   lib/intel64/        # x86_64
@@ -663,33 +659,35 @@ cmake --install .
   3rdparty/tbb/lib/
 ```
 
-这样做的目的不是“好看”，而是尽量对齐当前 `Analyzer/CMakeLists.txt` 的默认搜索路径，减少后面改 CMake 的工作量。
+配置 CMake 时分别将这三个根目录传给 `BEACON_FFMPEG_ROOT`、`BEACON_ONNXRUNTIME_DIR` 和 `BEACON_OPENVINO_RUNTIME_DIR`。
 
 ### 每个依赖至少要验证什么
 
 手动 CMake 前，建议直接逐项检查：
 
 ```bash
+ORT_DIR=/path/to/onnxruntime
+OPENVINO_RUNTIME_DIR=/path/to/openvino/runtime
+
 pkg-config --modversion opencv4
 test -f /usr/include/curl/curl.h && echo "curl_header=ok"
 test -f /usr/include/event2/event.h && echo "event_header=ok"
 ldconfig -p | grep jsoncpp || true
-test -f /usr/local/onnxruntime/include/onnxruntime_cxx_api.h && echo "onnxruntime_header=ok"
-test -f /usr/local/onnxruntime/lib/libonnxruntime.so && echo "onnxruntime_lib=ok"
-test -f /usr/local/openvino/include/openvino/openvino.hpp && echo "openvino_header=ok"
-find /usr/local/openvino/lib -maxdepth 2 -type f | grep -E 'libopenvino|plugin' | head
-test -f /usr/local/openvino/3rdparty/tbb/include/tbb/tbb.h && echo "tbb_header=ok"
-find /usr/local/openvino/3rdparty/tbb/lib -maxdepth 1 -type f | grep tbb | head
+test -f "$ORT_DIR/include/onnxruntime_cxx_api.h" && echo "onnxruntime_header=ok"
+test -f "$ORT_DIR/lib/libonnxruntime.so" && echo "onnxruntime_lib=ok"
+test -f "$OPENVINO_RUNTIME_DIR/include/openvino/openvino.hpp" && echo "openvino_header=ok"
+find "$OPENVINO_RUNTIME_DIR/lib" -maxdepth 2 -type f | grep -E 'libopenvino|plugin' | head
+find "$OPENVINO_RUNTIME_DIR/3rdparty/tbb/lib" -maxdepth 1 -type f -name 'libtbb.so*' | head
 ```
 
 以上任一项缺失时，不应继续执行 CMake。
 
 ### 路径不一致时怎么处理
 
-如果依赖不在上面这些默认目录，当前有且只有两种处理方式：
+依赖路径不固定时，优先使用项目已经提供的参数：
 
-1. 修改 `Analyzer/CMakeLists.txt` 中的 `include_directories` / `link_directories`
-2. 在运行 CMake 前，明确设置 `CPATH`、`LIBRARY_PATH`、`LD_LIBRARY_PATH`
+1. 配置 CMake 时传入 `BEACON_ONNXRUNTIME_DIR`、`BEACON_OPENVINO_RUNTIME_DIR` 和 `BEACON_FFMPEG_ROOT`
+2. 特殊布局再在运行 CMake 前补充 `CPATH`、`LIBRARY_PATH` 和 `LD_LIBRARY_PATH`
 
 也就是说，不能只说“我装过了 OpenVINO / ONNX Runtime”，还必须确认：
 
@@ -702,7 +700,11 @@ find /usr/local/openvino/3rdparty/tbb/lib -maxdepth 1 -type f | grep tbb | head
 依赖和路径都确认无误后，再执行：
 
 ```bash
-cmake -S Analyzer -B Analyzer/build -DCMAKE_BUILD_TYPE=Release
+cmake -S Analyzer -B Analyzer/build \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DBEACON_ONNXRUNTIME_DIR="$ORT_DIR" \
+  -DBEACON_OPENVINO_RUNTIME_DIR="$OPENVINO_RUNTIME_DIR" \
+  -DBEACON_FFMPEG_ROOT=/usr/local/ffmpeg
 cmake --build Analyzer/build -j
 ```
 
@@ -720,10 +722,10 @@ cmake --build Analyzer/build -j
 | `fatal error: opencv2/...: No such file or directory` | OpenCV 头文件没装或 CMake 没找到 | `pkg-config --modversion opencv4` |
 | `fatal error: curl/curl.h: No such file or directory` | libcurl 开发头文件缺失 | `test -f /usr/include/curl/curl.h` |
 | `fatal error: event2/event.h: No such file or directory` | libevent 开发头文件缺失 | `test -f /usr/include/event2/event.h` |
-| `fatal error: onnxruntime_cxx_api.h: No such file or directory` | ONNX Runtime 头文件路径不对 | `test -f /usr/local/onnxruntime/include/onnxruntime_cxx_api.h` |
-| `fatal error: openvino/openvino.hpp: No such file or directory` | OpenVINO 头文件路径不对 | `test -f /usr/local/openvino/include/openvino/openvino.hpp` |
-| `ld: cannot find -lonnxruntime` | `libonnxruntime.so` 不在链接器可见路径 | `test -f /usr/local/onnxruntime/lib/libonnxruntime.so` |
-| `ld: cannot find -lopenvino` / `-ltbb` | OpenVINO / TBB 库路径不对 | `find /usr/local/openvino/lib -type f | head` |
+| `fatal error: onnxruntime_cxx_api.h: No such file or directory` | ONNX Runtime 头文件路径不对 | `test -f "$ORT_DIR/include/onnxruntime_cxx_api.h"` |
+| `fatal error: openvino/openvino.hpp: No such file or directory` | OpenVINO 头文件路径不对 | `test -f "$OPENVINO_RUNTIME_DIR/include/openvino/openvino.hpp"` |
+| `ld: cannot find -lonnxruntime` | `libonnxruntime.so` 不在链接器可见路径 | `test -f "$ORT_DIR/lib/libonnxruntime.so"` |
+| `ld: cannot find -lopenvino` / `-ltbb` | OpenVINO / TBB 库路径不对 | `find "$OPENVINO_RUNTIME_DIR/lib" -type f | head` |
 | `undefined reference to av_*` | FFmpeg 头文件和库版本不一致，或某个 `libav*` 库没装全 | `ls /usr/local/ffmpeg/lib` 与 `libav*dev` 安装情况 |
 | `./Analyzer: error while loading shared libraries: ... not found` | 运行阶段找不到 `.so` | `ldd Analyzer/build/Analyzer` |
 

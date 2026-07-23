@@ -1,26 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { createChunkFileName } from './config/chunkNaming.js';
-
-function latestGitTag() {
-  const explicit = String(process.env.VITE_BEACON_VERSION || process.env.BEACON_VERSION || '').trim();
-  if (explicit) return explicit;
-
-  try {
-    const output = execFileSync('git', ['tag', '--sort=-creatordate'], {
-      cwd: resolve(__dirname, '../..'),
-      encoding: 'utf8',
-      timeout: 2000,
-    });
-    return output.split(/\r?\n/).map((line) => line.trim()).find(Boolean) || 'dev';
-  } catch {
-    return 'dev';
-  }
-}
-
-const beaconVersion = latestGitTag();
 
 function getPackageName(id) {
   const normalized = String(id || '').replace(/\\/g, '/');
@@ -67,9 +48,6 @@ function buildManualChunk(id) {
 
 export default defineConfig({
   base: '/static/app-shell/',
-  define: {
-    'import.meta.env.VITE_BEACON_VERSION': JSON.stringify(beaconVersion),
-  },
   plugins: [react()],
   publicDir: false,
   build: {

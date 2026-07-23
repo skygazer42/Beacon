@@ -43,4 +43,4 @@ def get_project_version(repo_root: Optional[Path] = None) -> str:
         file_version = (root / "PROJECT_VERSION").read_text(encoding="utf-8").strip()
     except OSError:
         file_version = ""
-    return _latest_git_tag(root) or file_version or FALLBACK_PROJECT_VERSION
+    return file_version or _latest_git_tag(root) or FALLBACK_PROJECT_VERSION

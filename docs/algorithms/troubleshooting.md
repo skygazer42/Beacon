@@ -159,7 +159,7 @@ flowchart TD
 入口建议:
 
 - `Analyzer/Analyzer/Core/` — 推理后端、Pipeline 调度
-- `Analyzer/Analyzer/Behavior/` — 行为判定算法
+- `Analyzer/Analyzer/Core/Behavior*.{h,cpp}` — 行为判定与行为 API 后处理
 - 单测目录配合最小复现样本调试
 
 更进一步参考 [Analyzer 架构文档](../architecture/analyzer.md)。

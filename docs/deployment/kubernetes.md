@@ -179,7 +179,7 @@ beaconCloud:
   replicaCount: 1
   image:
     repository: beacon-cloud-saas-v1
-    tag: v5.0.0
+    tag: v1.0.0
     pullPolicy: IfNotPresent
   service:
     type: ClusterIP
@@ -314,7 +314,7 @@ edgeSimulator:
   enabled: false
   image:
     repository: beacon-cloud-saas-v1
-    tag: v5.0.0
+    tag: v1.0.0
     pullPolicy: IfNotPresent
   cloudBaseURL: ""
   restartPolicy: OnFailure
@@ -553,7 +553,7 @@ helm upgrade beacon-cloud ./deploy/cloud-saas-v1/chart/ \
 helm upgrade beacon-cloud ./deploy/cloud-saas-v1/chart/ \
   -n beacon \
   -f deploy/cloud-saas-v1/chart/my-values.yaml \
-  --set beaconCloud.image.tag=v5.0.0
+  --set beaconCloud.image.tag=v1.0.0
 
 # 查看 Release
 helm list -n beacon

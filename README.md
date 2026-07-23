@@ -1,173 +1,136 @@
-<div align="center">
+<p align="center">
+  <img src="docs/assets/logo.svg" alt="Beacon Logo" width="92">
+</p>
 
-<img src="docs/assets/branding/readme-brand.png" alt="Beacon" width="800"/>
+<h1 align="center">Beacon</h1>
 
-# Beacon
+<p align="center"><strong>新一代 AI 视频分析系统</strong></p>
+<p align="center">统一管理视频接入、AI 推理、布控告警、云边协同与平台运维，面向边缘和私有化部署。</p>
 
-**面向边缘与私有化场景的智能视频分析平台** — 集流媒体接入、算法推理、布控告警与运维管理于一体。
+<p align="center">
+  <a href="https://github.com/skygazer42/Beacon/releases/tag/v1.0.0"><img src="https://img.shields.io/badge/release-v1.0.0-3964fe?style=flat-square" alt="Release v1.0.0"></a>
+  <a href="https://github.com/skygazer42/Beacon/actions/workflows/ci.yml"><img src="https://github.com/skygazer42/Beacon/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/Python-3.10--3.12-3776ab?style=flat-square&logo=python&logoColor=white" alt="Python 3.10–3.12">
+  <img src="https://img.shields.io/badge/C++-17-00599c?style=flat-square&logo=cplusplus&logoColor=white" alt="C++17">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-16a34a?style=flat-square" alt="MIT License"></a>
+</p>
 
-[![Python](https://img.shields.io/badge/Python-3.10--3.12-3776ab?style=flat-square&logo=python&logoColor=white)](https://python.org)
-[![Django](https://img.shields.io/badge/Django-5.2_LTS-092e20?style=flat-square&logo=django&logoColor=white)](https://www.djangoproject.com/)
-[![C++](https://img.shields.io/badge/C++-17-00599c?style=flat-square&logo=cplusplus&logoColor=white)](https://isocpp.org)
-[![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows-lightgrey?style=flat-square)](#-部署方式)
-[![License](https://img.shields.io/badge/License-Beacon_MIT-blue?style=flat-square)](LICENSE)
-[![CI](https://github.com/skygazer42/Beacon/actions/workflows/ci.yml/badge.svg)](https://github.com/skygazer42/Beacon/actions/workflows/ci.yml)
+<p align="center">
+  <a href="#快速体验">快速体验</a> ·
+  <a href="#系统架构">系统架构</a> ·
+  <a href="docs/deploy/README.md">部署文档</a> ·
+  <a href="docs/api/index.md">API</a> ·
+  <a href="#sdk">SDK</a>
+</p>
 
-[快速开始](#-快速开始) · [部署方式](#-部署方式) · [授权模式](#-授权模式) · [文档](#-文档) · [SDK](#-sdk)
+## 产品预览
 
-</div>
+<p align="center">
+  <img src="docs/assets/readme/product-dashboard.png" alt="Beacon 系统总览" width="100%">
+</p>
 
-## Beacon 是什么
+<p align="center"><sub>Edge 管理控制台实拍；主机标识已匿名化，运行数据仅用于界面展示。</sub></p>
 
-Beacon 是一套可私有化部署的智能视频分析平台，由三个组件构成：
+## 核心能力
 
-| 组件 | 技术栈 | 职责 |
-|------|--------|------|
-| **Admin** | Django | 管理后台、Web UI、OpenAPI、运维与配置入口 |
-| **Analyzer** | C++ | 模型推理、行为分析与告警生成 |
-| **MediaServer** | C++（ZLMediaKit 体系） | 流媒体接入、转发、播放与录制 |
+| 能力 | 当前实现 |
+|---|---|
+| 视频接入与分发 | 管理 RTSP / RTMP 视频源，提供播放、转发、录像和截图链路 |
+| AI 分析 | C++ 推理引擎，支持检测、追踪、行为规则和算法插件 |
+| 布控与告警 | 绑定视频、算法、阈值与 ROI，完成启停、告警取证和处置闭环 |
+| 云边协同 | Edge 接入 Beacon Cloud，上报告警并查看远程视频、录像和运行状态 |
+| 开放集成 | OpenAPI、Webhook，以及 Python / JavaScript / Go SDK |
+| 平台运维 | 运行概览、诊断、审计、权限、API Key、升级与许可证管理 |
 
-四种典型用法，按你拿到的交付物形态选择：源码自编译全栈、二进制/DLL 私有化交付、Docker Cloud POC 快速体验，或只跑 `Admin/` 调试后台。
+## 系统架构
 
-## ✨ 核心能力
+<p align="center">
+  <img src="docs/assets/architecture.svg" alt="Beacon 系统架构" width="900">
+</p>
 
-- 📡 **接入与播放** — RTSP / RTMP 来源接入，按 MediaServer 能力提供 HLS / WebRTC 等播放与转发
-- 🧠 **行为智能分析** — 入侵、徘徊、越线、聚集、离岗、跌倒、打架等
-- 🎯 **布控闭环** — 视频与算法绑定、ROI/阈值配置、批量启停与分析日志
-- 🔔 **告警工作流** — 截图/短视频取证、审核流转、Webhook / Cloud 投递
-- 👤 **人脸向量库** — 向量录入、列表筛选、相似检索与分析联动
-- ⚡ **可扩展推理后端** — ONNX Runtime / OpenVINO；TensorRT Engine 与 NPU 通过匹配的运行时或插件接入
-- ☁️ **云边协同** — 边缘集群、远程共享、上级平台、云端告警聚合
-- 🛠️ **管理运维** — 系统概览、诊断、审计、权限、API Key、升级与云边同步
+Beacon 是三个可独立启动的进程，不是无状态微服务集群：
 
-> 仓库不包含模型权重或需要单独授权的硬件 SDK。管理与调度能力可直接使用；具体推理算法能否运行，取决于部署者提供的合法模型、推理运行时和硬件。
+| 组件 | 技术栈 | 默认端口 | 职责 |
+|---|---|---:|---|
+| **Admin** | Django 5.2 + React | <code>9991</code> | Web 管理、OpenAPI、权限、任务编排、告警与运维 |
+| **MediaServer** | C++ / ZLMediaKit 体系 | <code>9992</code> / <code>9994</code> / <code>9995</code> | 流接入、协议分发、播放、录像与截图 |
+| **Analyzer** | C++17 | <code>9993</code> | 解码、模型推理、追踪、行为分析与告警生成 |
 
-## 🏗️ 系统架构
+一条完整链路：
 
-<div align="center">
-<img src="docs/assets/architecture.svg" alt="Beacon 系统架构" width="820"/>
-</div>
+    摄像头 / NVR / 推流端
+            │ RTSP / RTMP
+            ▼
+    MediaServer ──拉流──▶ Analyzer ──告警回调──▶ Admin ──▶ Webhook / Beacon Cloud
+            ▲                              │
+            └────播放、录像与转发 API───────┘
 
-视频源经 MediaServer 接入分发，Analyzer 拉帧推理并生成告警，Admin 统一调度、下发布控并对外提供 Web/OpenAPI；三者共享根目录 `config.json`。
+实现边界和进程关系见 [系统架构说明](docs/architecture/index.md)。
 
-## 📐 架构图
+## 快速体验
 
-<div align="center">
-<img src="docs/assets/images/readme-architecture-diagram.png" alt="Beacon 架构图" width="920"/>
+最快入口是 Docker Cloud POC，适合查看登录、云边接入和云端告警流程：
 
-<br/><sub>产品关系示意图，不作为版本、数据库、协议或已交付算法的技术契约；当前实现以 <a href="docs/architecture/index.md">系统架构</a> 和上方 SVG 为准。</sub>
-</div>
+    git clone https://github.com/skygazer42/Beacon.git
+    cd Beacon/deploy/cloud-saas-v1
+    cp .env.example .env
+    # 将 .env 中所有 CHANGE_ME 替换为你自己的强随机值
+    docker compose up -d --build
 
-## 🚀 快速开始
+浏览器打开 <code>http://localhost:9991/login</code>，账号由 <code>.env</code> 中的 bootstrap 配置创建。
 
-最快的方式是用 Docker 起一套 **Cloud POC**，用于快速查看登录页与云端告警页面（仅演示 UI 与云端流程，不等同于正式 Edge 全栈交付）：
+> Cloud POC 不包含真实 MediaServer / Analyzer 推理链路。接入摄像头并运行模型，请使用 [Edge 全栈部署](docs/deploy/edge-full-stack.md)。
 
-```bash
-git clone https://github.com/skygazer42/Beacon.git
-cd Beacon
-cd deploy/cloud-saas-v1
-cp .env.example .env
-# 编辑 .env，替换所有 CHANGE_ME 占位值
-docker compose up -d --build
-```
+## 部署选择
 
-启动后访问：
+| 场景 | 运行内容 | 文档 |
+|---|---|---|
+| 快速体验云端流程 | Admin + PostgreSQL + MinIO | [Cloud POC](docs/deploy/README.md) |
+| 真实视频分析 | Admin + MediaServer + Analyzer | [Edge 全栈](docs/deploy/edge-full-stack.md) |
+| 本机源码开发 | 按需启动三个进程 | [Linux](docs/deployment/local-linux.md) · [Windows](docs/deployment/local-windows.md) |
+| 二进制私有化交付 | 已编译程序、配置、模型与授权 | [交付包规范](docs/deploy/delivery-layout.md) |
+| Kubernetes 云端部署 | Beacon Cloud + PostgreSQL + MinIO | [Kubernetes](docs/deployment/kubernetes.md) |
 
-| 页面 | 地址 |
-|------|------|
-| 登录页 | http://localhost:9991/login |
-| Cloud 告警页 | http://localhost:9991/cloud/alarms |
+默认只应对外开放 Admin <code>9991</code>；MediaServer 和 Analyzer 端口优先限制在本机或内网。详见 [端口与防火墙](docs/deploy/ports-and-firewall.md)。
 
-管理员用户名和密码由 `.env` 显式提供；生产模式不会生成默认密码。停止：`docker compose down`。
+## 模型与硬件边界
 
-> 想跑通真实摄像头 + 算法 + 告警的完整链路？见 [部署方式](#-部署方式)。
+仓库不分发模型权重、厂商 SDK 或需要单独授权的硬件运行时。Analyzer 包含 ONNX Runtime、OpenVINO 和插件接入路径；CUDA、TensorRT、NPU 等能力取决于实际链接的运行时、插件和硬件。
 
-## 📦 部署方式
+算法名称中的 <code>GPU</code>、<code>TRT</code> 或 <code>NPU</code> 只表达选择意图，不代表当前机器已经具备对应算力。
 
-首次获取 Beacon 后，先按「当前交付物形态」选择路线，避免混用不同部署命令。
+## SDK
 
-| 路线 | 交付物形态 | 客户机器编译 | 适合场景 | 详细步骤 |
-|------|-----------|:---:|---------|---------|
-| **源码自编译** | Git/ZIP 源码 + 合法取得的 SDK/模型 | 是 | 开发联调、源码交付、硬件适配 | [Edge 全栈](docs/deploy/edge-full-stack.md) · [Linux 本机开发](docs/deployment/local-linux.md) |
-| **二进制/DLL 交付** | 已编译产物 + 模型 + 授权 | 否 | 现场私有化、客户不参与编译 | [交付包规范](docs/deploy/delivery-layout.md) · [服务管理](docs/deploy/service-management.md) |
-| **Docker Cloud POC** | 源码 + Docker | 仅构建镜像 | 快速看页面、云端流程演示 | [快速开始](#-快速开始) |
-| **只启动 Admin** | `Admin/` 源码 | 否 | 后台页面 / API / 权限开发 | 见下方 |
+面向 OpenAPI 集成提供三种客户端：
 
-**只启动 Admin**（不依赖完整视频分析链路，最适合后台开发）：
+- [Python SDK](sdk/python/README.md)
+- [JavaScript SDK](sdk/javascript/README.md)
+- [Go SDK](sdk/go/README.md)
 
-```bash
-cd Admin
-python3 -m venv venv && source venv/bin/activate        # Windows: venv\Scripts\activate
-python -m pip install -r requirements-linux.txt         # Windows: requirements-windows.txt
-python manage.py migrate --noinput
-python manage.py createsuperuser                         # 新数据库首次启动必须创建账号
-python manage.py runserver 0.0.0.0:9991                 # 访问 http://127.0.0.1:9991/login
-```
+## 文档导航
 
-关键目录与配置（`config.json`、`BEACON_ROOT_DIR`、`data/models`、`data/upload` 等）与各组件分步骤编译，见 **[部署总入口](docs/deploy/README.md)**。云端部署与边缘接入统一使用 [`deploy/cloud-saas-v1/`](deploy/cloud-saas-v1)；不再额外启动 10091 本地云实例。
+| 主题 | 文档 |
+|---|---|
+| 从零部署 | [部署总入口](docs/deploy/README.md) |
+| 视频、布控与告警 | [使用指南](docs/guide/index.md) |
+| API 与鉴权 | [API 文档](docs/api/index.md) |
+| 配置项 | [配置参考](docs/deploy/config-reference.md) |
+| 安全加固 | [安全指南](docs/deploy/security-hardening.md) |
+| 运维与排障 | [运维手册](docs/deploy/ops-runbook.md) · [故障排除](docs/deploy/troubleshooting.md) |
+| 页面清单 | [页面与路由导览](docs/guide/ui-pages.md) |
+| 版本变化 | [更新日志](docs/CHANGELOG.md) |
 
-## 🔑 授权模式
+## 仓库结构
 
-| 模式 | `licenseType` | 交付物 | 适合场景 |
-|------|--------------|--------|---------|
-| 社区版 | `community` | 无 | 开源默认，不启用运行授权门禁 |
-| 机器码 | `machine` | 一个 `licenseKey` 字符串 | 单机、简单离线授权 |
-| 加密锁 | `dongle` | 硬件锁 / 检测命令 / sentinel 文件 | 需要 USB/硬件锁控制 |
-| 授权池·租约 | `pool` | 签名后的 `license.json` | 推荐商业交付，支持路数 / 节点 / 算法包限制 |
+| 路径 | 内容 |
+|---|---|
+| <code>Admin/</code> | Django 后端与 React 管理界面 |
+| <code>Analyzer/</code> | C++ 视频分析引擎 |
+| <code>MediaServer/</code> | 流媒体接入与分发 |
+| <code>sdk/</code> | Python、JavaScript、Go SDK |
+| <code>deploy/</code> | Docker Compose、Helm 与运维资源 |
+| <code>docs/</code> | 架构、部署、使用和 API 文档 |
 
-完整的发放、导入与验证流程（含 Ed25519 签名、`license.json` 结构、租约校验、常见报错）见 **[授权指南](docs/deploy/licensing.md)**。
+## License
 
-## 🔌 默认端口
-
-| 组件 | 端口 | 说明 |
-|------|:---:|------|
-| Admin | `9991` | Web 后台、Admin API、OpenAPI/Ops |
-| MediaServer HTTP | `9992` | HTTP API、HLS、部分播放链路 |
-| Analyzer | `9993` | 分析引擎 API |
-| MediaServer RTSP | `9994` | RTSP 分发 |
-| MediaServer RTMP | `9995` | RTMP 分发 |
-
-端口与网络策略详见 [ports-and-firewall.md](docs/deploy/ports-and-firewall.md)。
-
-## 📖 文档
-
-| 主题 | 链接 |
-|------|------|
-| 部署总入口 | [docs/deploy/README.md](docs/deploy/README.md) |
-| 配置参考 | [config-reference.md](docs/deploy/config-reference.md) |
-| 授权发放 | [licensing.md](docs/deploy/licensing.md) |
-| 安全加固 | [security-hardening.md](docs/deploy/security-hardening.md) |
-| 故障排除 | [troubleshooting.md](docs/deploy/troubleshooting.md) |
-| 页面与路由导览 | [guide/ui-pages.md](docs/guide/ui-pages.md) |
-| 项目结构 | [developer/structure.md](docs/developer/structure.md) |
-| 贡献说明 | [developer/contributing.md](docs/developer/contributing.md) |
-| 更新日志 | [CHANGELOG.md](docs/CHANGELOG.md) |
-
-## 🧩 SDK
-
-面向二次开发与 OpenAPI 集成，提供三语言 SDK：
-[Python](sdk/python/README.md) · [JavaScript](sdk/javascript/README.md) · [Go](sdk/go/README.md)
-
-## 🗂️ 仓库结构
-
-| 路径 | 用途 |
-|------|------|
-| [Admin/](Admin) | Django 管理后台：页面、API、权限、运维 |
-| [Analyzer/](Analyzer) | C++ 分析引擎与模型推理 |
-| [MediaServer/](MediaServer) | 流媒体接入与分发（ZLMediaKit 体系） |
-| [sdk/](sdk) | Python / JavaScript / Go SDK |
-| [deploy/](deploy) | Docker、Cloud POC、观测性与部署资源 |
-| [docs/](docs) | 部署、运维、架构、变更记录 |
-| [tests/](tests) | 集成与验收测试 |
-
-## 🔒 安全提醒
-
-- Cloud 和生产部署必须显式提供强管理员密码；不要复用文档中的演示值。
-- 对外暴露时优先只开放 `9991`，并通过反向代理统一做 TLS、访问控制与审计。
-- `9992` / `9993` 默认更适合内网或本机访问，公网暴露前应完成鉴权与加固。
-
-详细策略见 [security-hardening.md](docs/deploy/security-hardening.md)。
-
-## 📄 License
-
-Beacon 自研代码使用 [MIT](LICENSE) 许可。`MediaServer/source/` 及其他引入代码保留各自的上游许可，其中 ZLMediaKit 还有必须保留品牌标识的补充条款。分发前请阅读 [第三方声明](THIRD_PARTY_NOTICES.md)。
+Beacon 自研代码使用 [MIT License](LICENSE)。<code>MediaServer/source/</code> 和其他引入代码保留各自的上游许可与署名；分发前请阅读 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

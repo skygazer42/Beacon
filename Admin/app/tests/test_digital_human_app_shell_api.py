@@ -5,6 +5,7 @@ import tempfile
 from datetime import datetime, timedelta
 from unittest import mock
 
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.test import RequestFactory, TestCase
 
@@ -116,6 +117,7 @@ class DigitalHumanAppShellApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"beacon-app-root", response.content)
         self.assertIn(b'"isStaff": true', response.content)
+        self.assertIn(f'"projectVersion": "{settings.PROJECT_VERSION}"'.encode(), response.content)
         self.assertIn("数字人监管".encode(), response.content)
 
     @mock.patch("app.services.digital_human.requests.post")

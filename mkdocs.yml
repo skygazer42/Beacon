@@ -8,7 +8,7 @@ edit_uri: edit/main/docs/
 copyright: Copyright &copy; 2024-2026 Beacon Team
 not_in_nav: |
   CHANGELOG.md
-  TAGS.md
+  assets/readme/BRIEF.md
   deploy/**
   deployment/build-and-package.md
 
@@ -113,8 +113,6 @@ extra:
     - icon: fontawesome/brands/github
       link: https://github.com/skygazer42/Beacon
   generator: false
-  version:
-    provider: mike
 
 extra_css:
   - assets/css/custom.css

@@ -56,9 +56,9 @@ Linux 交付时，至少应能落出下面几类产物：
 
 | 软件 / 工具 | 建议版本 | 用途 | 现场验证命令 |
 |-------------|----------|------|--------------|
-| Python | 3.10 或 3.11 | `Admin`、启动器、迁移脚本 | `python3 --version` |
-| Node.js | 18+ | 前端构建 | `node --version` |
-| npm | 9+ | 前端依赖安装 | `npm --version` |
+| Python | 3.10–3.12 | `Admin`、启动器、迁移脚本 | `python3 --version` |
+| Node.js | 20.19+ 或 22.12+ | 前端构建 | `node --version` |
+| npm | 随受支持的 Node.js 安装 | 前端依赖安装 | `npm --version` |
 | CMake | 3.16+ | `Analyzer` / `MediaServer` 构建 | `cmake --version` |
 | GCC / G++ | 9+ | C++ 编译 | `gcc --version | head -n 1`、`g++ --version | head -n 1` |
 | pkg-config | 任意可用版本 | 解析 OpenCV 等系统库 | `pkg-config --version` |
