@@ -71,8 +71,14 @@ def _stable_process_index(code: str, mod: int) -> int:
         return 0
     try:
         value = str(code or "")
-        h = hashlib.md5(value.encode("utf-8")).hexdigest()
-        return int(h[:8], 16) % m
+        # This is a versioned, non-security sharding function. Replacing MD5 with a
+        # different digest would remap existing controls after an upgrade, so retain
+        # the legacy first-32-bit mapping and make the non-cryptographic use explicit.
+        digest = hashlib.md5(  # nosemgrep: python.lang.security.insecure-hash-algorithms-md5.insecure-hash-algorithm-md5
+            value.encode("utf-8"),
+            usedforsecurity=False,
+        ).digest()
+        return int.from_bytes(digest[:4], byteorder="big") % m
     except Exception:
         return 0
 

@@ -17,6 +17,14 @@ class SystemSettingsTest(TestCase):
         self._temp_root = tempfile.TemporaryDirectory()
         self._root_patcher = mock.patch.dict(os.environ, {"BEACON_ROOT_DIR": self._temp_root.name}, clear=False)
         self._root_patcher.start()
+        # System settings can enable OS-level autostart. Keep every test in this
+        # class hermetic so a persistence assertion can never modify the host's
+        # systemd/launchd/XDG configuration.
+        self._autostart_patcher = mock.patch(
+            "app.utils.AutoStart.apply_autostart",
+            return_value=(True, "test-isolated"),
+        )
+        self._autostart_patcher.start()
         if hasattr(settings_store, "_CACHE") and isinstance(settings_store._CACHE, dict):
             settings_store._CACHE.clear()
         session = self.client.session
@@ -26,6 +34,7 @@ class SystemSettingsTest(TestCase):
     def tearDown(self):
         if hasattr(settings_store, "_CACHE") and isinstance(settings_store._CACHE, dict):
             settings_store._CACHE.clear()
+        self._autostart_patcher.stop()
         self._root_patcher.stop()
         self._temp_root.cleanup()
         super().tearDown()
