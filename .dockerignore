@@ -21,6 +21,8 @@
 .pytest_cache/**
 .scannerwork
 .scannerwork/**
+.cache/trivy
+.cache/trivy/**
 
 **/__pycache__
 **/*.py[cod]
@@ -50,6 +52,11 @@ Admin/frontend
 Admin/app/tests
 Admin/test_*.py
 Admin/static/upload
+Admin/staticfiles
+Admin/build
+Admin/build-*
+Admin/dist
+Admin/dist-*
 
 Analyzer/build
 Analyzer/build-*

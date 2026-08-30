@@ -1,0 +1,146 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "beacon-cloud-saas-v1.initializeJobName" . }}
+  labels:
+    {{- include "beacon-cloud-saas-v1.labels" . | nindent 4 }}
+    app.kubernetes.io/component: initialize
+spec:
+  completions: 1
+  parallelism: 1
+  backoffLimit: {{ .Values.initialization.backoffLimit }}
+  activeDeadlineSeconds: {{ .Values.initialization.activeDeadlineSeconds }}
+  ttlSecondsAfterFinished: {{ .Values.initialization.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      labels:
+        {{- include "beacon-cloud-saas-v1.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: initialize
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "beacon-cloud-saas-v1.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      {{- if .Values.minio.enabled }}
+      initContainers:
+        - name: minio-bucket-init
+          image: {{ include "beacon-cloud-saas-v1.imageRef" (dict "name" "minio.mcImage" "image" .Values.minio.mcImage "requireDigest" true) | quote }}
+          imagePullPolicy: {{ .Values.minio.mcImage.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+              ephemeral-storage: 128Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+              ephemeral-storage: 256Mi
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              attempt=0
+              until mc alias set local http://{{ include "beacon-cloud-saas-v1.minioName" . }}:{{ .Values.minio.service.apiPort }} "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"; do
+                attempt=$((attempt + 1))
+                if [ "$attempt" -ge 60 ]; then
+                  echo "MinIO did not become ready after 60 attempts" >&2
+                  exit 1
+                fi
+                sleep 2
+              done
+              mc mb --ignore-existing "local/{{ .Values.minio.bucket }}"
+          env:
+            - name: MC_CONFIG_DIR
+              value: /tmp/.mc
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "beacon-cloud-saas-v1.secretName" . }}
+                  key: minio-root-user
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "beacon-cloud-saas-v1.secretName" . }}
+                  key: minio-root-password
+          volumeMounts:
+            - name: minio-init-tmp
+              mountPath: /tmp
+      {{- end }}
+      containers:
+        - name: initialize
+          image: {{ include "beacon-cloud-saas-v1.imageRef" (dict "name" "beaconCloud" "image" .Values.beaconCloud.image "requireDigest" (ne .Values.beaconCloud.secrets.existingSecret "")) | quote }}
+          imagePullPolicy: {{ .Values.beaconCloud.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            readOnlyRootFilesystem: true
+          command:
+            - /app/deploy/cloud-saas-v1/scripts/initialize.sh
+          env:
+            {{- include "beacon-cloud-saas-v1.runtimeEnv" (dict "root" . "role" "init") | nindent 12 }}
+          volumeMounts:
+            - name: app-config
+              mountPath: /app/config.json
+              subPath: config.json
+              readOnly: true
+            - name: app-data
+              mountPath: /app/data
+            - name: tmp
+              mountPath: /tmp
+            {{- if .Values.demoVolume.enabled }}
+            - name: demo
+              mountPath: /demo
+            {{- end }}
+          resources:
+            requests:
+              cpu: {{ .Values.initialization.resources.requests.cpu | default "50m" | quote }}
+              memory: {{ .Values.initialization.resources.requests.memory | default "128Mi" | quote }}
+              ephemeral-storage: {{ .Values.initialization.resources.requests.ephemeralStorage | default "256Mi" | quote }}
+            limits:
+              cpu: {{ .Values.initialization.resources.limits.cpu | default "500m" | quote }}
+              memory: {{ .Values.initialization.resources.limits.memory | default "512Mi" | quote }}
+              ephemeral-storage: {{ .Values.initialization.resources.limits.ephemeralStorage | default "1Gi" | quote }}
+      volumes:
+        - name: app-config
+          configMap:
+            name: {{ include "beacon-cloud-saas-v1.fullname" . }}-config
+        - name: app-data
+          {{- if .Values.beaconCloud.runtimeStorage.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "beacon-cloud-saas-v1.runtimePVCName" . }}
+          {{- else }}
+          emptyDir:
+            sizeLimit: {{ .Values.beaconCloud.runtimeStorage.dataSizeLimit | quote }}
+          {{- end }}
+        - name: tmp
+          emptyDir:
+            sizeLimit: {{ .Values.beaconCloud.runtimeStorage.tmpSizeLimit | quote }}
+        {{- if .Values.minio.enabled }}
+        - name: minio-init-tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Mi
+        {{- end }}
+        {{- if .Values.demoVolume.enabled }}
+        - name: demo
+          persistentVolumeClaim:
+            claimName: {{ include "beacon-cloud-saas-v1.demoPVCName" . }}
+        {{- end }}

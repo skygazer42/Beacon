@@ -60,10 +60,49 @@ def _build_local_file_response(abs_path: str):
         except Exception:
             logger.debug("set recording file content length failed path=%s", abs_path, exc_info=True)
         resp["Content-Disposition"] = 'inline; filename="%s"' % os.path.basename(abs_path)
+        resp["X-Content-Type-Options"] = "nosniff"
         return resp
     except Exception as e:
         logger.exception("file service file error: err=%s", e)
         return HttpResponse(status=500)
+
+
+def _managed_upload_root_dir() -> str:
+    return str(getattr(g_config, "uploadDir", "") or "").strip()
+
+
+def _resolve_managed_upload_abs_path(rel_path: str) -> str:
+    """Resolve a mutable upload path without allowing traversal or symlink escape."""
+    from app.utils.Security import resolve_under_base, validate_upload_rel_path
+
+    root = _managed_upload_root_dir()
+    if not root:
+        raise FileNotFoundError("managed upload storage is not configured")
+    rel = validate_upload_rel_path(rel_path)
+    target = resolve_under_base(root, rel)
+    real_root = os.path.realpath(root)
+    real_target = os.path.realpath(target)
+    if os.path.commonpath((real_root, real_target)) != real_root:
+        raise ValueError("managed upload path escapes storage root")
+    return real_target
+
+
+def managed_upload_serve(request, rel_path: str):
+    """Serve authenticated mutable uploads kept outside immutable static files."""
+    if request.method not in ("GET", "HEAD"):
+        return HttpResponse(status=405)
+    try:
+        abs_path = _resolve_managed_upload_abs_path(rel_path)
+    except (FileNotFoundError, ValueError):
+        return HttpResponse(status=404)
+    except Exception:
+        logger.exception("managed upload path resolution failed")
+        return HttpResponse(status=500)
+
+    response = _build_local_file_response(abs_path)
+    if response.status_code == 200:
+        response["Cache-Control"] = "private, max-age=300"
+    return response
 
 
 def open_serve(request, rel_path: str):

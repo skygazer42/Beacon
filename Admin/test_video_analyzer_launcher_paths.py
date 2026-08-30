@@ -2,10 +2,10 @@ import configparser
 import importlib
 import logging
 import os
+import socket
 import sys
 import tempfile
 import unittest
-from unittest import mock
 from unittest import mock
 
 
@@ -53,7 +53,14 @@ class TestVideoAnalyzerLauncherPaths(unittest.TestCase):
                 mock.patch.object(va, "BASE_DIR", tmp),
                 mock.patch.object(va.platform, "system", return_value="Windows"),
             ):
-                args = va._build_admin_args(9991)
+                args = va._build_admin_args(
+                    9991,
+                    {
+                        "adminServer": "waitress",
+                        "adminThreads": 6,
+                        "adminTrustedProxy": "127.0.0.1",
+                    },
+                )
 
             with open(venv_cfg, "r", encoding="ascii") as f:
                 cfg = f.read()
@@ -65,7 +72,35 @@ class TestVideoAnalyzerLauncherPaths(unittest.TestCase):
         self.assertIn("..\\venv\\Lib\\site-packages", pth)
         self.assertIn("import site", pth)
         self.assertEqual(args[0], python_exe)
-        self.assertEqual(args[1:], [manage_py, "runserver", "0.0.0.0:9991", "--noreload"])
+        self.assertEqual(
+            args[1:],
+            [
+                manage_py,
+                "serve_production",
+                "--host", "0.0.0.0",
+                "--port", "9991",
+                "--threads", "6",
+                "--trusted-proxy", "127.0.0.1",
+                "--trusted-proxy-headers", "x-forwarded-proto,x-forwarded-for",
+            ],
+        )
+
+    def test_build_admin_args_allows_explicit_django_development_mode(self):
+        va = self._import_video_analyzer()
+        with tempfile.TemporaryDirectory() as tmp:
+            manage_py = os.path.join(tmp, "manage.py")
+            with open(manage_py, "w", encoding="utf-8") as f:
+                f.write("")
+            with (
+                mock.patch.object(va, "BASE_DIR", tmp),
+                mock.patch.dict(os.environ, {"BEACON_ADMIN_SERVER": "django"}),
+            ):
+                args = va._build_admin_args(9991, {})
+
+        self.assertEqual(
+            args[-3:],
+            ["runserver", "0.0.0.0:9991", "--noreload"],
+        )
 
     def test_lock_file_frozen_uses_exe_dir(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -195,6 +230,77 @@ class TestVideoAnalyzerLauncherPaths(unittest.TestCase):
         finally:
             va.time.time = old_time
             va._check_port_free = old_check_port_free
+
+    def test_environment_check_includes_rtp_proxy_tcp_and_udp(self):
+        va = self._import_video_analyzer()
+        tcp_ports = []
+        udp_ports = []
+
+        def _check_tcp(port):
+            tcp_ports.append(port)
+            return True, "free"
+
+        def _check_udp(port):
+            udp_ports.append(port)
+            return True, "free"
+
+        with (
+            mock.patch.object(va, "_check_port_free", side_effect=_check_tcp),
+            mock.patch.object(va, "_check_udp_port_free", side_effect=_check_udp),
+            mock.patch.object(va, "check_cpu_support", return_value=(True, "")),
+            mock.patch.object(va, "check_gpu_support", return_value=(True, "")),
+        ):
+            ok = va.run_environment_check(
+                {
+                    "adminPort": 9991,
+                    "analyzerPort": 9993,
+                    "mediaHttpPort": 9992,
+                    "mediaRtspPort": 9994,
+                    "mediaRtmpPort": 9995,
+                    "mediaRtpProxyPort": 10001,
+                }
+            )
+
+        self.assertTrue(ok)
+        self.assertIn(10001, tcp_ports)
+        self.assertEqual(udp_ports, [10001])
+
+    def test_environment_check_rejects_occupied_rtp_proxy_udp_port(self):
+        va = self._import_video_analyzer()
+        with (
+            mock.patch.object(va, "_check_port_free", return_value=(True, "free")),
+            mock.patch.object(va, "_check_udp_port_free", return_value=(False, "udp-owner")),
+            mock.patch.object(va, "check_cpu_support", return_value=(True, "")),
+            mock.patch.object(va, "check_gpu_support", return_value=(True, "")),
+        ):
+            ok = va.run_environment_check({"mediaRtpProxyPort": 10001})
+
+        self.assertFalse(ok)
+
+    def test_environment_check_rejects_unsafe_admin_proxy(self):
+        va = self._import_video_analyzer()
+        with (
+            mock.patch.object(va, "_check_port_free", return_value=(True, "free")),
+            mock.patch.object(va, "_check_udp_port_free", return_value=(True, "free")),
+            mock.patch.object(va, "check_cpu_support", return_value=(True, "")),
+            mock.patch.object(va, "check_gpu_support", return_value=(True, "")),
+        ):
+            ok = va.run_environment_check({"adminTrustedProxy": "*"})
+
+        self.assertFalse(ok)
+
+    def test_udp_port_probe_detects_real_bound_socket(self):
+        va = self._import_video_analyzer()
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            sock.bind(("127.0.0.1", 0))
+            port = sock.getsockname()[1]
+            ok, detail = va._check_udp_port_free(port)
+        finally:
+            sock.close()
+
+        self.assertFalse(ok)
+        self.assertTrue(detail)
 
     def test_record_log_restarts_stopped_process_after_grace_period(self):
         class _StopLoop(RuntimeError):
@@ -442,7 +548,7 @@ class TestVideoAnalyzerLauncherPaths(unittest.TestCase):
             va.App = _FakeApp
             va.threading.Thread = _FakeThread
             va._build_media_server_args = lambda config_data=None: ["media-server"]
-            va._build_admin_args = lambda port: ["manage", "runserver", "0.0.0.0:%s" % port, "--noreload"]
+            va._build_admin_args = lambda port, config_data=None: ["manage", "runserver", "0.0.0.0:%s" % port, "--noreload"]
             va._build_analyzer_args = lambda: ["analyzer", "-f", "/tmp/config.json"]
             va._wait_for_usb_camera_publish_target = _fake_wait
 
@@ -526,7 +632,7 @@ class TestVideoAnalyzerLauncherPaths(unittest.TestCase):
             va.App = _FakeApp
             va.threading.Thread = _FakeThread
             va._build_media_server_args = lambda config_data=None: ["media"]
-            va._build_admin_args = lambda port: ["admin", str(port)]
+            va._build_admin_args = lambda port, config_data=None: ["admin", str(port)]
             va._build_analyzer_args = lambda: ["analyzer"]
 
             runner = va.VideoAnalyzer(
@@ -535,13 +641,14 @@ class TestVideoAnalyzerLauncherPaths(unittest.TestCase):
                     "mediaHttpPort": 9992,
                     "mediaRtspPort": 9993,
                     "mediaRtmpPort": 9994,
+                    "mediaRtpProxyPort": 10001,
                     "analyzerPort": 9995,
                 }
             )
             runner.run()
 
             self.assertEqual([app.name for app in created], ["MediaServer", "manage", "Analyzer"])
-            self.assertEqual(created[0].ports, [9992, 9993, 9994])
+            self.assertEqual(created[0].ports, [9992, 9993, 9994, 10001])
             self.assertEqual(created[1].ports, [9991])
             self.assertEqual(created[2].ports, [9995])
             self.assertIsInstance(created[2].env, dict)
@@ -609,6 +716,7 @@ class TestVideoAnalyzerLauncherPaths(unittest.TestCase):
                 with open(config_target, "w", encoding="utf-8") as f:
                     f.write(
                         "[api]\n"
+                        "apiDebug=1\n"
                         "secret=template-secret\n"
                         "\n"
                         "[http]\n"
@@ -620,6 +728,9 @@ class TestVideoAnalyzerLauncherPaths(unittest.TestCase):
                         "\n"
                         "[rtsp]\n"
                         "port=554\n"
+                        "\n"
+                        "[rtp_proxy]\n"
+                        "port=10000\n"
                     )
 
                 os.symlink(
@@ -642,6 +753,7 @@ class TestVideoAnalyzerLauncherPaths(unittest.TestCase):
                             "mediaHttpPort": 9992,
                             "mediaRtspPort": 9994,
                             "mediaRtmpPort": 9995,
+                            "mediaRtpProxyPort": 10001,
                         }
                     )
 
@@ -653,14 +765,50 @@ class TestVideoAnalyzerLauncherPaths(unittest.TestCase):
                 parser.read(runtime_config, encoding="utf-8")
 
                 self.assertEqual(parser.get("api", "secret"), "env-secret")
+                self.assertEqual(parser.getint("api", "apiDebug"), 0)
                 self.assertEqual(parser.getint("http", "port"), 9992)
                 self.assertEqual(parser.getint("http", "sslport"), 0)
                 self.assertEqual(parser.getint("rtsp", "port"), 9994)
                 self.assertEqual(parser.getint("rtmp", "port"), 9995)
+                self.assertEqual(parser.getint("rtp_proxy", "port"), 10001)
+                if os.name != "nt":
+                    self.assertEqual(os.stat(runtime_config).st_mode & 0o777, 0o600)
         finally:
             va.ROOT_DIR = old_root_dir
             va.platform.system = old_system
             va.platform.machine = old_machine
+
+    @unittest.skipIf(os.name == "nt", "POSIX file mode assertion")
+    def test_private_runtime_config_restricts_existing_permissions(self):
+        va = self._import_video_analyzer()
+        with tempfile.TemporaryDirectory() as tmp:
+            target = os.path.join(tmp, "config.runtime.ini")
+            with open(target, "w", encoding="utf-8") as f:
+                f.write("old\n")
+            overly_permissive_mode = int("664", 8)
+            os.chmod(target, overly_permissive_mode)
+
+            va._write_private_text_file_atomic(target, "new\n")
+
+            self.assertEqual(os.stat(target).st_mode & 0o777, 0o600)
+            with open(target, "r", encoding="utf-8") as f:
+                self.assertEqual(f.read(), "new\n")
+
+    @unittest.skipIf(os.name == "nt", "symlink semantics differ on Windows")
+    def test_private_runtime_config_rejects_symlink_target(self):
+        va = self._import_video_analyzer()
+        with tempfile.TemporaryDirectory() as tmp:
+            protected = os.path.join(tmp, "protected.ini")
+            target = os.path.join(tmp, "config.runtime.ini")
+            with open(protected, "w", encoding="utf-8") as f:
+                f.write("do-not-touch\n")
+            os.symlink(protected, target)
+
+            with self.assertRaisesRegex(OSError, "not a regular file"):
+                va._write_private_text_file_atomic(target, "secret\n")
+
+            with open(protected, "r", encoding="utf-8") as f:
+                self.assertEqual(f.read(), "do-not-touch\n")
 
     def test_build_analyzer_env_includes_runtime_libs_dir(self):
         va = self._import_video_analyzer()
@@ -681,6 +829,54 @@ class TestVideoAnalyzerLauncherPaths(unittest.TestCase):
         finally:
             va.ROOT_DIR = old_root_dir
             va.platform.system = old_system
+
+    def test_build_runtime_env_sets_product_paths_and_preserves_overrides(self):
+        va = self._import_video_analyzer()
+        old_root_dir = va.ROOT_DIR
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                va.ROOT_DIR = tmp
+                env = va._build_runtime_env({})
+
+                self.assertEqual(env["BEACON_ROOT_DIR"], tmp)
+                self.assertEqual(env["BEACON_CONFIG_PATH"], os.path.join(tmp, "config.json"))
+                self.assertEqual(
+                    env["BEACON_SQLITE_DB_PATH"],
+                    os.path.join(tmp, "Admin", "Admin.sqlite3"),
+                )
+
+                empty_values = va._build_runtime_env(
+                    {
+                        "BEACON_ROOT_DIR": "",
+                        "BEACON_CONFIG_PATH": "",
+                        "BEACON_SQLITE_DB_PATH": "",
+                    }
+                )
+                self.assertEqual(empty_values["BEACON_ROOT_DIR"], tmp)
+                self.assertEqual(
+                    empty_values["BEACON_CONFIG_PATH"],
+                    os.path.join(tmp, "config.json"),
+                )
+                self.assertEqual(
+                    empty_values["BEACON_SQLITE_DB_PATH"],
+                    os.path.join(tmp, "Admin", "Admin.sqlite3"),
+                )
+
+                overridden = va._build_runtime_env(
+                    {
+                        "BEACON_ROOT_DIR": "/srv/beacon",
+                        "BEACON_CONFIG_PATH": "/etc/beacon/config.json",
+                        "BEACON_SQLITE_DB_PATH": "/var/lib/beacon/admin.sqlite3",
+                    }
+                )
+                self.assertEqual(overridden["BEACON_ROOT_DIR"], "/srv/beacon")
+                self.assertEqual(overridden["BEACON_CONFIG_PATH"], "/etc/beacon/config.json")
+                self.assertEqual(
+                    overridden["BEACON_SQLITE_DB_PATH"],
+                    "/var/lib/beacon/admin.sqlite3",
+                )
+        finally:
+            va.ROOT_DIR = old_root_dir
 
     def test_build_analyzer_env_prefers_project_localdeps(self):
         va = self._import_video_analyzer()
@@ -773,7 +969,7 @@ class TestVideoAnalyzerLauncherPaths(unittest.TestCase):
                 va.App = _FakeApp
                 va.threading.Thread = _FakeThread
                 va._build_media_server_args = lambda config_data=None: ["media"]
-                va._build_admin_args = lambda _port: ["manage"]
+                va._build_admin_args = lambda _port, config_data=None: ["manage"]
                 va._build_analyzer_args = lambda: ["analyzer"]
                 va._build_usb_camera_bridge_args = lambda _config: []
 

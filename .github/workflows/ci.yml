@@ -28,13 +28,17 @@ jobs:
       BEACON_DJANGO_SECRET_KEY: ci-only-django-secret-key-7YQ4x9M2p8V6k3N5w1R0-not-for-production
     steps:
       - name: Check out repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Set up Python
-        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
-          cache-dependency-path: Admin/requirements-linux.txt
+          cache-dependency-path: |
+            Admin/requirements-linux.txt
+            Admin/requirements-build.txt
       - name: Install dependencies
         run: python -m pip install -r requirements-linux.txt
       - name: Run Django tests
@@ -53,6 +57,53 @@ jobs:
         run: python manage.py check --deploy
       - name: Run launcher tests
         run: python -m unittest test_runtime_paths test_video_analyzer_launcher_paths
+      - name: Test operational evidence tooling
+        if: matrix.python-version == '3.12'
+        working-directory: .
+        run: |
+          python -m unittest tests.test_beacon_backup -v
+          python -m unittest tests.test_release_evidence -v
+          python -m unittest tests.test_admin_api_load_test -v
+          python -m unittest tests.test_edge_e2e_acceptance -v
+      - name: Install standalone packaging dependencies
+        if: matrix.python-version == '3.12'
+        run: python -m pip install -r requirements-build.txt
+      - name: Collect production static assets
+        if: matrix.python-version == '3.12'
+        run: python manage.py collectstatic --noinput
+      - name: Build standalone Admin executable
+        if: matrix.python-version == '3.12'
+        run: pyinstaller --clean --noconfirm manage.spec
+      - name: Smoke test packaged production command
+        if: matrix.python-version == '3.12'
+        env:
+          BEACON_ROOT_DIR: ${{ github.workspace }}
+          BEACON_CONFIG_PATH: ${{ github.workspace }}/config.json
+          BEACON_SQLITE_DB_PATH: ${{ runner.temp }}/beacon-packaging-smoke.sqlite3
+          BEACON_DJANGO_DEBUG: "0"
+          BEACON_DJANGO_ALLOWED_HOSTS: 127.0.0.1,localhost
+          BEACON_DJANGO_SESSION_COOKIE_SECURE: "0"
+          BEACON_DJANGO_CSRF_COOKIE_SECURE: "0"
+        run: |
+          dist/manage/manage help serve_production
+          python manage.py migrate --noinput
+          dist/manage/manage serve_production --host 127.0.0.1 --port 19991 --threads 2 >"${RUNNER_TEMP}/packaged-admin.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "${server_pid}" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in $(seq 1 30); do
+            if curl --noproxy '*' --fail --silent --show-error http://127.0.0.1:19991/healthz >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "${ready}" -ne 1 ]; then
+            sed -n '1,160p' "${RUNNER_TEMP}/packaged-admin.log"
+            exit 1
+          fi
+          curl --noproxy '*' --fail --silent --show-error http://127.0.0.1:19991/login >/dev/null
+          curl --noproxy '*' --fail --silent --show-error http://127.0.0.1:19991/static/app-shell/beacon-shell.js >/dev/null
 
   frontend:
     name: Frontend / Node 22
@@ -62,9 +113,11 @@ jobs:
         working-directory: Admin/frontend
     steps:
       - name: Check out repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
           cache: npm
@@ -80,7 +133,9 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Check out repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Install native build dependencies
         run: |
           sudo apt-get update
@@ -106,9 +161,11 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Check out repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Set up Python
-        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
           cache: pip
@@ -116,13 +173,13 @@ jobs:
             docs/requirements.txt
             sdk/python/pyproject.toml
       - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: sdk/javascript/package-lock.json
       - name: Set up Go
-        uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.20.x"
           cache-dependency-path: sdk/go/go.sum
@@ -149,13 +206,15 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Check out repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Set up Python
-        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
       - name: Set up Helm
-        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
         with:
           version: v3.19.0
       - name: Validate Compose
@@ -166,15 +225,43 @@ jobs:
         run: |
           docker build -f deploy/cloud-saas-v1/Dockerfile -t beacon-cloud-ci:local .
           test "$(docker image inspect beacon-cloud-ci:local --format '{{.Config.User}}')" = "10001:10001"
-      - name: Validate Helm chart
-        run: python deploy/cloud-saas-v1/tests/test_helm_chart.py
+      - name: Reject high and critical Cloud image vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: beacon-cloud-ci:local
+          scanners: vuln
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: "1"
+          format: table
+          timeout: 10m
+          version: v0.74.0
+      - name: Validate Cloud deployment and Helm chart
+        run: python -m unittest discover -s deploy/cloud-saas-v1/tests -p "test_*.py" -v
 
   dependency-audit:
     name: Dependency audit
     runs-on: ubuntu-24.04
     steps:
       - name: Check out repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Validate GitHub Actions workflows
+        env:
+          ACTIONLINT_VERSION: 1.7.12
+          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          set -euo pipefail
+          archive_path="${RUNNER_TEMP}/actionlint.tar.gz"
+          curl --fail --location --silent --show-error \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" \
+            --output "${archive_path}"
+          printf '%s  %s\n' "${ACTIONLINT_SHA256}" "${archive_path}" | sha256sum --check
+          tar -xzf "${archive_path}" -C "${RUNNER_TEMP}" actionlint
+          "${RUNNER_TEMP}/actionlint" .github/workflows/*.yml
       - name: Reject tracked runtime artifacts
         run: test -z "$(git ls-files -ci --exclude-standard)"
       - name: Scan committed source for secrets
@@ -185,21 +272,22 @@ jobs:
             zricethezav/gitleaks:v8.28.0@sha256:cdbb7c955abce02001a9f6c9f602fb195b7fadc1e812065883f695d1eeaba854 \
             detect --source /repo --no-git --config /repo/.gitleaks.toml --redact --no-banner
       - name: Set up Python
-        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.11"
+          python-version: "3.12"
       - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
-      - name: Scan source for security patterns
+      - name: Scan source and workflows for security patterns
         run: |
-          python -m pip install semgrep==1.169.0
+          python -m pip install semgrep==1.169.0 zizmor==1.29.0
+          zizmor --pedantic --offline .github
           semgrep scan --config p/security-audit --config p/django --timeout 30 --error .
       - name: Audit Python lock inputs
         run: |
           python -m pip install pip-audit==2.10.1
-          for requirements in Admin/requirements-cloud.txt Admin/requirements-linux.txt Admin/requirements-windows.txt Admin/requirements-optional.txt Admin/requirements-build.txt docs/requirements.txt; do
+          for requirements in Admin/requirements-cloud.lock Admin/requirements-linux.txt Admin/requirements-windows.txt Admin/requirements-optional.txt Admin/requirements-build.txt docs/requirements.txt; do
             python -m pip_audit -r "$requirements"
           done
       - name: Audit frontend dependencies

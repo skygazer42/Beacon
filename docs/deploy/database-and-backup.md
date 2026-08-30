@@ -69,7 +69,38 @@ Beacon 提供 “DB URL -> Django DATABASES” 解析能力（当前实现仅支
 推荐备份窗口：
 
 - 在业务低峰期执行
-- 执行前建议停止 Admin（或至少确保无写入峰值）
+- 数据库可以在线生成一致性快照；为了保证数据库记录与截图/录像文件跨存储一致，完整备份仍应冻结业务写入或停止 Admin
+
+仓库提供不依赖第三方包的备份工具。输出文件必须不存在，工具不会覆盖已有备份：
+
+```bash
+python tools/beacon_backup.py create \
+  --root /opt/beacon \
+  --output /secure-backup/beacon-20260829T120000Z.tar.gz
+```
+
+默认备份：
+
+- 使用 SQLite Backup API 创建在线一致性快照，并执行 `PRAGMA quick_check`
+- `config.json`、存在时的 `settings.json`、`PROJECT_VERSION`
+- `uploadDir` 和 `modelDir` 下的普通文件；发现符号链接会拒绝备份，避免越界读取
+- `manifest.json` 中的 SHA-256、大小、版本、组件与规范化恢复路径
+
+如果文件数据由独立快照/对象存储保护，可以显式使用 `--skip-upload` 或
+`--skip-models`，但必须在发布证据中记录对应的替代恢复方案。
+
+备份后必须验证归档结构、每个文件哈希和 SQLite 快照：
+
+```bash
+python tools/beacon_backup.py verify /secure-backup/beacon-20260829T120000Z.tar.gz
+```
+
+!!! warning "备份包是敏感资产"
+    备份包可能包含数据库凭据字段、Token、摄像头地址、个人信息、截图和模型。
+    工具将新归档权限尽量设置为 `0600`，但 SHA-256 只证明完整性，不证明来源，
+    也不提供加密。生产环境仍需使用加密存储、最小权限、不可变保留策略和外部签名。
+
+### 3.2 停机复制（保守回退方案）
 
 最保守的备份方法（停服务后复制文件）：
 
@@ -82,9 +113,28 @@ Beacon 提供 “DB URL -> Django DATABASES” 解析能力（当前实现仅支
 - Windows 下文件锁更常见，停服务后复制是最稳妥方案。
 - 若运行方式为容器/服务，可使用宿主机快照或卷快照方式执行。
 
-### 3.2 恢复（SQLite）
+### 3.3 隔离恢复与切换（SQLite）
 
-恢复流程（概念步骤）：
+工具只允许恢复到一个尚不存在的新目录，不会直接覆盖生产目录：
+
+```bash
+python tools/beacon_backup.py restore \
+  /secure-backup/beacon-20260829T120000Z.tar.gz \
+  --destination /srv/beacon-restore-drill-20260829
+```
+
+恢复结果使用固定布局：
+
+- `Admin/Admin.sqlite3`
+- `data/upload/`
+- `data/models/`
+- `config.json`、`settings.json`（如备份中存在）、`PROJECT_VERSION`
+
+隔离启动时设置 `BEACON_ROOT_DIR`、`BEACON_CONFIG_PATH`、
+`BEACON_SQLITE_DB_PATH`、`BEACON_UPLOAD_DIR` 和 `BEACON_MODEL_DIR` 指向恢复目录，
+完成迁移与 L0/L1/L2 验收后，再按维护窗口执行受控切换。
+
+手工恢复流程（概念步骤）：
 
 1. 停止 Admin
 2. 替换 `Admin/Admin.sqlite3` 为备份文件
@@ -200,6 +250,7 @@ SQLite 到 Postgres 的迁移属于交付工程能力，常见做法：
 
 - 在隔离环境恢复数据库（SQLite 文件或 Postgres dump）
 - 恢复 `uploadDir` 与 `modelDir`（按实际交付内容）
+- SQLite 场景保存 `create`、`verify`、`restore` 三个命令的 JSON 输出和归档 SHA-256
 - 启动 Admin/Analyzer/MediaServer
 - 执行 L0/L1 级别验收（见 `docs/deploy/e2e-acceptance.md`）
 

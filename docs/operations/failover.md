@@ -1,6 +1,9 @@
 # 故障恢复与演练
 
-Beacon 当前提供健康检查、备份说明、Outbox 重试和服务托管样例，但不包含自动主备选举、Analyzer 任务迁移或 MediaServer 跨节点接管。本页描述的是手工恢复基线，不是高可用承诺。
+Beacon 当前提供健康检查、备份说明、Outbox 重试和服务托管样例；Cloud 后台 Worker
+具备 PostgreSQL advisory-lock 主备选举，但仍不包含内置数据库/对象存储自动切换、
+Analyzer 任务迁移或 MediaServer 跨节点接管。本页描述的是恢复与演练基线，不是
+端到端高可用承诺。
 
 ## 先定义目标
 
@@ -36,6 +39,7 @@ curl -fsS http://127.0.0.1:9993/api/health
 | 数据库不可写 | 配置、告警、审计和 Outbox 写入失败 | `/readyz`、数据库日志和磁盘 | 恢复数据库，验证迁移和业务写入，不只检查连接 |
 | 磁盘耗尽 | 截图、录像、日志或数据库失败 | 磁盘比例、写入错误 | 先止写/扩容，再按留存策略清理并验证文件权限 |
 | Webhook/Cloud 不可达 | 下游暂时收不到事件 | Outbox pending/failed、接收端日志 | 恢复后确认队列消化；按 `event_id` 去重 |
+| Cloud Worker leader 停止 | 短暂暂停 Outbox/计划任务 | 两个 Worker heartbeat、leader/standby 日志 | standby 在轮询窗口内接管，状态保持 `running`，恢复旧副本后回到 standby |
 
 ## 演练记录
 
@@ -43,4 +47,6 @@ curl -fsS http://127.0.0.1:9993/api/health
 |---|---|---|---|---|---|---|
 | YYYY-MM-DD | commit + model hash | Analyzer 停止 |  |  |  |  |
 
-每次演练都应保留命令、日志、时间线和验收证据。自动切换、多副本 Admin 或跨节点调度属于后续架构改造，不能通过增加 Gunicorn worker 或 Kubernetes replica 直接获得。
+每次演练都应保留命令、日志、时间线和验收证据。Cloud Web/Worker 可按 Chart 的角色
+拆分扩展；本地兼容模式不能直接复制。数据库、对象存储、Analyzer 和 MediaServer 的
+自动切换仍需要目标基础设施方案与单独验收。

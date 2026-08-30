@@ -8,10 +8,13 @@ import logging
 import json
 import threading
 import socket
+import ipaddress
 import atexit
 import signal
 import secrets
+import stat
 import sys
+import tempfile
 import platform
 import subprocess
 import glob
@@ -108,7 +111,17 @@ def _resolve_runtime_libs_dir():
 
 def _build_runtime_env(base_env=None):
     """为子进程构建基础运行时环境。"""
-    env = dict(base_env or os.environ.copy())
+    env = dict(os.environ.copy() if base_env is None else base_env)
+    runtime_root = str(env.get("BEACON_ROOT_DIR", "") or "").strip() or ROOT_DIR
+    env["BEACON_ROOT_DIR"] = runtime_root
+    if not str(env.get("BEACON_CONFIG_PATH", "") or "").strip():
+        env["BEACON_CONFIG_PATH"] = os.path.join(runtime_root, "config.json")
+    if not str(env.get("BEACON_SQLITE_DB_PATH", "") or "").strip():
+        env["BEACON_SQLITE_DB_PATH"] = os.path.join(
+            runtime_root,
+            "Admin",
+            "Admin.sqlite3",
+        )
     runtime_libs_dir = _resolve_runtime_libs_dir()
     if runtime_libs_dir:
         _prepend_env_path(env, "LD_LIBRARY_PATH", [runtime_libs_dir])
@@ -234,15 +247,45 @@ def _read_text_file_with_fallbacks(path, encodings=("utf-8", "gbk")):
         return f.read(), "utf-8"
 
 
-def _write_text_file_if_changed(path, content, encoding="utf-8"):
+def _write_private_text_file_atomic(path, content, encoding="utf-8"):
+    """Atomically replace a secret-bearing runtime file with mode 0600."""
+    target_path = os.path.abspath(path)
+    parent_dir = os.path.dirname(target_path)
+    parent_stat = os.stat(parent_dir, follow_symlinks=False)
+    if not stat.S_ISDIR(parent_stat.st_mode):
+        raise OSError("runtime config parent is not a directory")
+
     try:
-        with open(path, "r", encoding=encoding) as f:
-            if f.read() == content:
-                return
-    except (OSError, UnicodeDecodeError):
-        pass
-    with open(path, "w", encoding=encoding, newline="\n") as f:
-        f.write(content)
+        existing_stat = os.lstat(target_path)
+    except FileNotFoundError:
+        existing_stat = None
+    if existing_stat is not None and not stat.S_ISREG(existing_stat.st_mode):
+        raise OSError("runtime config target is not a regular file")
+
+    fd, temporary_path = tempfile.mkstemp(
+        prefix=f".{os.path.basename(target_path)}.",
+        suffix=".tmp",
+        dir=parent_dir,
+    )
+    try:
+        if hasattr(os, "fchmod"):
+            os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w", encoding=encoding, newline="\n") as file_obj:
+            fd = -1
+            file_obj.write(content)
+            file_obj.flush()
+            os.fsync(file_obj.fileno())
+        os.replace(temporary_path, target_path)
+        temporary_path = ""
+        os.chmod(target_path, 0o600)
+    finally:
+        if fd >= 0:
+            os.close(fd)
+        if temporary_path:
+            try:
+                os.unlink(temporary_path)
+            except FileNotFoundError:
+                pass
 
 
 def _build_media_server_runtime_config(config_path, config_data):
@@ -256,15 +299,20 @@ def _build_media_server_runtime_config(config_path, config_data):
         parser.optionxform = str
         parser.read_string(config_text)
     except Exception as exc:
-        logging.getLogger().warning("load media server config failed, using template: %s", exc)
-        return config_path
+        logging.getLogger().error(
+            "load media server config failed: %s",
+            type(exc).__name__,
+        )
+        raise RuntimeError("unable to load MediaServer runtime config template") from exc
 
     overrides = {
+        ("api", "apiDebug"): "1" if _media_api_debug_enabled(config_data) else "0",
         ("api", "secret"): str(os.environ.get("BEACON_MEDIA_SECRET") or (config_data or {}).get("mediaSecret") or "").strip(),
         ("http", "port"): str(_clamp_int((config_data or {}).get("mediaHttpPort") or 9992, default=9992, min_value=1, max_value=65535)),
         ("http", "sslport"): "0",
         ("rtsp", "port"): str(_clamp_int((config_data or {}).get("mediaRtspPort") or 9994, default=9994, min_value=1, max_value=65535)),
         ("rtmp", "port"): str(_clamp_int((config_data or {}).get("mediaRtmpPort") or 9995, default=9995, min_value=1, max_value=65535)),
+        ("rtp_proxy", "port"): str(_media_rtp_proxy_port(config_data)),
     }
     for (section, key), value in overrides.items():
         if not value:
@@ -280,10 +328,13 @@ def _build_media_server_runtime_config(config_path, config_data):
     try:
         buffer = io.StringIO()
         parser.write(buffer, space_around_delimiters=False)
-        _write_text_file_if_changed(runtime_config_path, buffer.getvalue(), encoding="utf-8")
+        _write_private_text_file_atomic(runtime_config_path, buffer.getvalue(), encoding="utf-8")
     except Exception as exc:
-        logging.getLogger().warning("write media server runtime config failed, using template: %s", exc)
-        return config_path
+        logging.getLogger().error(
+            "write media server runtime config failed: %s",
+            type(exc).__name__,
+        )
+        raise RuntimeError("unable to write private MediaServer runtime config") from exc
     return runtime_config_path
 
 
@@ -372,26 +423,46 @@ def _prepare_packaged_python_runtime():
         return False
 
 
-def _build_admin_args(admin_port):
-    """构建管理员`args`。"""
+def _build_admin_args(admin_port, config_data=None):
+    """Build Admin process arguments with a production WSGI server by default."""
     _prepare_packaged_python_runtime()
+    server_mode = _admin_server_mode(config_data)
+    admin_threads = _admin_server_threads(config_data)
+    trusted_proxy = _admin_trusted_proxy(config_data)
     manage_py = os.path.join(BASE_DIR, "manage.py")
     packaged_python = _pick_first_existing([
         os.path.join(BASE_DIR, "venv", "Scripts", WINDOWS_PYTHON_EXE),
         os.path.join(BASE_DIR, "venv", "bin", "python"),
     ], require_file=True)
     if packaged_python and os.path.exists(manage_py):
-        return [packaged_python, manage_py, "runserver", "0.0.0.0:%s" % admin_port, "--noreload"]
+        command = [packaged_python, manage_py]
+    else:
+        manage_exe = _pick_first_existing([
+            os.path.join(BASE_DIR, WINDOWS_MANAGE_EXE),
+            os.path.join(BASE_DIR, "dist", "manage", WINDOWS_MANAGE_EXE),
+            os.path.join(BASE_DIR, "manage", WINDOWS_MANAGE_EXE),
+        ], require_file=True)
+        if manage_exe:
+            command = [manage_exe]
+        else:
+            python_exec = sys.executable or "python3"
+            command = [python_exec, manage_py]
 
-    manage_exe = _pick_first_existing([
-        os.path.join(BASE_DIR, WINDOWS_MANAGE_EXE),
-        os.path.join(BASE_DIR, "dist", "manage", WINDOWS_MANAGE_EXE),
-        os.path.join(BASE_DIR, "manage", WINDOWS_MANAGE_EXE),
-    ], require_file=True)
-    if manage_exe:
-        return [manage_exe, "runserver", "0.0.0.0:%s" % admin_port, "--noreload"]
-    python_exec = sys.executable or "python3"
-    return [python_exec, manage_py, "runserver", "0.0.0.0:%s" % admin_port, "--noreload"]
+    if server_mode == "django":
+        return command + ["runserver", "0.0.0.0:%s" % admin_port, "--noreload"]
+
+    command += [
+        "serve_production",
+        "--host", "0.0.0.0",
+        "--port", str(admin_port),
+        "--threads", str(admin_threads),
+    ]
+    if trusted_proxy:
+        command += [
+            "--trusted-proxy", trusted_proxy,
+            "--trusted-proxy-headers", "x-forwarded-proto,x-forwarded-for",
+        ]
+    return command
 
 def _build_analyzer_args():
     """构建分析器`args`。"""
@@ -443,6 +514,60 @@ def _config_int(config_data, env_key: str, json_key: str, default: int = 0, min_
     """处理配置整数值。"""
     raw = _config_value(config_data, env_key, json_key, default)
     return _clamp_int(raw, default=default, min_value=min_value, max_value=max_value)
+
+
+def _media_api_debug_enabled(config_data) -> bool:
+    """Return whether verbose MediaServer API request logging is explicitly enabled."""
+    return _config_bool(config_data, "BEACON_MEDIA_API_DEBUG", "mediaApiDebug", default=False)
+
+
+def _admin_server_mode(config_data) -> str:
+    """Resolve the Admin HTTP server; Django runserver requires explicit opt-in."""
+    raw = _config_text(config_data, "BEACON_ADMIN_SERVER", "adminServer", "waitress").lower()
+    aliases = {
+        "development": "django",
+        "runserver": "django",
+        "production": "waitress",
+        "wsgi": "waitress",
+    }
+    mode = aliases.get(raw, raw)
+    if mode not in {"waitress", "django"}:
+        raise ValueError("adminServer must be 'waitress' or 'django'")
+    return mode
+
+
+def _admin_server_threads(config_data) -> int:
+    """Resolve the bounded Waitress worker-thread count."""
+    return _config_int(
+        config_data,
+        "BEACON_ADMIN_THREADS",
+        "adminThreads",
+        default=4,
+        min_value=1,
+        max_value=64,
+    )
+
+
+def _admin_trusted_proxy(config_data) -> str:
+    """Resolve the single reverse-proxy address trusted by Waitress."""
+    return _config_text(
+        config_data,
+        "BEACON_ADMIN_TRUSTED_PROXY",
+        "adminTrustedProxy",
+        "",
+    )
+
+
+def _media_rtp_proxy_port(config_data) -> int:
+    """Resolve the MediaServer RTP proxy TCP/UDP port."""
+    return _config_int(
+        config_data,
+        "BEACON_MEDIA_RTP_PROXY_PORT",
+        "mediaRtpProxyPort",
+        default=10000,
+        min_value=1,
+        max_value=65535,
+    )
 
 
 def _resolve_internal_host(config_data) -> str:
@@ -682,15 +807,15 @@ def _find_port_owner(port):
         uniq.append(item)
     return uniq
 
-def _check_port_free(port):
-    """检查端口`free`。"""
+def _check_socket_port_free(port, socket_type):
+    """Check whether a TCP or UDP port can be bound on all IPv4 interfaces."""
     if not port or port <= 0:
         return True, ""
     s = socket.socket(  # nosemgrep: python.lang.security.audit.network.bind.avoid-bind-to-all-interfaces
         socket.AF_INET,
-        socket.SOCK_STREAM,
+        socket_type,
     )
-    if os.name == "posix":
+    if os.name == "posix" and socket_type == socket.SOCK_STREAM:
         try:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         except Exception:
@@ -714,6 +839,16 @@ def _check_port_free(port):
             s.close()
         except Exception:
             pass
+
+
+def _check_port_free(port):
+    """检查 TCP 端口是否可用。"""
+    return _check_socket_port_free(port, socket.SOCK_STREAM)
+
+
+def _check_udp_port_free(port):
+    """检查 UDP 端口是否可用。"""
+    return _check_socket_port_free(port, socket.SOCK_DGRAM)
 
 def _get_configured_max_controls(config_data) -> int:
     """获取`configured`最大值`controls`。"""
@@ -1060,17 +1195,36 @@ def run_environment_check(config_data):
     errors = []
     warnings = []
 
+    try:
+        _admin_server_mode(config_data)
+        trusted_proxy = _admin_trusted_proxy(config_data)
+        if trusted_proxy:
+            if trusted_proxy == "*":
+                raise ValueError("adminTrustedProxy wildcard is not allowed")
+            ipaddress.ip_address(trusted_proxy)
+    except ValueError as exc:
+        errors.append("admin server configuration is invalid: %s" % exc)
+
     port_items = {
         "adminPort": config_data.get("adminPort"),
         "analyzerPort": config_data.get("analyzerPort"),
         "mediaHttpPort": config_data.get("mediaHttpPort"),
         "mediaRtspPort": config_data.get("mediaRtspPort"),
         "mediaRtmpPort": config_data.get("mediaRtmpPort"),
+        "mediaRtpProxyPort": _media_rtp_proxy_port(config_data),
     }
     for name, port in port_items.items():
         ok, detail = _check_port_free(int(port) if port is not None else 0)
         if not ok:
             errors.append("port %s (%s) is occupied: %s" % (str(port), name, detail))
+
+    rtp_proxy_port = _media_rtp_proxy_port(config_data)
+    ok, detail = _check_udp_port_free(rtp_proxy_port)
+    if not ok:
+        errors.append(
+            "port %s (mediaRtpProxyPort/udp) is occupied: %s"
+            % (str(rtp_proxy_port), detail)
+        )
 
     ok, detail = check_cpu_support(config_data)
     if not ok:
@@ -1343,6 +1497,7 @@ class VideoAnalyzer():
             self.__config_data.get("mediaHttpPort"),
             self.__config_data.get("mediaRtspPort"),
             self.__config_data.get("mediaRtmpPort"),
+            _media_rtp_proxy_port(self.__config_data),
         ]
         runtime_env = _build_runtime_env()
         runtime_env["BEACON_MEDIA_SECRET"] = self.__media_secret
@@ -1350,7 +1505,7 @@ class VideoAnalyzer():
         app.start()
         self.__apps.append(app)
 
-        admin_args = _build_admin_args(self._admin_port)
+        admin_args = _build_admin_args(self._admin_port, self.__config_data)
         app = App("manage", admin_args, ports=[self._admin_port], env=runtime_env)
         app.start()
         self.__apps.append(app)

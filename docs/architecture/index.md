@@ -46,7 +46,10 @@ Analyzer 源码包含 ONNX Runtime、OpenVINO 和插件加载路径。CUDA/Tenso
 | Cloud POC | Admin + PostgreSQL + MinIO | 用于验证云端登录、边缘接入与告警聚合，不包含真实 Analyzer/MediaServer 链路 |
 | Admin 开发 | 只启动 Django/React 生产包 | 可开发页面和管理 API，视频及推理动作会依赖外部服务 |
 
-Admin 的后台任务当前在 Django 进程内启动。Cloud 参考部署因此固定为一个 Gunicorn worker 和一个副本；在拆出独立 worker 之前，不应直接增加 Web worker 或 Kubernetes 副本，否则可能重复执行计划、清理和 Outbox 投递。
+本地 Edge 兼容模式仍把后台任务放在单一 Admin 进程中。Cloud 参考部署已拆成多副本
+Web、版本化初始化 Job 和 PostgreSQL 选主的独立 Worker，计划、清理和 Outbox 不会随
+每个 Web 副本重复启动。该拆分只覆盖 Cloud Admin；MediaServer/Analyzer 的跨节点任务
+迁移以及内置 PostgreSQL/MinIO 的自动故障转移仍不在当前范围内。
 
 ## 进一步阅读
 

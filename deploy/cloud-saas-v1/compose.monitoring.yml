@@ -10,7 +10,8 @@
 
 services:
   prometheus:
-    image: prom/prometheus:v3.13.1
+    image: prom/prometheus:v3.13.1@sha256:3c42b892cf723fa54d2f262c37a0e1f80aa8c8ddb1da7b9b0df9455a35a7f893
+    user: "65534:65534"
     environment:
       BEACON_OPEN_API_TOKEN: "${BEACON_OPEN_API_TOKEN:?}"
     entrypoint: ["/bin/sh", "-ec"]
@@ -21,12 +22,27 @@ services:
       exec /bin/prometheus --config.file=/etc/prometheus/prometheus.yml
     volumes:
     - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    - prometheus_data:/prometheus
+    read_only: true
+    tmpfs:
+    - /tmp:mode=0700,uid=65534,gid=65534
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
     ports:
-    - "9090:9090"
+    - "${BEACON_BIND_ADDRESS:-127.0.0.1}:${BEACON_PROMETHEUS_PORT:-9090}:9090"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9090/-/ready >/dev/null"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
     restart: unless-stopped
 
   grafana:
-    image: grafana/grafana:13.1.0
+    image: grafana/grafana:13.1.0@sha256:121a7a9ece6dc10b969f1f96eed64b4f07dfac0d0b8abc070f7cb83bbde86f63
+    user: "472:472"
     environment:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:?}
@@ -35,9 +51,23 @@ services:
     - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
     - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
     - grafana_data:/var/lib/grafana
+    read_only: true
+    tmpfs:
+    - /tmp:mode=1777,uid=472,gid=472
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
     ports:
-    - "3000:3000"
+    - "${BEACON_BIND_ADDRESS:-127.0.0.1}:${BEACON_GRAFANA_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health | grep -q '\"database\"[[:space:]]*:[[:space:]]*\"ok\"'"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 180s
     restart: unless-stopped
 
 volumes:
+  prometheus_data:
   grafana_data:

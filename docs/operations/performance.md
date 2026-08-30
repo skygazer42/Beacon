@@ -87,10 +87,21 @@ python3 tools/admin_api_load_test.py \
   --requests 200 \
   --warmup-requests 10 \
   --timeout-seconds 5 \
+  --max-error-rate 0.001 \
+  --max-p95-ms 500 \
+  --min-rps 20 \
   --output /tmp/beacon-dashboard-load-test.json
 ```
 
-比较时必须保持硬件、数据量、并发数和预热条件一致。仓库不收录特定机器的临时压测产物。
+门禁参数省略时，脚本只记录结果；提供任一门禁后，如果错误率、P95 或 RPS 不满足
+条件，脚本在仍然输出完整 JSON 后以退出码 `2` 结束。报告中的 token、secret、
+password、signature、API key 等查询参数值会替换为 `REDACTED`；鉴权信息仍应优先
+放在 Header 或 Cookie 中，不要写入 URL。
+
+阈值必须来自已批准的 SLO，不能把上面示例数字直接作为生产承诺。比较时必须保持
+硬件、数据量、并发数和预热条件一致。健康接口压测只验证 HTTP/WSGI 基线，不能替代
+带真实模型、视频、告警写入、录像和外部依赖的容量测试。仓库不收录特定机器的临时
+压测产物。
 
 ---
 

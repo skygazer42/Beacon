@@ -150,15 +150,35 @@ def healthz(request):
     )
 
 
+def _check_background_services() -> Dict[str, Any]:
+    """Return readiness state for the in-process background components."""
+    try:
+        from app.utils.BackgroundServices import get_background_services_status
+
+        status = get_background_services_status()
+    except Exception as exc:
+        return {"ok": False, "state": "unknown", "error": type(exc).__name__}
+
+    state = str((status or {}).get("state") or "unknown")
+    return {
+        "ok": state == "running",
+        "state": state,
+        "failed_components": list((status or {}).get("failed_components") or []),
+        "failure_types": dict((status or {}).get("failure_types") or {}),
+    }
+
+
 def readyz(request):
     """处理`readyz`。"""
     checks: Dict[str, Any] = {}
 
     db = _check_db()
     checks["db"] = db
+    checks["background_services"] = _check_background_services()
 
     if get_deployment_mode() == "cloud":
         checks["cloud_required_config"] = _check_cloud_required_config()
+        checks["object_storage"] = _check_cloud_object_storage()
 
     ok = True
     for item in checks.values():
@@ -909,7 +929,7 @@ def _check_db() -> Dict[str, Any]:
             "ok": False,
             "vendor": str(getattr(connection, "vendor", "") or ""),
             "latency_ms": int((time.time() - start) * 1000),
-            "error": str(e),
+            "error": type(e).__name__,
         }
 
 
@@ -925,3 +945,28 @@ def _check_cloud_required_config() -> Dict[str, Any]:
         missing.append("BEACON_CLOUD_S3_BUCKET")
 
     return {"ok": len(missing) == 0, "missing": missing}
+
+
+def _check_cloud_object_storage() -> Dict[str, Any]:
+    """Check access to the configured Cloud object-storage bucket."""
+    start = time.time()
+    bucket = str(os.environ.get("BEACON_CLOUD_S3_BUCKET", "") or "").strip()
+    if not bucket:
+        return {"ok": False, "error": "MissingBucket"}
+
+    try:
+        from app.utils.CloudS3 import check_bucket_access
+
+        check_bucket_access(bucket)
+        return {
+            "ok": True,
+            "bucket": bucket,
+            "latency_ms": int((time.time() - start) * 1000),
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "bucket": bucket,
+            "latency_ms": int((time.time() - start) * 1000),
+            "error": type(exc).__name__,
+        }

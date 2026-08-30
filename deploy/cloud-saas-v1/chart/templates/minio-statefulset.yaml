@@ -19,10 +19,24 @@ spec:
         app.kubernetes.io/component: minio
     spec:
       automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: minio
-          image: "{{ .Values.minio.image.repository }}:{{ .Values.minio.image.tag }}"
+          image: {{ include "beacon-cloud-saas-v1.imageRef" (dict "name" "minio" "image" .Values.minio.image "requireDigest" true) | quote }}
           imagePullPolicy: {{ .Values.minio.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
           args:
             - server
             - /data
@@ -37,16 +51,39 @@ spec:
             - name: MINIO_ROOT_USER
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "beacon-cloud-saas-v1.fullname" . }}-secret
+                  name: {{ include "beacon-cloud-saas-v1.secretName" . }}
                   key: minio-root-user
             - name: MINIO_ROOT_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "beacon-cloud-saas-v1.fullname" . }}-secret
+                  name: {{ include "beacon-cloud-saas-v1.secretName" . }}
                   key: minio-root-password
           volumeMounts:
             - name: data
               mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+          startupProbe:
+            httpGet:
+              path: /minio/health/live
+              port: api
+            periodSeconds: 2
+            timeoutSeconds: 3
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /minio/health/ready
+              port: api
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /minio/health/live
+              port: api
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
           resources:
             requests:
               cpu: {{ .Values.minio.resources.requests.cpu | default "100m" | quote }}
@@ -56,6 +93,10 @@ spec:
               cpu: {{ .Values.minio.resources.limits.cpu | default "1000m" | quote }}
               memory: {{ .Values.minio.resources.limits.memory | default "1Gi" | quote }}
               ephemeral-storage: {{ .Values.minio.resources.limits.ephemeralStorage | default "2Gi" | quote }}
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
   volumeClaimTemplates:
     {{- if .Values.minio.persistence.enabled }}
     - metadata:

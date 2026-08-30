@@ -41,7 +41,7 @@ Beacon 当前既可单机运行，也提供 Cloud POC 和 Helm 参考，但没�
 
 ## 关键限制
 
-- Admin 的计划、清理和 Outbox 等后台任务当前随 Django 进程启动。参考 Cloud 部署固定一个 Gunicorn worker 和一个副本。
+- 本地 Edge 兼容模式的后台任务仍随单一 Admin 进程启动；Cloud Helm 形态已拆成多副本 Web 与 PostgreSQL 选主 Worker。Worker 自动接管不等于数据库、MediaServer 或 Analyzer 自动故障转移。
 - WebSocket 需要 ASGI；只用 WSGI/Gunicorn 启动时，常规 HTTP 页面仍可用但 `/ws/alarm/poll` 不可用。
 - Cloud POC 不包含 Analyzer 和 MediaServer，不能用它证明真实检测链路可用。
 - 外部告警是至少一次投递，下游必须按 `event_id` 幂等。

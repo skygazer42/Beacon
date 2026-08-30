@@ -72,6 +72,7 @@ site/
 html/
 deploy/local-cloud-edge/local-cloud-edge.env
 Admin/static/upload/
+Admin/staticfiles/
 
 # CMake / build output
 build/

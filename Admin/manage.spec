@@ -1,20 +1,65 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import os
+import sys
+
+from PyInstaller.utils.hooks import collect_submodules
+
 
 block_cipher = None
+
+project_dir = os.path.dirname(os.path.abspath(SPEC))
+if project_dir not in sys.path:
+    sys.path.insert(0, project_dir)
+
+app_hiddenimports = collect_submodules(
+    'app',
+    filter=lambda name: not name.startswith('app.tests'),
+)
+framework_hiddenimports = collect_submodules('framework')
+
+required_hiddenimports = {
+    'app.apps',
+    'app.management.commands.serve_production',
+    'app.middleware',
+    'app.utils.JsonLogFormatter',
+    'framework.wsgi',
+}
+discovered_hiddenimports = set(app_hiddenimports + framework_hiddenimports)
+missing_hiddenimports = required_hiddenimports - discovered_hiddenimports
+if missing_hiddenimports:
+    raise RuntimeError(
+        'Unable to discover required modules: ' + ', '.join(sorted(missing_hiddenimports))
+    )
+
+templates_dir = os.path.join(project_dir, 'templates')
+staticfiles_dir = os.path.join(project_dir, 'staticfiles')
+project_version_file = os.path.join(project_dir, '..', 'PROJECT_VERSION')
+if not os.path.isdir(staticfiles_dir):
+    raise RuntimeError(
+        'Admin/staticfiles is missing; run "python manage.py collectstatic --noinput" before packaging.'
+    )
 
 
 a = Analysis(
     ['manage.py'],
     pathex=[],
     binaries=[],
-    datas=[],
-    hiddenimports=[  'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles'],
+    datas=[
+        (templates_dir, 'templates'),
+        (staticfiles_dir, 'staticfiles'),
+        (project_version_file, '.'),
+    ],
+    hiddenimports=[
+        'django.contrib.admin',
+        'django.contrib.auth',
+        'django.contrib.contenttypes',
+        'django.contrib.sessions',
+        'django.contrib.messages',
+        'django.contrib.staticfiles',
+        'waitress',
+        'whitenoise.middleware',
+    ] + app_hiddenimports + framework_hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

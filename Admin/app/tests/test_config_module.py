@@ -7,6 +7,27 @@ from django.test import SimpleTestCase
 
 
 class ConfigModuleHelpersTest(SimpleTestCase):
+    def test_config_path_prefers_explicit_file_then_runtime_root(self):
+        from app.utils import Config as ConfigModule
+
+        self.assertEqual(
+            ConfigModule._resolve_runtime_config_path(
+                "/legacy/root",
+                {"BEACON_ROOT_DIR": "/runtime/root"},
+            ),
+            os.path.join("/runtime/root", "config.json"),
+        )
+        self.assertEqual(
+            ConfigModule._resolve_runtime_config_path(
+                "/legacy/root",
+                {
+                    "BEACON_ROOT_DIR": "/runtime/root",
+                    "BEACON_CONFIG_PATH": "/explicit/beacon.json",
+                },
+            ),
+            os.path.join("/explicit", "beacon.json"),
+        )
+
     def test_config_import_rejects_non_object_sections(self):
         from app.views.ConfigExportView import _load_import_data_from_uploaded_file
 

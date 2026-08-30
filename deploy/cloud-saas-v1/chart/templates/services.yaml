@@ -13,6 +13,7 @@ spec:
     - name: http
       port: {{ .Values.beaconCloud.service.port }}
       targetPort: http
+{{- if .Values.postgres.enabled }}
 ---
 apiVersion: v1
 kind: Service
@@ -28,6 +29,8 @@ spec:
     - name: postgres
       port: {{ .Values.postgres.service.port }}
       targetPort: postgres
+{{- end }}
+{{- if .Values.minio.enabled }}
 ---
 apiVersion: v1
 kind: Service
@@ -46,3 +49,4 @@ spec:
     - name: console
       port: {{ .Values.minio.service.consolePort }}
       targetPort: console
+{{- end }}

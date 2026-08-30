@@ -1,0 +1,83 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "beacon-cloud-saas-v1.fullname" . }}-beacon-ingress
+  labels:
+    {{- include "beacon-cloud-saas-v1.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "beacon-cloud-saas-v1.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: beacon-cloud
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        {{- toYaml .Values.networkPolicy.beaconIngressFrom | nindent 8 }}
+      ports:
+        - protocol: TCP
+          port: http
+{{- if .Values.postgres.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "beacon-cloud-saas-v1.fullname" . }}-postgres-ingress
+  labels:
+    {{- include "beacon-cloud-saas-v1.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "beacon-cloud-saas-v1.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "beacon-cloud-saas-v1.selectorLabels" . | nindent 14 }}
+            matchExpressions:
+              - key: app.kubernetes.io/component
+                operator: In
+                values:
+                  - beacon-cloud
+                  - background-worker
+                  - initialize
+      ports:
+        - protocol: TCP
+          port: postgres
+{{- end }}
+{{- if .Values.minio.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "beacon-cloud-saas-v1.fullname" . }}-minio-ingress
+  labels:
+    {{- include "beacon-cloud-saas-v1.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "beacon-cloud-saas-v1.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: minio
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "beacon-cloud-saas-v1.selectorLabels" . | nindent 14 }}
+            matchExpressions:
+              - key: app.kubernetes.io/component
+                operator: In
+                values:
+                  - beacon-cloud
+                  - background-worker
+                  - initialize
+      ports:
+        - protocol: TCP
+          port: api
+{{- end }}
+{{- end }}

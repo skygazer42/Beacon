@@ -197,7 +197,15 @@ if _cloud_db_url:
     from app.utils.DbUrl import parse_database_url
 
     try:
-        DATABASES = {"default": parse_database_url(_cloud_db_url)}
+        cloud_database = parse_database_url(_cloud_db_url)
+        cloud_database["CONN_MAX_AGE"] = _env_int(
+            "BEACON_PG_CONN_MAX_AGE_SECONDS",
+            default=60,
+            min_value=0,
+            max_value=3600,
+        )
+        cloud_database["CONN_HEALTH_CHECKS"] = True
+        DATABASES = {"default": cloud_database}
     except Exception as e:
         raise RuntimeError(f"invalid BEACON_CLOUD_DB_URL: {e}")
 

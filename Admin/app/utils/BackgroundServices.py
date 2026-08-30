@@ -1,11 +1,11 @@
 import logging
-import os
 import threading
 import time
 from django.db import close_old_connections
 
 from app.utils.AlarmOutboxDispatcher import AlarmOutboxDispatcher
 from app.utils.AlarmSinkDispatcher import AlarmSinkDispatcher
+from app.utils.BackgroundRoles import get_background_role
 from app.utils.RecordingPlanService import RecordingPlanService
 from app.utils.SystemConfigHelper import get_bool
 from app.utils.TaskPlanService import TaskPlanService
@@ -16,11 +16,21 @@ _started = False
 _startup_lock = threading.RLock()
 _startup_attempt_lock = threading.Lock()
 _startup_state = "not_started"
+_startup_role = None
 _startup_failures = {}
 _started_components = set()
 _background_threads = {}
 _service_candidates = {}
 _services = {}
+_PERSISTENT_BACKGROUND_THREADS = frozenset(
+    {
+        "beacon-alarm-cache-clean",
+        "beacon-alarm-retention",
+        "beacon-recording-retention",
+        "beacon-log-retention",
+        "beacon-storage-quota",
+    }
+)
 
 logger = logging.getLogger(__name__)
 
@@ -49,12 +59,44 @@ def get_task_plan_service():
 def get_background_services_status() -> dict:
     """Return a stable snapshot of background-service startup state."""
     with _startup_lock:
+        state = _startup_state
+        failures = dict(_startup_failures)
+        if state == "running":
+            for component_name, service in _services.items():
+                thread = getattr(service, "_thread", None)
+                is_alive = getattr(thread, "is_alive", None)
+                if not callable(is_alive):
+                    continue
+                try:
+                    alive = is_alive()
+                except Exception:
+                    alive = None
+                if alive is False:
+                    failures[component_name] = "ThreadStopped"
+
+            for component_name in _PERSISTENT_BACKGROUND_THREADS:
+                thread = _background_threads.get(component_name)
+                if thread is None:
+                    continue
+                is_alive = getattr(thread, "is_alive", None)
+                if not callable(is_alive):
+                    continue
+                try:
+                    alive = is_alive()
+                except Exception:
+                    alive = None
+                if alive is False:
+                    failures[component_name] = "ThreadStopped"
+            if failures:
+                state = "degraded"
+
         return {
-            "state": _startup_state,
-            "started": _startup_state == "running",
+            "state": state,
+            "role": _startup_role or get_background_role(),
+            "started": state == "running",
             "started_components": sorted(_started_components),
-            "failed_components": sorted(_startup_failures),
-            "failure_types": dict(sorted(_startup_failures.items())),
+            "failed_components": sorted(failures),
+            "failure_types": dict(sorted(failures.items())),
             "background_threads": sorted(_background_threads),
         }
 
@@ -110,17 +152,64 @@ def _ensure_background_thread_started(component_name: str, target) -> None:
         _background_threads[component_name] = thread
         _startup_failures.pop(component_name, None)
 
-def start_background_services() -> dict:
+def _service_specs_for_role(role: str):
+    web_specs = (
+        ("alarm_sink", lambda: AlarmSinkDispatcher(g_config)),
+    )
+    edge_specs = (
+        # TranscodeManager tracks cooldown and idle state in process memory and
+        # controls the local ZLMediaKit instance.  It therefore belongs only to
+        # the single-process Edge compatibility role, never a replicated Cloud
+        # Web process.
+        ("transcode", lambda: TranscodeManager(g_config, g_zlm)),
+    )
+    worker_specs = (
+        ("alarm_outbox", lambda: AlarmOutboxDispatcher(g_config)),
+        ("recording_plan", lambda: RecordingPlanService(g_config)),
+        ("task_plan", TaskPlanService),
+    )
+    if role == "web":
+        return web_specs
+    if role == "worker":
+        return worker_specs
+    return web_specs + edge_specs + worker_specs
+
+
+def _thread_specs_for_role(role: str):
+    if role == "web":
+        return ()
+    return (
+        ("beacon-alarm-cache-clean", _alarm_cache_clean_task),
+        ("beacon-alarm-retention", _alarm_data_retention_task),
+        ("beacon-recording-retention", _recording_data_retention_task),
+        ("beacon-log-retention", _log_retention_task),
+        ("beacon-storage-quota", _storage_quota_task),
+        ("beacon-auto-forward", _auto_start_forward_task),
+        ("beacon-control-auto-recover", _control_auto_recover_task),
+    )
+
+
+def start_background_services(*, role: str = None) -> dict:
     """启动`background``services`。"""
-    global _started, _startup_state
+    global _started, _startup_role, _startup_state
+    resolved_role = role or get_background_role()
+    if resolved_role not in {"all", "web", "worker", "init", "disabled"}:
+        raise ValueError(f"unsupported background role: {resolved_role}")
     if not _startup_attempt_lock.acquire(blocking=False):
         return get_background_services_status()
     try:
         with _startup_lock:
+            if _startup_role and _startup_role != resolved_role and (
+                _started_components or _background_threads
+            ):
+                raise RuntimeError(
+                    f"background services already initialized for role {_startup_role}"
+                )
+            _startup_role = resolved_role
             if _startup_state == "running":
                 return get_background_services_status()
 
-            if os.environ.get("BEACON_DISABLE_BACKGROUND") == "1":
+            if resolved_role in {"init", "disabled"}:
                 _started = False
                 _startup_state = "disabled"
                 _startup_failures.clear()
@@ -129,25 +218,11 @@ def start_background_services() -> dict:
             _started = False
             _startup_state = "starting"
 
-        service_specs = (
-            ("alarm_sink", lambda: AlarmSinkDispatcher(g_config)),
-            ("alarm_outbox", lambda: AlarmOutboxDispatcher(g_config)),
-            ("transcode", lambda: TranscodeManager(g_config, g_zlm)),
-            ("recording_plan", lambda: RecordingPlanService(g_config)),
-            ("task_plan", TaskPlanService),
-        )
+        service_specs = _service_specs_for_role(resolved_role)
         for component_name, factory in service_specs:
             _ensure_service_started(component_name, factory)
 
-        thread_specs = (
-            ("beacon-alarm-cache-clean", _alarm_cache_clean_task),
-            ("beacon-alarm-retention", _alarm_data_retention_task),
-            ("beacon-recording-retention", _recording_data_retention_task),
-            ("beacon-log-retention", _log_retention_task),
-            ("beacon-storage-quota", _storage_quota_task),
-            ("beacon-auto-forward", _auto_start_forward_task),
-            ("beacon-control-auto-recover", _control_auto_recover_task),
-        )
+        thread_specs = _thread_specs_for_role(resolved_role)
         for component_name, target in thread_specs:
             _ensure_background_thread_started(component_name, target)
 
@@ -162,6 +237,27 @@ def start_background_services() -> dict:
         return get_background_services_status()
     finally:
         _startup_attempt_lock.release()
+
+
+def shutdown_background_services() -> None:
+    """Best-effort shutdown for service objects owned by a worker process."""
+    global _started, _startup_state
+    with _startup_lock:
+        services = tuple(_services.values())
+    for service in reversed(services):
+        shutdown = getattr(service, "shutdown", None)
+        if not callable(shutdown):
+            continue
+        try:
+            shutdown()
+        except Exception:
+            logger.exception(
+                "Background component shutdown failed: component=%s",
+                type(service).__name__,
+            )
+    with _startup_lock:
+        _started = False
+        _startup_state = "stopped"
 
 
 def _auto_start_forward_task():

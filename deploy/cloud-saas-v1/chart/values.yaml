@@ -4,6 +4,15 @@ serviceAccount:
   create: true
   name: ""
 
+# Ingress isolation is enabled by default. The default source selector permits
+# Pods in this release namespace (including the Helm test and edge simulator).
+# Add an explicit namespaceSelector/podSelector when the ingress controller or
+# Prometheus runs in another namespace. Egress is intentionally unrestricted.
+networkPolicy:
+  enabled: true
+  beaconIngressFrom:
+  - podSelector: {}
+
 config:
   code: cloud-demo
   name: Beacon Cloud Demo
@@ -30,10 +39,14 @@ config:
   alarmComposeCacheRetentionHours: 72
 
 beaconCloud:
-  replicaCount: 1
+  # Two Web replicas plus two leader-elected background workers provide the
+  # minimum production HA baseline. Local POC deployments may override to 1.
+  replicaCount: 2
   image:
     repository: beacon-cloud-saas-v1
     tag: v1.0.0
+    # Required when secrets.existingSecret is set (production mode).
+    digest: ""
     pullPolicy: IfNotPresent
   service:
     type: ClusterIP
@@ -54,9 +67,15 @@ beaconCloud:
     djangoAllowedHosts: "beacon-cloud.local,beacon-cloud,127.0.0.1"
     healthCheckHost: beacon-cloud.local
     cloudImagePreviewProxy: "1"
+    djangoCsrfTrustedOrigins: "https://beacon-cloud.local"
+    djangoHstsSeconds: "31536000"
     bootstrapEdgeClusterName: edge-default
     bootstrapEdgeTokenFile: ''
   secrets:
+    # Production: point this at a Secret provisioned outside Helm so plaintext
+    # credentials do not enter Helm values or release history. Required keys are
+    # documented in docs/deployment/kubernetes.md.
+    existingSecret: ""
     openApiToken: ''
     # Required for deployment; generate a random value of at least 32 characters.
     djangoSecretKey: ''
@@ -72,16 +91,73 @@ beaconCloud:
       cpu: 1000m
       memory: 1Gi
       ephemeralStorage: 2Gi
+  gunicorn:
+    workers: 2
+    threads: 4
+  runtimeStorage:
+    # Web replicas share mutable uploads/models through this RWX claim. For a
+    # managed production cluster, set existingClaim to a pre-provisioned RWX PVC.
+    persistence:
+      enabled: true
+      existingClaim: ""
+      accessModes:
+      - ReadWriteMany
+      size: 10Gi
+      storageClassName: ""
+    dataSizeLimit: 1Gi
+    tmpSizeLimit: 256Mi
   podAnnotations: {}
   nodeSelector: {}
   tolerations: []
   affinity: {}
+
+backgroundWorker:
+  replicaCount: 2
+  standbyPollSeconds: 5
+  heartbeat:
+    path: /tmp/beacon-background-worker.json
+    intervalSeconds: 5
+    maxAgeSeconds: 20
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+      ephemeralStorage: 512Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+      ephemeralStorage: 1Gi
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+initialization:
+  activeDeadlineSeconds: 900
+  backoffLimit: 4
+  ttlSecondsAfterFinished: 3600
+  waitAttempts: 180
+  waitDelaySeconds: 2
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+      ephemeralStorage: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+      ephemeralStorage: 1Gi
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
 
 postgres:
   enabled: true
   image:
     repository: postgres
     tag: 16-alpine
+    digest: sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
     pullPolicy: IfNotPresent
   auth:
     database: beacon
@@ -107,13 +183,18 @@ postgres:
 
 minio:
   enabled: true
+  # Used only when enabled=false. Leave empty for AWS S3, or set the HTTPS
+  # endpoint for a managed/private S3-compatible service.
+  externalEndpointURL: ""
   image:
     repository: minio/minio
     tag: RELEASE.2025-09-07T16-13-09Z
+    digest: sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
     pullPolicy: IfNotPresent
   mcImage:
     repository: minio/mc
     tag: RELEASE.2025-08-13T08-35-41Z
+    digest: sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
     pullPolicy: IfNotPresent
   rootUser: beacon-minio
   rootPassword: ''
@@ -139,7 +220,8 @@ minio:
       ephemeralStorage: 2Gi
 
 demoVolume:
-  enabled: true
+  # Development-only shared token volume for the optional edge simulator.
+  enabled: false
   accessModes:
   - ReadWriteOnce
   size: 1Gi
@@ -150,7 +232,24 @@ edgeSimulator:
   image:
     repository: beacon-cloud-saas-v1
     tag: v1.0.0
+    # Required whenever the optional simulator Job is enabled.
+    digest: ""
     pullPolicy: IfNotPresent
   cloudBaseURL: ""
   restartPolicy: OnFailure
-  resources: {}
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+      ephemeral-storage: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+      ephemeral-storage: 256Mi
+
+helmTest:
+  image:
+    repository: busybox
+    tag: "1.36"
+    digest: sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662
+    pullPolicy: IfNotPresent

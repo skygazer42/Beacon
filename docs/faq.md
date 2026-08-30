@@ -84,4 +84,4 @@
 
 ??? question "可以直接增加 Gunicorn worker 或 Kubernetes 副本吗？"
 
-    当前不可以直接这样扩容。Admin 的计划、清理和 Outbox 等后台任务在 Django 进程内启动；参考 Cloud 部署固定一个 Gunicorn worker 和一个副本。先拆出独立 worker 或加分布式互斥，再扩容 Web 进程。
+    本地 Edge 的默认 `BEACON_BACKGROUND_ROLE=all` 不能直接复制，否则会重复执行计划、清理和 Outbox。Cloud Helm 形态已使用 `web`/`worker`/`init` 角色拆分：Web 可多副本，后台 Worker 用 PostgreSQL advisory lock 选主。扩容前仍要保证共享 RWX runtime PVC、数据库连接预算和目标环境压测；Worker 副本增加的是接管冗余，不会线性提升吞吐。

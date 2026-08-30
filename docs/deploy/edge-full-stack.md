@@ -81,10 +81,15 @@ Edge 全栈建议把所有组件的端口/目录/密钥都统一到仓库根目�
 当前仓库根目录已经有一个示例：`config.json`，主要字段包括：
 
 - `adminPort`：Admin Web（默认 `9991`）
+- `adminServer`：Admin HTTP 服务（生产默认 `waitress`，`django` 仅供开发）
+- `adminThreads`：Waitress 工作线程数（默认 `4`）
+- `adminTrustedProxy`：可信直连反向代理 IP（默认空，禁止通配符）
 - `mediaHttpPort`：MediaServer HTTP（默认 `9992`）
 - `analyzerPort`：Analyzer HTTP（默认 `9993`）
 - `mediaRtspPort`：MediaServer RTSP（默认 `9994`）
 - `mediaRtmpPort`：MediaServer RTMP（默认 `9995`）
+- `mediaRtpProxyPort`：MediaServer RTP Proxy TCP/UDP（默认 `10000`）
+- `mediaApiDebug`：媒体 API 请求元数据调试日志（默认 `false`，生产必须关闭）
 - `mediaSecret`：Admin 调用 ZLMediaKit HTTP API 的 `secret`（必须与 MediaServer 的 `config.ini [api].secret` 一致）
 - `uploadDir`：告警图片/视频落盘目录（可用相对路径）
 - `modelDir`：模型目录（可用相对路径）
@@ -139,11 +144,13 @@ ZLMediaKit 的构建产物通常会在类似目录（示例）：
 
 ### 4.2 配置端口与 `secret`（必须对齐 Beacon）
 
-需修改 MediaServer 实际运行目录下的 `config.ini`，至少对齐下面三件事：
+需修改 MediaServer 实际运行目录下的 `config.ini`，至少对齐下面五件事：
 
 1. `[api].secret` 必须等于 `config.json` 里的 `mediaSecret`
 2. `[http].port` 必须等于 `config.json` 里的 `mediaHttpPort`（默认 9992）
 3. `[rtsp].port` 必须等于 `config.json` 里的 `mediaRtspPort`（默认 9994）
+4. `[rtp_proxy].port` 必须等于 `config.json` 里的 `mediaRtpProxyPort`（默认 10000，同时占用 TCP/UDP）
+5. `[api].apiDebug` 生产必须为 `0`，减少请求元数据进入日志造成的暴露面
 
 可能还需对齐：
 
@@ -276,8 +283,10 @@ python manage.py createsuperuser
 
 ### 6.3 启动 Admin
 
+生产/试运行应通过统一启动器启动 Admin（默认 Waitress）。仅本地开发调试可使用：
+
 ```bash
-python manage.py runserver 0.0.0.0:9991
+BEACON_ADMIN_SERVER=django python manage.py runserver 0.0.0.0:9991
 ```
 
 浏览器访问：

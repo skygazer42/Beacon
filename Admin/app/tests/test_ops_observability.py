@@ -165,6 +165,7 @@ class BackgroundServicesStartupStateTest(SimpleTestCase):
     _STATE_DEFAULTS = {
         "_started": False,
         "_startup_state": "not_started",
+        "_startup_role": None,
         "_startup_failures": {},
         "_started_components": set(),
         "_background_threads": {},
@@ -264,6 +265,117 @@ class BackgroundServicesStartupStateTest(SimpleTestCase):
         service_factory.assert_not_called()
         thread_factory.assert_not_called()
 
+    def test_web_role_starts_only_request_local_components(self):
+        from app.utils import BackgroundServices as background
+
+        self._reset_module_state(background)
+        alarm_sink = mock.Mock()
+        with (
+            mock.patch.object(background, "AlarmSinkDispatcher", return_value=alarm_sink),
+            mock.patch.object(background, "TranscodeManager") as transcode,
+            mock.patch.object(background, "AlarmOutboxDispatcher") as alarm_outbox,
+            mock.patch.object(background, "RecordingPlanService") as recording_plan,
+            mock.patch.object(background, "TaskPlanService") as task_plan,
+            mock.patch.object(background.threading, "Thread") as thread_factory,
+        ):
+            status = background.start_background_services(role="web")
+
+        self.assertEqual(status["state"], "running")
+        self.assertEqual(status["role"], "web")
+        self.assertEqual(status["started_components"], ["alarm_sink"])
+        alarm_sink.start.assert_called_once_with()
+        transcode.assert_not_called()
+        alarm_outbox.assert_not_called()
+        recording_plan.assert_not_called()
+        task_plan.assert_not_called()
+        thread_factory.assert_not_called()
+
+    def test_worker_role_starts_only_singleton_components(self):
+        from app.utils import BackgroundServices as background
+
+        self._reset_module_state(background)
+        worker_services = [mock.Mock() for _ in range(3)]
+        created_threads = []
+        with (
+            mock.patch.object(background, "AlarmSinkDispatcher") as alarm_sink,
+            mock.patch.object(background, "TranscodeManager") as transcode,
+            mock.patch.object(
+                background,
+                "AlarmOutboxDispatcher",
+                return_value=worker_services[0],
+            ),
+            mock.patch.object(
+                background,
+                "RecordingPlanService",
+                return_value=worker_services[1],
+            ),
+            mock.patch.object(
+                background,
+                "TaskPlanService",
+                return_value=worker_services[2],
+            ),
+            mock.patch.object(
+                background.threading,
+                "Thread",
+                side_effect=self._thread_factory(created_threads),
+            ),
+        ):
+            status = background.start_background_services(role="worker")
+
+        self.assertEqual(status["state"], "running")
+        self.assertEqual(status["role"], "worker")
+        self.assertEqual(
+            status["started_components"],
+            ["alarm_outbox", "recording_plan", "task_plan"],
+        )
+        alarm_sink.assert_not_called()
+        transcode.assert_not_called()
+        self.assertEqual(len(created_threads), 7)
+
+    def test_role_cannot_change_after_components_start(self):
+        from app.utils import BackgroundServices as background
+
+        self._reset_module_state(background)
+        with (
+            mock.patch.object(background, "AlarmSinkDispatcher", return_value=mock.Mock()),
+            mock.patch.object(background, "TranscodeManager", return_value=mock.Mock()),
+        ):
+            background.start_background_services(role="web")
+            with self.assertRaisesRegex(RuntimeError, "already initialized"):
+                background.start_background_services(role="worker")
+
+    def test_stopped_service_thread_degrades_runtime_status(self):
+        from app.utils import BackgroundServices as background
+
+        self._reset_module_state(background)
+        service = mock.Mock()
+        service._thread = mock.Mock()
+        service._thread.is_alive.return_value = False
+        background._startup_state = "running"
+        background._startup_role = "worker"
+        background._services = {"alarm_outbox": service}
+        background._started_components = {"alarm_outbox"}
+
+        status = background.get_background_services_status()
+
+        self.assertEqual(status["state"], "degraded")
+        self.assertFalse(status["started"])
+        self.assertEqual(status["failure_types"], {"alarm_outbox": "ThreadStopped"})
+
+    def test_finished_one_shot_thread_does_not_degrade_runtime_status(self):
+        from app.utils import BackgroundServices as background
+
+        self._reset_module_state(background)
+        thread = mock.Mock()
+        thread.is_alive.return_value = False
+        background._startup_state = "running"
+        background._startup_role = "worker"
+        background._background_threads = {"beacon-auto-forward": thread}
+
+        status = background.get_background_services_status()
+
+        self.assertEqual(status["state"], "running")
+
     def test_starting_state_can_be_observed_while_component_start_is_in_progress(self):
         from app.utils import BackgroundServices as background
 
@@ -320,16 +432,119 @@ class BackgroundServicesStartupStateTest(SimpleTestCase):
 
 
 class OpsReadyEndpointTest(TestCase):
+    def test_db_check_redacts_exception_message(self):
+        sensitive_message = "postgresql://beacon:do-not-return@database.internal/beacon"
+        with mock.patch.object(
+            OpsView.connection,
+            "cursor",
+            side_effect=RuntimeError(sensitive_message),
+        ):
+            result = OpsView._check_db()
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"], "RuntimeError")
+        self.assertNotIn(sensitive_message, json.dumps(result))
+
     def test_readyz_ok(self):
-        with mock.patch.dict(os.environ, {"BEACON_OPEN_API_TOKEN": "t1"}, clear=False):
+        with (
+            mock.patch.dict(os.environ, {"BEACON_OPEN_API_TOKEN": "t1"}, clear=False),
+            mock.patch(
+                "app.views.OpsView._check_background_services",
+                return_value={"ok": True, "state": "running"},
+            ),
+        ):
             res = self.client.get("/readyz", REMOTE_ADDR="8.8.8.8", HTTP_X_BEACON_TOKEN="t1")
         self.assertEqual(res.status_code, 200, msg=res.content)
 
     def test_readyz_db_fail_is_503(self):
-        with mock.patch.dict(os.environ, {"BEACON_OPEN_API_TOKEN": "t1"}, clear=False):
-            with mock.patch("app.views.OpsView._check_db", return_value={"ok": False, "error": "boom"}, create=True):
-                res = self.client.get("/readyz", REMOTE_ADDR="8.8.8.8", HTTP_X_BEACON_TOKEN="t1")
+        with (
+            mock.patch.dict(os.environ, {"BEACON_OPEN_API_TOKEN": "t1"}, clear=False),
+            mock.patch("app.views.OpsView._check_db", return_value={"ok": False, "error": "boom"}, create=True),
+            mock.patch(
+                "app.views.OpsView._check_background_services",
+                return_value={"ok": True, "state": "running"},
+            ),
+        ):
+            res = self.client.get("/readyz", REMOTE_ADDR="8.8.8.8", HTTP_X_BEACON_TOKEN="t1")
         self.assertEqual(res.status_code, 503, msg=res.content)
+
+    def test_readyz_background_services_degraded_is_503(self):
+        with (
+            mock.patch.dict(os.environ, {"BEACON_OPEN_API_TOKEN": "t1"}, clear=False),
+            mock.patch("app.views.OpsView._check_db", return_value={"ok": True}),
+            mock.patch(
+                "app.views.OpsView._check_background_services",
+                return_value={
+                    "ok": False,
+                    "state": "degraded",
+                    "failed_components": ["alarm_outbox"],
+                },
+            ),
+        ):
+            res = self.client.get("/readyz", REMOTE_ADDR="8.8.8.8", HTTP_X_BEACON_TOKEN="t1")
+
+        self.assertEqual(res.status_code, 503, msg=res.content)
+        body = json.loads(res.content.decode("utf-8"))
+        checks = (body.get("data") or {}).get("checks") or {}
+        self.assertEqual((checks.get("background_services") or {}).get("state"), "degraded")
+
+    def test_cloud_readyz_checks_object_storage(self):
+        with (
+            mock.patch.dict(
+                os.environ,
+                {
+                    "BEACON_OPEN_API_TOKEN": "t1",
+                    "BEACON_CLOUD_S3_BUCKET": "beacon-cloud",
+                },
+                clear=False,
+            ),
+            mock.patch("app.views.OpsView.get_deployment_mode", return_value="cloud"),
+            mock.patch("app.views.OpsView._check_db", return_value={"ok": True}),
+            mock.patch(
+                "app.views.OpsView._check_background_services",
+                return_value={"ok": True, "state": "running"},
+            ),
+            mock.patch(
+                "app.views.OpsView._check_cloud_required_config",
+                return_value={"ok": True, "missing": []},
+            ),
+            mock.patch(
+                "app.views.OpsView._check_cloud_object_storage",
+                return_value={"ok": True, "bucket": "beacon-cloud", "latency_ms": 1},
+            ) as object_storage,
+        ):
+            res = self.client.get("/readyz", REMOTE_ADDR="8.8.8.8", HTTP_X_BEACON_TOKEN="t1")
+
+        self.assertEqual(res.status_code, 200, msg=res.content)
+        object_storage.assert_called_once_with()
+
+    def test_cloud_readyz_object_storage_failure_is_503(self):
+        with (
+            mock.patch.dict(os.environ, {"BEACON_OPEN_API_TOKEN": "t1"}, clear=False),
+            mock.patch("app.views.OpsView.get_deployment_mode", return_value="cloud"),
+            mock.patch("app.views.OpsView._check_db", return_value={"ok": True}),
+            mock.patch(
+                "app.views.OpsView._check_background_services",
+                return_value={"ok": True, "state": "running"},
+            ),
+            mock.patch(
+                "app.views.OpsView._check_cloud_required_config",
+                return_value={"ok": True, "missing": []},
+            ),
+            mock.patch(
+                "app.views.OpsView._check_cloud_object_storage",
+                return_value={"ok": False, "error": "EndpointConnectionError"},
+            ),
+        ):
+            res = self.client.get("/readyz", REMOTE_ADDR="8.8.8.8", HTTP_X_BEACON_TOKEN="t1")
+
+        self.assertEqual(res.status_code, 503, msg=res.content)
+        payload = json.loads(res.content.decode("utf-8"))
+        checks = (payload.get("data") or {}).get("checks") or {}
+        self.assertEqual(
+            (checks.get("object_storage") or {}).get("error"),
+            "EndpointConnectionError",
+        )
 
 
 class OpsMetricsEndpointTest(TestCase):

@@ -46,14 +46,28 @@ ws://<host>:9991/ws/alarm/poll?after_id=0&interval_ms=3000
 
 ## 后台服务
 
-`app.utils.BackgroundServices` 在 Django 应用启动时管理以下进程内任务：
+`app.utils.BackgroundServices` 按显式进程角色管理以下任务：
 
 | 类型 | 当前组件 |
 |---|---|
 | 常驻服务 | Webhook/Cloud 告警投递、Outbox、转码管理、录像计划、任务计划 |
 | 后台线程 | 告警缓存/留存清理、录像留存、日志留存、存储配额、自动转发、布控自动恢复 |
 
-设置 `BEACON_DISABLE_BACKGROUND=1` 可整体关闭。因为这些任务不是独立 worker，部署时只能运行一个会启动后台服务的 Django 进程；Cloud 参考镜像已经固定一个 Gunicorn worker。
+| `BEACON_BACKGROUND_ROLE` | 行为 |
+|---|---|
+| `all` | Edge/本机兼容模式；在单一 Admin 进程中启动全部组件 |
+| `web` | Cloud Web；只启动兼容模式的告警 Sink dispatcher，不启动任何本地媒体转码或单例调度器 |
+| `worker` | 仅由 `run_background_worker` 启动 Outbox、计划、留存和配额等单例任务 |
+| `init` / `disabled` | 不启动后台组件 |
+
+Cloud 部署使用两个独立 Worker 竞争 PostgreSQL session advisory lock；只有 leader 启动
+单例任务，standby 定期重试并在 leader 会话断开后接管。Web 可以多进程/多 Pod 运行，
+但必须共享可变 runtime 存储。本地 ZLMediaKit 转码管理器只在单进程 Edge `all` 角色运行，
+避免 Cloud Web 副本之间因进程内状态不一致而重复启停转码源。
+`BEACON_DISABLE_BACKGROUND=1` 仍作为旧版整体关闭开关保留。
+
+未显式设置角色时默认 `all`，因此本地 Edge 形态仍不应直接复制 Admin 进程；需要扩容时
+应采用 Cloud 的 `web`/`worker` 拆分和 PostgreSQL，而不是复制兼容模式。
 
 ## 告警投递
 

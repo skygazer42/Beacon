@@ -14,8 +14,35 @@
 - `docs/deploy/security-hardening.md`
 - 端口与防火墙口径：`docs/deploy/ports-and-firewall.md`
 - 数据库与备份恢复：`docs/deploy/database-and-backup.md`
+- 发布证据与供应链验证：`docs/deploy/release-evidence.md`
 - 可观测性（Metrics/Logs/Tracing）：`docs/deploy/observability.md`
 - 密钥资产与轮换：`docs/deploy/secrets-and-rotation.md`
+
+---
+
+## 0. 企业发布判定（GO / NO-GO）
+
+本清单中的“建议”不能替代正式发布判定。企业交付应把下表标记为**强制门禁**：任一项没有可复核证据，结论即为 `NO-GO`，不得用“服务能启动”代替业务、可靠性或安全验收。
+
+| 门禁 | 最低通过标准 | 必须留存的证据 |
+|------|--------------|----------------|
+| 源码与构建 | 对应模块的单元测试、前端生产构建、文档严格检查、静态安全扫描全部通过 | commit、命令、退出码、测试数量、构建日志 |
+| 供应链 | Python、npm 与容器 OS/library 审计无未豁免的高危/严重漏洞；每个实际交付包均有 SBOM、校验和与可验证签名/证明 | 审计报告、豁免审批、SBOM、`SHA256SUMS`、签名/证明及验证记录 |
+| 生产配置 | Admin 使用生产 WSGI 服务；DEBUG 关闭；域名、TLS、Cookie、CSRF、鉴权、密钥与端口边界符合基线 | 脱敏配置快照、`check --deploy`、反代与防火墙验证 |
+| 真实业务闭环 | E2E 的 L0、L1、L2 均通过；每个拟交付算法 SKU 使用真实授权模型和代表性视频验证 | 模型哈希/授权、视频样本编号、接口响应、截图/告警记录 |
+| 容量与稳定性 | 在目标硬件上完成容量边界测试和持续运行；P95/P99、错误率、丢帧、队列、资源峰值满足已批准 SLO | 压测配置与原始报告、监控图、SLO 签字记录 |
+| 数据可靠性 | 数据库与媒体文件备份成功，并在隔离环境完成恢复；RPO/RTO 来自实测 | 备份清单、恢复日志、数据核对、计时记录 |
+| 故障与回滚 | 服务、网络、数据库、磁盘和下游故障演练通过；升级包可验证且能回滚 | 演练时间线、审计日志、回滚后 E2E 结果 |
+| 运维与合规 | 告警、日志、指标、审计留存、隐私/数据保留、第三方许可证和现场 SOP 已确认 | 看板/告警截图、留存策略、许可证清单、交接记录 |
+
+发布证据必须绑定同一组 Beacon commit、模型哈希、依赖锁文件和目标环境；任一项变化后，应重跑受影响门禁。HSTS `includeSubDomains`/`preload` 等不可安全通用开启的选项可以保留明确的风险接受记录，但 `DEBUG`、安全 Cookie、HTTPS、强鉴权和生产 WSGI 不属于可默认豁免项。
+
+仓库的 `Release evidence` 工作流会为**源码归档**生成 SPDX SBOM、SLSA
+provenance、SBOM attestation、离线验证记录和校验清单；`Release container` 会为
+正式发布的 GHCR `linux/amd64` Cloud 镜像生成并复验同类证据。具体触发和验签命令见
+[发布证据与供应链验证](release-evidence.md)。这些证据不能覆盖另行组装的 Linux、
+Windows、其他架构容器、模型或 GPU 专用产物；这些交付件必须在各自构建流水线中单独
+生成并验证证据，缺一项仍为 `NO-GO`。
 
 ---
 
@@ -63,6 +90,10 @@
 2. Analyzer
 3. Admin
 
+Cloud Helm/Compose 形态使用另一套受控顺序：PostgreSQL/对象存储 → `init`（migration、
+bootstrap）→ `web` + `worker`。不得让每个 Web 副本自行迁移。生产至少保留两个 Web
+和两个 Worker，并验证一个 Worker 为 `leader/running`、其余为 `standby`。
+
 最低可用的健康标准（建议在监控/巡检中固化）：
 
 Admin：
@@ -85,6 +116,7 @@ MediaServer（ZLM）：
 - `mediaSecret` 与 ZLM `config.ini [api].secret` 不一致
 - SQLite 被锁导致 `/readyz` 失败（写并发高时更常见）
 - Cloud 模式缺少必需 env（S3、edge token pepper 等）
+- Cloud Worker heartbeat 过期、leader 后台状态 degraded，或初始化 Job 未完成
 
 ---
 
@@ -98,6 +130,8 @@ MediaServer（ZLM）：
 具体步骤与命令见：
 
 - `docs/deploy/e2e-acceptance.md`
+- 可复跑基线：`python tools/edge_e2e_acceptance.py --synthetic-l1 --alarm-workflow`；
+  保存其脱敏 JSON 输出与退出码。正式 L1/L2 改用 `--external-l1` 和正式算法编号。
 
 验收输出建议固化为“可回放证据”：
 
@@ -119,6 +153,10 @@ MediaServer（ZLM）：
   - `BEACON_DJANGO_DEBUG=0`
   - `BEACON_DJANGO_SECRET_KEY` 非默认占位
   - `BEACON_DJANGO_ALLOWED_HOSTS` 已显式配置且不含 `*`
+  - Edge Admin 使用默认 `waitress`（或经评审的其他生产 WSGI 服务），进程参数中不得出现 `runserver`
+  - 若信任反向代理头，`BEACON_ADMIN_TRUSTED_PROXY` 必须是实际直连代理 IP，不得使用通配符
+- Cloud 外置 PostgreSQL URL 使用 `sslmode=verify-full`（最低不低于 `require`），外置 S3 endpoint 使用 HTTPS
+- Cloud `/app/data` 使用经验证的共享 RWX PVC；运行时上传不写入镜像内 `Admin/static`
 - 端口暴露策略：Analyzer/MediaServer 管理端口不对公网暴露（或已网关隔离）
 - IP 策略：对 OpenAPI/Ops 配置 allowlist/denylist（应用层兜底）
 - 速率限制与 WAF：公网或弱信任网络建议开启（OpenAPI）
@@ -160,6 +198,7 @@ MediaServer（ZLM）：
 - 文件数据：
   - `uploadDir`（告警截图/视频、录制数据等）
   - `modelDir`（模型文件与插件）
+  - Cloud runtime RWX PVC（即 `/app/data`；不得只备份对象存储而漏掉兼容上传）
 - 配置：
   - `config.json`、`settings.json`
   - `.env`（或等效配置注入清单）
@@ -167,6 +206,7 @@ MediaServer（ZLM）：
 建议至少完成一次恢复演练：
 
 - 将 DB 与 `uploadDir` 恢复到隔离环境
+- SQLite 场景运行 `tools/beacon_backup.py create/verify/restore`，保留命令 JSON、归档 SHA-256 与恢复目录核对结果
 - 验证 Admin/Analyzer/MediaServer 可启动
 - 按 `docs/deploy/e2e-acceptance.md` 完成最小验收
 
@@ -179,6 +219,8 @@ MediaServer（ZLM）：
 - 可审计：升级包上传/应用/回滚过程可追溯
 - 可回滚：保留 previous 状态，出现问题可快速回退
 - 可验证：升级后执行健康检查与端到端验收
+- Cloud 发布使用版本化 initialize Job，并以 `--wait --wait-for-jobs` 等待成功；迁移采用 expand/contract，Helm 回滚不等于 schema 回滚
+- 演练停止当前 Worker leader，确认 standby 在目标 RTO 内接管且任务不重复
 
 Beacon 运维接口支持离线升级包管理（上传/校验/应用/回滚）：
 

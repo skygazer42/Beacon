@@ -51,6 +51,8 @@ urlpatterns = [
     path('healthz', OpsView.healthz),
     path('readyz', OpsView.readyz),
     path('metrics', OpsView.metrics),
+    # Mutable runtime uploads are outside STATIC_ROOT and require a web session.
+    path('static/upload/<path:rel_path>', FileServiceView.managed_upload_serve),
     # Ops Audit (web UI)
     path('ops/audit', OpsAuditLogView.index),
     path('ops/diagnostics', OpsDiagnosticsView.index),

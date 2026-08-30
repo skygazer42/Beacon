@@ -1,0 +1,31 @@
+{{- if .Values.podDisruptionBudget.enabled }}
+{{- if gt (int .Values.beaconCloud.replicaCount) 1 }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "beacon-cloud-saas-v1.fullname" . }}-web
+  labels:
+    {{- include "beacon-cloud-saas-v1.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "beacon-cloud-saas-v1.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: beacon-cloud
+{{- end }}
+{{- if gt (int .Values.backgroundWorker.replicaCount) 1 }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "beacon-cloud-saas-v1.fullname" . }}-background-worker
+  labels:
+    {{- include "beacon-cloud-saas-v1.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "beacon-cloud-saas-v1.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: background-worker
+{{- end }}
+{{- end }}

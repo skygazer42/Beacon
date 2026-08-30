@@ -19,14 +19,30 @@ spec:
         app.kubernetes.io/component: postgres
     spec:
       automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 70
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: postgres
-          image: "{{ .Values.postgres.image.repository }}:{{ .Values.postgres.image.tag }}"
+          image: {{ include "beacon-cloud-saas-v1.imageRef" (dict "name" "postgres" "image" .Values.postgres.image "requireDigest" true) | quote }}
           imagePullPolicy: {{ .Values.postgres.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 70
+            runAsGroup: 70
           ports:
             - name: postgres
               containerPort: {{ .Values.postgres.service.port }}
           env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
             - name: POSTGRES_DB
               value: {{ .Values.postgres.auth.database | quote }}
             - name: POSTGRES_USER
@@ -34,11 +50,42 @@ spec:
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "beacon-cloud-saas-v1.fullname" . }}-secret
+                  name: {{ include "beacon-cloud-saas-v1.secretName" . }}
                   key: postgres-password
           volumeMounts:
             - name: data
               mountPath: /var/lib/postgresql/data
+            - name: run
+              mountPath: /var/run/postgresql
+            - name: tmp
+              mountPath: /tmp
+          startupProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -ec
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            periodSeconds: 2
+            timeoutSeconds: 3
+            failureThreshold: 60
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -ec
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -ec
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
           resources:
             requests:
               cpu: {{ .Values.postgres.resources.requests.cpu | default "100m" | quote }}
@@ -48,6 +95,13 @@ spec:
               cpu: {{ .Values.postgres.resources.limits.cpu | default "1000m" | quote }}
               memory: {{ .Values.postgres.resources.limits.memory | default "1Gi" | quote }}
               ephemeral-storage: {{ .Values.postgres.resources.limits.ephemeralStorage | default "2Gi" | quote }}
+      volumes:
+        - name: run
+          emptyDir:
+            sizeLimit: 64Mi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
   volumeClaimTemplates:
     {{- if .Values.postgres.persistence.enabled }}
     - metadata:
