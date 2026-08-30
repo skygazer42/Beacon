@@ -10,10 +10,10 @@
 #include "Util/SSLBox.h"
 #include "Util/logger.h"
 #include "Util/util.h"
+#include <array>
 #include <iostream>
 #include <map>
 #include <memory>
-#include <vector>
 
 
 using namespace std;
@@ -70,34 +70,36 @@ private:
     uint64_t timeStamp_last = 0;
 };
 
-static bool loadFile(const char *path, const EventPoller::Ptr &poller) {
+static bool loadFile(const char *path) {
     std::unique_ptr<FILE, decltype(&fclose)> fp(fopen(path, "rb"), &fclose);
     if (!fp) {
         WarnL << "open file failed:" << path;
         return false;
     }
-    if (fseek(fp.get(), 0, SEEK_END) != 0) {
-        WarnL << "seek file failed:" << path;
-        return false;
-    }
-    long lSize = ftell(fp.get());
-    if (lSize <= 0) {
-        WarnL << "invalid file size:" << path;
-        return false;
-    }
-    std::vector<uint8_t> text(static_cast<size_t>(lSize));
-    rewind(fp.get());
-    if (fread(text.data(), sizeof(uint8_t), text.size(), fp.get()) != text.size()) {
-        WarnL << "read file failed:" << path;
+
+    PsProcess::Ptr ps_process = std::make_shared<PsProcess>();
+    DecoderImp::Ptr ps_decoder = DecoderImp::createDecoder(DecoderImp::decoder_ps, ps_process.get());
+    if (!ps_decoder) {
+        WarnL << "create PS decoder failed";
         return false;
     }
 
-    PsProcess::Ptr  ps_process = std::make_shared<PsProcess>();
-    DecoderImp::Ptr ps_decoder = DecoderImp::createDecoder(DecoderImp::decoder_ps, ps_process.get());
-    if (ps_decoder) {
-        ps_decoder->input(text.data(), text.size());
+    std::array<uint8_t, 64U * 1024U> buffer{};
+    size_t total_size = 0;
+    size_t bytes = 0;
+    while ((bytes = fread(buffer.data(), sizeof(uint8_t), buffer.size(), fp.get())) > 0) {
+        if (ps_decoder->input(buffer.data(), bytes) < 0) {
+            WarnL << "decode PS data failed:" << path;
+            return false;
+        }
+        total_size += bytes;
     }
-    WarnL << (lSize >> 10) << "KB";
+    if (ferror(fp.get())) {
+        WarnL << "read file failed:" << path;
+        return false;
+    }
+    ps_decoder->flush();
+    WarnL << (total_size >> 10) << "KB";
     return true;
 }
 
@@ -119,7 +121,7 @@ int main(int argc, char *argv[]) {
     if (argc == 2) {
         auto poller = EventPollerPool::Instance().getPoller();
         poller->async_first([poller, argv]() {
-            loadFile(argv[1], poller);
+            loadFile(argv[1]);
             sem.post();
         });
         sem.wait();
