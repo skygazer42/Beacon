@@ -1006,7 +1006,8 @@ def _fetch_analyzer_license_info(*, cache_ttl_seconds=None, default_message="lic
             return (data or {}).get("data") or {}, {}, "", True
         return {}, _local_license_check(), str(msg or default_message), False
     except Exception as exc:
-        return {}, _local_license_check(), str(exc or default_message), False
+        logger.warning("analyzer license lookup failed error_type=%s", type(exc).__name__)
+        return {}, _local_license_check(), str(default_message), False
 
 
 def _fetch_license_info(license_type: str, *, cache_ttl_seconds=None, default_message="license_info failed"):
@@ -1020,7 +1021,8 @@ def _fetch_license_info(license_type: str, *, cache_ttl_seconds=None, default_me
     try:
         return "admin", api_view.g_license.check() or {}, {}, "", True
     except Exception as exc:
-        return "admin", {}, {}, str(exc or default_message), False
+        logger.warning("admin license lookup failed error_type=%s", type(exc).__name__)
+        return "admin", {}, {}, str(default_message), False
 
 
 def _license_usage_message(extra: dict) -> str:
@@ -1159,7 +1161,8 @@ def _load_dashboard_analyzer_status(cache_ttl_seconds):
         )
         return analyzer_ok, analyzer_msg, analyzer_stats
     except Exception as exc:
-        return False, str(exc), {}
+        logger.warning("dashboard analyzer status failed error_type=%s", type(exc).__name__)
+        return False, "Analyzer 状态暂不可用", {}
 
 
 def _load_dashboard_device_status(cache_ttl_seconds):
@@ -1171,7 +1174,8 @@ def _load_dashboard_device_status(cache_ttl_seconds):
         )
         return device_ok, device_msg, device_info
     except Exception as exc:
-        return False, str(exc), {}
+        logger.warning("dashboard device status failed error_type=%s", type(exc).__name__)
+        return False, "设备状态暂不可用", {}
 
 
 def _build_dashboard_process_rows(cache_ttl_seconds):
@@ -2662,7 +2666,8 @@ def api_control_osd_assets_upload(request):
         )
         asset = _control_osd_asset_row_from_rel_path(rel_path)
     except ValueError as exc:
-        return f_responseJson({"code": 0, "msg": str(exc or "贴图上传失败"), "data": _build_control_osd_assets_payload()})
+        logger.warning("control OSD upload rejected error_type=%s", type(exc).__name__)
+        return f_responseJson({"code": 0, "msg": "贴图文件无效", "data": _build_control_osd_assets_payload()})
     except Exception as exc:
         logger.exception("control OSD upload failed error_type=%s", type(exc).__name__)
         return f_responseJson({"code": 0, "msg": "贴图上传失败", "data": _build_control_osd_assets_payload()})
@@ -3603,7 +3608,8 @@ def _face_db_payload():
             return data or {}, ""
         return {}, str(msg or "face_list failed")
     except Exception as exc:
-        return {}, str(exc)
+        logger.warning("face database lookup failed error_type=%s", type(exc).__name__)
+        return {}, "人脸库暂不可用"
 
 
 def api_faces(request):
@@ -3874,10 +3880,11 @@ def _edge_cloud_connection_state():
             }
         )
     except (CloudEdgeClientError, ValueError) as exc:
+        logger.warning("Beacon Cloud connection check failed error_type=%s", type(exc).__name__)
         state.update(
             {
                 "status": "unreachable",
-                "message": (str(exc) or "无法连接 Beacon Cloud")[:240],
+                "message": "无法连接 Beacon Cloud",
             }
         )
     return state
@@ -4808,7 +4815,8 @@ def api_cloud_remote_recordings(request):
     try:
         rows, total = _fetch_remote_recording_rows(request, cluster, stream_code, page=page, page_size=page_size)
     except Exception as exc:
-        top_msg = str(exc)
+        logger.warning("remote recording lookup failed error_type=%s", type(exc).__name__)
+        top_msg = "远程录像列表暂不可用"
 
     return _cloud_remote_recordings_response(
         _cloud_remote_recordings_data(

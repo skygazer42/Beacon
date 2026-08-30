@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import secrets
 
@@ -20,6 +21,9 @@ from app.utils.CloudEdgeClient import CloudEdgeClient, CloudEdgeClientError
 from app.utils.CloudRemotePermissions import CLOUD_REMOTE_PERMISSION_META
 from app.utils.DeploymentMode import is_cloud_mode
 from app.views.ViewsBase import f_parseGetParams
+
+
+logger = logging.getLogger(__name__)
 
 
 def _require_cloud_mode():
@@ -541,8 +545,9 @@ def _probe_edge_cluster_ops_health(cluster):
         remote_status = str(remote_data.get("status", "") or "").strip() or "ok"
         version = str(remote_data.get("version", "") or "").strip()
         return remote_status, version, ""
-    except CloudEdgeClientError as e:
-        return "", "", str(e)
+    except CloudEdgeClientError as exc:
+        logger.warning("edge cluster health probe failed error_type=%s", type(exc).__name__)
+        return "", "", "远端健康状态暂不可用"
 
 
 def _edge_cluster_health_issues(
@@ -1223,8 +1228,9 @@ def _resolve_cloud_alarm_image_preview(row, *, use_proxy: bool):
         expires_in = _cloud_alarm_presign_expires_in_seconds()
         url = presign_get(bucket=row.image_bucket, key=row.image_key, expires_in=expires_in).get("url") or ""
         return str(url), ""
-    except Exception as e:
-        return "", str(e)
+    except Exception as exc:
+        logger.warning("cloud alarm preview signing failed error_type=%s", type(exc).__name__)
+        return "", "告警图片预览暂不可用"
 
 
 def alarm_detail(request):

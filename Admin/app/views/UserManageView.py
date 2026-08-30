@@ -8,6 +8,10 @@ from app.views.ViewsBase import f_parsePostParams, f_responseJson, getUser
 
 from functools import wraps
 import json
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 
 PERMISSION_DENIED_MSG = "权限不足"
@@ -144,8 +148,9 @@ def api_get_user_list(request):
 
     try:
         page, page_size, keyword = _parse_user_list_params(request)
-    except Exception as e:
-        return f_responseJson({"code": 0, "msg": str(e), "data": []})
+    except Exception as exc:
+        logger.warning("user list parameters rejected error_type=%s", type(exc).__name__)
+        return f_responseJson({"code": 0, "msg": "user list parameters are invalid", "data": []})
 
     users_query = User.objects.all().order_by("-id")
     if keyword:
@@ -192,8 +197,9 @@ def api_add_user(request):
         is_staff = _to_bool(params.get("is_staff"), default=False)
         is_superuser = _to_bool(params.get("is_superuser"), default=False)
         is_active = _to_bool(params.get("is_active"), default=True)
-    except Exception as e:
-        return f_responseJson({"code": 0, "msg": str(e)})
+    except Exception as exc:
+        logger.warning("user create parameters rejected error_type=%s", type(exc).__name__)
+        return f_responseJson({"code": 0, "msg": "user parameters are invalid"})
 
     if not username:
         return f_responseJson({"code": 0, "msg": "username is required"})

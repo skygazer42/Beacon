@@ -96,8 +96,8 @@ def _parse_algorithm_callback_payload(data: dict):
         from app.utils.Security import validate_control_code
 
         control_code = validate_control_code(control_code)
-    except ValueError as exc:
-        return None, str(exc)
+    except ValueError:
+        return None, "control_code is invalid"
 
     # 可选字段验证
     frame_index = data.get("frame_index", 0)
@@ -509,8 +509,9 @@ def api_get_stream_info(request):
             code = 1000
             msg = "success"
 
-        except Exception as e:
-            msg = f"获取失败: {str(e)}"
+        except Exception as exc:
+            logger.warning("developer stream info failed error_type=%s", type(exc).__name__)
+            msg = "获取失败"
 
     else:
         msg = MSG_METHOD_NOT_ALLOWED
@@ -558,6 +559,7 @@ def api_get_algorithm_info(request):
         algorithms = AlgorithmModel.objects.filter(state__gte=0)
         data = [_serialize_algorithm_info(alg) for alg in algorithms]
         return f_responseJson({"code": 1000, "msg": "success", "data": data})
-    except Exception as e:
-        return f_responseJson({"code": 0, "msg": f"获取失败: {str(e)}", "data": []})
+    except Exception as exc:
+        logger.warning("developer algorithm info failed error_type=%s", type(exc).__name__)
+        return f_responseJson({"code": 0, "msg": "获取失败", "data": []})
 api_getAlgorithmInfo = api_get_algorithm_info  # pragma: no cover - compatibility alias

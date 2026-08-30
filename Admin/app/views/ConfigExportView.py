@@ -291,15 +291,15 @@ def _load_import_data_from_uploaded_file(uploaded_file):
     """加载导入数据`from``uploaded`文件。"""
     try:
         raw = uploaded_file.read().decode("utf-8")
-    except Exception as e:
-        return None, str(e)
+    except Exception:
+        return None, "unable to read import file"
 
     try:
         data = json.loads(raw)
-    except json.JSONDecodeError as e:
-        return None, f"invalid json: {e}"
-    except Exception as e:
-        return None, str(e)
+    except json.JSONDecodeError:
+        return None, "invalid json"
+    except Exception:
+        return None, "unable to parse import file"
 
     payload = data.get("data", {}) if isinstance(data, dict) else None
     if not isinstance(payload, dict):

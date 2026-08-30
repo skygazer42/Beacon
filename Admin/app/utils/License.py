@@ -231,8 +231,9 @@ class License:
             info["edition"] = str(runtime_policy.get("edition", "") or "")
             info["thread_priority_policy"] = runtime_policy.get("thread_priority_policy") if isinstance(runtime_policy, dict) else {}
             return True, info
-        except Exception as e:
-            return False, {"reason": str(e)}
+        except Exception as exc:
+            logger.warning("license pool check failed error_type=%s", type(exc).__name__)
+            return False, {"reason": "license pool check failed"}
 
     def check(self):
         """检查相关数据。"""

@@ -10,7 +10,6 @@ from app.utils.ONVIF import ONVIFClient
 import re
 import urllib.parse
 import logging
-import json
 from datetime import datetime
 from django.db.models import Q
 
@@ -741,8 +740,9 @@ def api_webrtc_self_check(request):
     try:
         report = build_webrtc_selfcheck_report(g_config, g_zlm, app=app, name=name, public_host=public_host)
         return f_responseJson({"code": 1000, "msg": "success", "data": report})
-    except Exception as e:
-        return f_responseJson({"code": 0, "msg": str(e)})
+    except Exception as exc:
+        logger.warning("WebRTC self-check failed error_type=%s", type(exc).__name__)
+        return f_responseJson({"code": 0, "msg": "WebRTC 自检失败"})
 api_webrtcSelfCheck = api_webrtc_self_check  # pragma: no cover - compatibility alias
 
 
@@ -929,9 +929,9 @@ def api_get_online(request):
 
         code = 1000
         msg = "success"
-    except Exception as e:
-        log = "流媒体服务异常：" + str(e)
-        msg = log
+    except Exception as exc:
+        logger.warning("online stream lookup failed error_type=%s", type(exc).__name__)
+        msg = "流媒体服务异常"
 
     top_msg = ""
     if not media_server_state:
@@ -1255,8 +1255,9 @@ def api_get_all_update_forward_state(request):
                 forward_state=1 if app_name in online_keys else 0,
             )
         return f_responseJson({"code": 1000, "msg": "刷新状态成功"})
-    except Exception as e:
-        return f_responseJson({"code": 0, "msg": "刷新状态失败：" + str(e)})
+    except Exception as exc:
+        logger.warning("stream forward-state refresh failed error_type=%s", type(exc).__name__)
+        return f_responseJson({"code": 0, "msg": "刷新状态失败"})
 api_getAllUpdateForwardState = api_get_all_update_forward_state  # pragma: no cover - compatibility alias
 
 
@@ -1326,8 +1327,9 @@ def api_open_del(request):
             code, msg = _open_del_delete_all()
         else:
             code, msg = 0, "request parameters are incorrect"
-    except Exception as e:
-        code, msg = 0, str(e)
+    except Exception as exc:
+        logger.warning("stream delete failed error_type=%s", type(exc).__name__)
+        code, msg = 0, "删除摄像头失败"
 
     return f_responseJson({"code": code, "msg": msg})
 api_openDel = api_open_del  # pragma: no cover - compatibility alias
@@ -1503,8 +1505,9 @@ def api_open_add(request):
             site_label=site_label,
             floor_label=floor_label,
         )
-    except Exception as e:
-        return f_responseJson({"code": 0, "msg": str(e)})
+    except Exception as exc:
+        logger.warning("stream create failed error_type=%s", type(exc).__name__)
+        return f_responseJson({"code": 0, "msg": "添加摄像头失败"})
 
     return f_responseJson({"code": 1000, "msg": "添加成功"})
 api_openAdd = api_open_add  # pragma: no cover - compatibility alias
@@ -1629,8 +1632,9 @@ def api_open_edit(request):
         stream.floor_label = floor_label
         _touch_stream_last_update_time(stream)
         stream.save()
-    except Exception as e:
-        return f_responseJson({"code": 0, "msg": str(e)})
+    except Exception as exc:
+        logger.warning("stream update failed error_type=%s", type(exc).__name__)
+        return f_responseJson({"code": 0, "msg": "保存摄像头失败"})
 
     return f_responseJson({"code": 1000, "msg": "success"})
 api_openEdit = api_open_edit  # pragma: no cover - compatibility alias
@@ -1655,8 +1659,9 @@ def api_open_set_state(request):
         stream.state = next_state
         _touch_stream_last_update_time(stream)
         stream.save(update_fields=["state", "last_update_time"])
-    except Exception as e:
-        return f_responseJson({"code": 0, "msg": str(e)})
+    except Exception as exc:
+        logger.warning("stream state update failed error_type=%s", type(exc).__name__)
+        return f_responseJson({"code": 0, "msg": "更新摄像头状态失败"})
 
     return f_responseJson({"code": 1000, "msg": "启用成功" if next_state == 1 else "停用成功"})
 api_openSetState = api_open_set_state  # pragma: no cover - compatibility alias
@@ -1680,8 +1685,9 @@ def api_open_add_stream_proxy(request):
                     code = 1000
                 msg = forward_msg
 
-        except Exception as e:
-            msg = "openAddStreamProxy() error:" + str(e)
+        except Exception as exc:
+            logger.warning("stream proxy start failed error_type=%s", type(exc).__name__)
+            msg = "开启转发失败"
     else:
         msg = MSG_METHOD_NOT_SUPPORTED_CN
 
@@ -1787,8 +1793,9 @@ def api_open_gb28181_ptz(request):
             speed=speed,
             preset_index=preset_index,
         )
-    except Exception as e:
-        return _ptz_error(str(e))
+    except Exception as exc:
+        logger.warning("GB28181 PTZ operation failed error_type=%s", type(exc).__name__)
+        return _ptz_error("PTZ 操作失败")
 
     return f_responseJson({"code": 1000, "msg": "success", "data": payload})
 api_openGb28181Ptz = api_open_gb28181_ptz  # pragma: no cover - compatibility alias
@@ -1808,8 +1815,9 @@ def api_open_del_stream_proxy(request):
                 code = 1000
             msg = forward_msg
 
-        except Exception as e:
-            msg = "openDelStreamProxy() error:" + str(e)
+        except Exception as exc:
+            logger.warning("stream proxy stop failed error_type=%s", type(exc).__name__)
+            msg = "停止转发失败"
     else:
         msg = MSG_METHOD_NOT_SUPPORTED_CN
     res = {
@@ -1858,8 +1866,9 @@ def api_open_add_stream_pusher_proxy(request):
             key = __key
         else:
             msg = str(__msg or "failed")
-    except Exception as e:
-        msg = str(e)
+    except Exception as exc:
+        logger.warning("stream pusher proxy start failed error_type=%s", type(exc).__name__)
+        msg = "开启转推失败"
 
     res = {"code": 1000 if ret else 0, "msg": msg, "key": key}
     logger.debug("StreamView.openAddStreamPusherProxy() res=%s", safe_json_dumps(res, max_len=1024))
@@ -1890,8 +1899,9 @@ def _batch_add_stream_proxy_one(stream_code: str):
         if ok:
             return True, {"code": stream_code, "result_code": 1000, "msg": forward_msg or "开启转发成功"}
         return False, {"code": stream_code, "result_code": 0, "msg": forward_msg or "开启转发失败"}
-    except Exception as e:
-        return False, {"code": stream_code, "result_code": 0, "msg": str(e)}
+    except Exception as exc:
+        logger.warning("batch stream proxy start failed error_type=%s", type(exc).__name__)
+        return False, {"code": stream_code, "result_code": 0, "msg": "开启转发失败"}
 
 
 def api_open_batch_add_stream_proxy(request):
@@ -1955,9 +1965,10 @@ def api_open_batch_del_stream_proxy(request):
             else:
                 fail_count += 1
                 results.append({"code": stream_code, "result_code": 0, "msg": forward_msg or "停止转发失败"})
-        except Exception as e:
+        except Exception as exc:
             fail_count += 1
-            results.append({"code": stream_code, "result_code": 0, "msg": str(e)})
+            logger.warning("batch stream proxy stop failed error_type=%s", type(exc).__name__)
+            results.append({"code": stream_code, "result_code": 0, "msg": "停止转发失败"})
 
     if success_count > 0:
         code = 1000
@@ -1983,8 +1994,9 @@ def _parse_stream_import_rows_csv(uploaded_file):
 
     try:
         content = uploaded_file.read().decode("utf-8-sig", errors="replace")
-    except Exception as e:
-        return None, "读取CSV失败：%s" % str(e)
+    except Exception as exc:
+        logger.warning("stream CSV read failed error_type=%s", type(exc).__name__)
+        return None, "读取CSV失败"
 
     rows = []
     reader = csv.reader(StringIO(content))
@@ -2165,8 +2177,9 @@ def _import_stream_row(
             rtsp_url=prepared["rtsp_url"],
             remark=prepared["remark"],
         )
-    except Exception as e:
-        return False, f"第{idx}行：保存失败 - {str(e)}", "", ""
+    except Exception as exc:
+        logger.warning("stream import row save failed error_type=%s", type(exc).__name__)
+        return False, f"第{idx}行：保存失败", "", ""
 
     return True, "", prepared["rtsp_url"], prepared["stream_code"]
 
@@ -2243,8 +2256,9 @@ def api_batch_import(request):
             msg = f"导入完成：成功{success_count}条，失败{error_count}条"
         else:
             msg = "导入失败"
-    except Exception as e:
-        msg = f"导入失败：{str(e)}"
+    except Exception as exc:
+        logger.warning("stream import failed error_type=%s", type(exc).__name__)
+        msg = "导入失败"
 
     result = {"code": code, "msg": msg, "success_count": success_count, "error_count": error_count}
     if error_list:
@@ -2284,8 +2298,9 @@ def api_set_auto_start_config(request):
                 config.save()
             code = 1000
             msg = "设置成功"
-        except Exception as e:
-            msg = f"设置失败：{str(e)}"
+        except Exception as exc:
+            logger.warning("stream autostart setting failed error_type=%s", type(exc).__name__)
+            msg = "设置失败"
     return f_responseJson({"code": code, "msg": msg})
 api_setAutoStartConfig = api_set_auto_start_config  # pragma: no cover - compatibility alias
 

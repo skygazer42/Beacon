@@ -1,6 +1,8 @@
 # ========== 视频流录像和截图 API 视图 ==========
 # 提供手动录像、截图的 Web API 接口
 
+import logging
+
 from django.shortcuts import render
 
 from app.models import Stream
@@ -8,6 +10,9 @@ from app.utils.StreamRecording import get_stream_recorder, get_stream_snapshotte
 from app.utils.Config import Config
 
 from app.views.ViewsBase import f_parsePostParams, f_responseJson, g_config
+
+
+logger = logging.getLogger(__name__)
 
 
 MSG_STREAM_CODE_REQUIRED = "视频流编号不能为空"
@@ -86,8 +91,9 @@ def api_start_recording(request):
                 }
             )
         return f_responseJson({"code": 0, "msg": str(result.get("message") or ""), "data": {}})
-    except Exception as e:
-        return f_responseJson({"code": 0, "msg": f"开始录像失败：{str(e)}", "data": {}})
+    except Exception as exc:
+        logger.warning("recording start failed error_type=%s", type(exc).__name__)
+        return f_responseJson({"code": 0, "msg": "开始录像失败", "data": {}})
 
 
 def api_stop_recording(request):
@@ -125,8 +131,9 @@ def api_stop_recording(request):
             else:
                 msg = result['message']
 
-        except Exception as e:
-            msg = f"停止录像失败：{str(e)}"
+        except Exception as exc:
+            logger.warning("recording stop failed error_type=%s", type(exc).__name__)
+            msg = "停止录像失败"
 
     else:
         msg = MSG_METHOD_NOT_SUPPORTED
@@ -173,8 +180,9 @@ def api_get_recording_status(request):
                 msg = "该视频流未在录像"
                 data = None
 
-        except Exception as e:
-            msg = f"获取状态失败：{str(e)}"
+        except Exception as exc:
+            logger.warning("recording status lookup failed error_type=%s", type(exc).__name__)
+            msg = "获取状态失败"
 
     else:
         msg = MSG_METHOD_NOT_SUPPORTED
@@ -209,8 +217,9 @@ def api_list_active_recordings(request):
             msg = f"获取成功，当前 {len(recordings)} 个活跃录像"
             data = recordings
 
-        except Exception as e:
-            msg = f"获取列表失败：{str(e)}"
+        except Exception as exc:
+            logger.warning("recording list failed error_type=%s", type(exc).__name__)
+            msg = "获取列表失败"
 
     else:
         msg = MSG_METHOD_NOT_SUPPORTED
@@ -267,8 +276,9 @@ def api_capture_snapshot(request):
             )
 
         return f_responseJson({"code": 0, "msg": str(result.get("message") or ""), "data": {}})
-    except Exception as e:
-        return f_responseJson({"code": 0, "msg": f"截图失败：{str(e)}", "data": {}})
+    except Exception as exc:
+        logger.warning("stream snapshot failed error_type=%s", type(exc).__name__)
+        return f_responseJson({"code": 0, "msg": "截图失败", "data": {}})
 
 
 def _get_snapshot_stream_url(stream_code: str) -> str:
@@ -371,5 +381,6 @@ def api_batch_capture_snapshots(request):
         }
         msg = f"批量截图完成：成功 {success_count} 个，失败 {fail_count} 个"
         return f_responseJson({"code": 1000, "msg": msg, "data": data})
-    except Exception as e:
-        return f_responseJson({"code": 0, "msg": f'批量截图失败：{str(e)}', "data": {}})
+    except Exception as exc:
+        logger.warning("batch stream snapshot failed error_type=%s", type(exc).__name__)
+        return f_responseJson({"code": 0, "msg": "批量截图失败", "data": {}})

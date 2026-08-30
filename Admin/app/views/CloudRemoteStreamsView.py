@@ -1,3 +1,5 @@
+import logging
+
 from django.shortcuts import render
 
 from app.models import CloudEdgeCluster
@@ -14,6 +16,9 @@ from app.views.CloudConsoleView import (
     _require_cloud_mode,
 )
 from app.views.ViewsBase import f_parseGetParams
+
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_int(value, default: int = 0) -> int:
@@ -51,8 +56,9 @@ def _fetch_remote_streams(selected_cluster):
             open_api_token=selected_cluster.edge_openapi_token,
         )
         return "", list(client.list_streams() or [])
-    except CloudEdgeClientError as e:
-        return str(e), []
+    except CloudEdgeClientError as exc:
+        logger.warning("remote stream list failed error_type=%s", type(exc).__name__)
+        return "远程摄像头列表暂不可用", []
 
 
 def streams(request):

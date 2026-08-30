@@ -1,3 +1,5 @@
+import logging
+
 from django.shortcuts import render
 
 from app.utils.CloudEdgeClient import CloudEdgeClient, CloudEdgeClientError
@@ -17,6 +19,7 @@ from app.views.CloudConsoleView import (
 )
 
 REMOTE_STREAM_DETAIL_TEMPLATE = "app/cloud/remote_stream_detail.html"
+logger = logging.getLogger(__name__)
 
 
 def _stream_detail_auth_or_resp(request):
@@ -106,8 +109,9 @@ def _handle_stream_detail_post(request, *, client: CloudEdgeClient, context: dic
     try:
         client.edit_stream(payload)
         context["top_msg"] = "保存成功"
-    except CloudEdgeClientError as e:
-        context["error_msg"] = str(e)
+    except CloudEdgeClientError as exc:
+        logger.warning("remote stream update failed error_type=%s", type(exc).__name__)
+        context["error_msg"] = "远程摄像头保存失败"
     return None
 
 
@@ -117,8 +121,9 @@ def _load_stream_detail(client: CloudEdgeClient, context: dict, stream_code: str
         return
     try:
         context["stream"] = client.get_stream(stream_code)
-    except CloudEdgeClientError as e:
-        context["error_msg"] = str(e)
+    except CloudEdgeClientError as exc:
+        logger.warning("remote stream load failed error_type=%s", type(exc).__name__)
+        context["error_msg"] = "远程摄像头暂不可用"
 
 
 def _resolve_stream_detail_flash(request, stream_code: str) -> tuple[str, dict]:

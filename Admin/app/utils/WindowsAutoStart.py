@@ -72,8 +72,8 @@ def apply_windows_autostart(*, enabled: bool, app_name: str = "Beacon") -> Tuple
     name = str(app_name or "").strip() or "Beacon"
     try:
         import winreg  # type: ignore
-    except ImportError as e:
-        return False, f"winreg not available: {e}"
+    except ImportError:
+        return False, "winreg not available"
 
     try:
         if enabled:
@@ -103,5 +103,6 @@ def apply_windows_autostart(*, enabled: bool, app_name: str = "Beacon") -> Tuple
         except Exception:
             logger.debug("suppressed exception in app/utils/WindowsAutoStart.py:101", exc_info=True)
         return True, "disabled"
-    except Exception as e:
-        return False, str(e)
+    except Exception as exc:
+        logger.warning("Windows autostart registry update failed error_type=%s", type(exc).__name__)
+        return False, "Windows autostart update failed"

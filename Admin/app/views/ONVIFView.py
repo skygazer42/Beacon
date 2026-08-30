@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 from datetime import datetime
 
@@ -8,6 +9,9 @@ from app.models import Stream
 from app.utils.ONVIF import discover_onvif_devices, ONVIFClient, capture_device_snapshot, get_device_rtsp_urls
 
 from app.views.ViewsBase import f_parsePostParams, f_responseJson, getUser, g_config, start_forward_for_stream
+
+
+logger = logging.getLogger(__name__)
 
 
 MSG_METHOD_NOT_SUPPORTED = "请求方法不支持"
@@ -368,8 +372,9 @@ def api_onvif_discover(request):
             code = 1000
             msg = f"搜索完成，发现 {len(devices)} 个设备"
 
-        except Exception as e:
-            msg = f"搜索失败：{str(e)}"
+        except Exception as exc:
+            logger.warning("ONVIF discovery failed error_type=%s", type(exc).__name__)
+            msg = "搜索失败"
 
     else:
         msg = MSG_METHOD_NOT_SUPPORTED
@@ -424,8 +429,9 @@ def api_onvif_import_streams(request):
         results = summary["results"]
         code, msg = _build_onvif_import_message(summary["created"], summary["skipped"], summary["failed"])
 
-    except Exception as e:
-        msg = str(e)
+    except Exception as exc:
+        logger.warning("ONVIF import failed error_type=%s", type(exc).__name__)
+        msg = "导入失败"
 
     return f_responseJson({"code": code, "msg": msg, "results": results})
 
@@ -510,8 +516,9 @@ def api_onvif_get_device_info(request):
             code = 1000
             msg = "获取成功"
 
-        except Exception as e:
-            msg = f"获取失败：{str(e)}"
+        except Exception as exc:
+            logger.warning("ONVIF device lookup failed error_type=%s", type(exc).__name__)
+            msg = "获取失败"
 
     else:
         msg = MSG_METHOD_NOT_SUPPORTED
@@ -554,8 +561,9 @@ def api_onvif_get_rtsp_urls(request):
             code = 1000
             msg = "获取成功"
 
-        except Exception as e:
-            msg = f"获取失败：{str(e)}"
+        except Exception as exc:
+            logger.warning("ONVIF RTSP lookup failed error_type=%s", type(exc).__name__)
+            msg = "获取失败"
 
     else:
         msg = MSG_METHOD_NOT_SUPPORTED
@@ -616,8 +624,9 @@ def api_onvif_capture_snapshot(request):
             else:
                 msg = "截图失败"
 
-        except Exception as e:
-            msg = f"截图失败：{str(e)}"
+        except Exception as exc:
+            logger.warning("ONVIF snapshot failed error_type=%s", type(exc).__name__)
+            msg = "截图失败"
 
     else:
         msg = MSG_METHOD_NOT_SUPPORTED

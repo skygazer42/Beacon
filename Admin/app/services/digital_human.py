@@ -31,7 +31,6 @@ from app.models import (
     DigitalHumanDeviceMetricHistory,
     DigitalHumanHumanLog,
     DigitalHumanJwtAccount,
-    SystemConfig,
 )
 from app.utils.DigitalHumanCrypto import extract_bearer_token, sm4_decrypt_ecb_pkcs7  # gitleaks:allow -- function names, not credentials
 from app.utils.Security import resolve_under_base
@@ -86,9 +85,11 @@ logger = logging.getLogger(__name__)
 
 
 class DigitalHumanError(RuntimeError):
-    def __init__(self, message, *, status_code=400):
-        super().__init__(str(message or "数字人监管服务错误"))
+    def __init__(self, message, *, status_code=400, error_code="request_failed"):
+        self.public_message = str(message or "数字人监管服务错误")
+        super().__init__(self.public_message)
         self.status_code = int(status_code or 400)
+        self.error_code = str(error_code or "request_failed")
 
 
 def _now():
@@ -182,15 +183,23 @@ def _floatish(value, default=0.0, digits=1):
 
 
 def _parse_object_id(value, field_name="ID"):
+    error_code = {
+        "deviceId": "invalid_device_id",
+        "告警 ID": "invalid_alert_id",
+        "路由 ID": "invalid_route_id",
+        "日志 ID": "invalid_log_id",
+        "设备授权 ID": "invalid_device_authorization_id",
+        "commandId": "invalid_command_id",
+    }.get(str(field_name or ""), "invalid_id")
     text = str(value or "").strip()
     if not text:
-        raise DigitalHumanError(f"{field_name} 不合法")
+        raise DigitalHumanError(f"{field_name} 不合法", error_code=error_code)
     try:
         parsed = int(text)
     except Exception as exc:
-        raise DigitalHumanError(f"{field_name} 不合法") from exc
+        raise DigitalHumanError(f"{field_name} 不合法", error_code=error_code) from exc
     if parsed <= 0:
-        raise DigitalHumanError(f"{field_name} 不合法")
+        raise DigitalHumanError(f"{field_name} 不合法", error_code=error_code)
     return parsed
 
 
@@ -809,7 +818,8 @@ def _call_ai_diagnosis(config, *, system_prompt, user_prompt):
                 timeout=(connect_timeout, read_timeout),
             )
         except Exception as exc:
-            errors.append(f"{url}: {exc}")
+            logger.warning("AI diagnosis request failed error_type=%s", type(exc).__name__)
+            errors.append("AI 诊断请求失败")
             continue
 
         if int(response.status_code or 0) >= 400:
@@ -819,7 +829,8 @@ def _call_ai_diagnosis(config, *, system_prompt, user_prompt):
         try:
             payload_json = response.json()
         except Exception as exc:
-            errors.append(f"{url}: invalid json ({exc})")
+            logger.warning("AI diagnosis response parsing failed error_type=%s", type(exc).__name__)
+            errors.append("AI 诊断响应格式无效")
             continue
 
         text = _extract_ai_completion_text(payload_json)
@@ -1048,7 +1059,8 @@ def _send_dingtalk_alert_notification(alert, route, now=None):
     except Exception as exc:
         alert.dingtalk_push_status = "failed"
         alert.dingtalk_message_preview = preview[:500]
-        alert.dingtalk_error = f"钉钉推送异常: {exc}"
+        logger.warning("DingTalk alert delivery failed error_type=%s", type(exc).__name__)
+        alert.dingtalk_error = "钉钉推送异常"
         alert.dingtalk_push_time = current
         _append_alert_timeline(alert, "钉钉推送失败", alert.dingtalk_error, current)
         return
@@ -1602,7 +1614,8 @@ def get_device_screenshot_descriptor(device_id):
         try:
             abs_path = resolve_under_base(upload_root, device.screenshot_storage_path)
         except Exception as exc:
-            raise DigitalHumanError(f"截图路径无效: {exc}", status_code=404) from exc
+            logger.warning("digital-human screenshot path rejected error_type=%s", type(exc).__name__)
+            raise DigitalHumanError("截图路径无效", status_code=404) from exc
         if not os.path.isfile(abs_path):
             raise DigitalHumanError("截图不存在", status_code=404)
         return {

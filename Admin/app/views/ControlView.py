@@ -459,8 +459,9 @@ def _prewarm_algorithms_for_control(control, algorithm, runtime_algorithm):
             ok, msg = _prewarm_algorithm_code(item, control_code=control.code)
             if not ok:
                 return False, f"算法预热失败({item}): {msg}"
-    except Exception as e:
-        return False, f"算法预热异常: {e}"
+    except Exception as exc:
+        logger.warning("control algorithm prewarm failed error_type=%s", type(exc).__name__)
+        return False, "算法预热异常"
     return True, ""
 
 
@@ -1338,10 +1339,10 @@ def api_open_start_control(request):
                     code = 1000
 
                 _save_control_log(control_code, "start", code, msg, operator)
-            except Exception as e:
-                msg = str(e)
+            except Exception as exc:
+                msg = "启动布控失败"
                 _save_control_log(control_code, "start", 0, msg, _get_operator(request))
-                logger.warning("ControlView.api_openStartControl() error: %s", e)
+                logger.warning("control start failed error_type=%s", type(exc).__name__)
 
         else:
             msg = MSG_INVALID_PARAMS_CN
@@ -1376,9 +1377,10 @@ def api_open_stop_control(request):
         code = 1000 if ok else 0
         _save_control_log(control_code, "stop", code, msg, operator)
         return f_responseJson({"code": code, "msg": msg})
-    except Exception as e:
-        msg = str(e)
+    except Exception as exc:
+        msg = "停止布控失败"
         _save_control_log(control_code, "stop", 0, msg, _get_operator(request))
+        logger.warning("control stop failed error_type=%s", type(exc).__name__)
         return f_responseJson({"code": 0, "msg": msg})
 api_openStopControl = api_open_stop_control  # pragma: no cover - compatibility alias
 
@@ -1469,8 +1471,9 @@ def _control_quickset_restart_if_needed(control, want_restart: bool):
         if not _start_ok:
             return f"已保存但重启启动失败: {_start_msg}"
         return ""
-    except Exception as e:
-        return f"已保存但重启异常: {e}"
+    except Exception as exc:
+        logger.warning("control quick-set restart failed error_type=%s", type(exc).__name__)
+        return "已保存但重启异常"
 
 
 def _control_quickset_save_log(control_code: str, *, operator: str, changed: dict):
@@ -1613,8 +1616,9 @@ def _batch_control_try_apply(control_code: str, op_fn):
         if not control:
             return False, MSG_CONTROL_NOT_FOUND_CN
         return op_fn(control)
-    except Exception as e:
-        return False, str(e)
+    except Exception as exc:
+        logger.warning("batch control operation failed error_type=%s", type(exc).__name__)
+        return False, "布控操作失败"
 
 
 def _batch_control_execute(codes: list, *, operator: str, op_fn, log_action: str):
@@ -1741,9 +1745,10 @@ def api_open_copy(request):
             msg = "复制失败"
 
         _save_control_log(new_code, "copy", code, msg, operator, detail="from=%s" % control_code)
-    except Exception as e:
-        msg = str(e)
+    except Exception as exc:
+        msg = "复制失败"
         _save_control_log(control_code, "copy", 0, msg, operator)
+        logger.warning("control copy failed error_type=%s", type(exc).__name__)
 
     res = {
         "code": code,
@@ -1858,5 +1863,6 @@ def _batch_copy_control_to_stream(*, src, src_code: str, stream_code: str, only_
 
         _save_control_log(new_code, "batch_copy", 1000, "复制成功", operator, detail="from=%s stream=%s" % (src_code, stream_code))
         return _batch_copy_result(stream_code, 1000, "复制成功", new_code=new_code)
-    except Exception as e:
-        return _batch_copy_result(stream_code, 0, str(e))
+    except Exception as exc:
+        logger.warning("batch control copy failed error_type=%s", type(exc).__name__)
+        return _batch_copy_result(stream_code, 0, "复制失败")

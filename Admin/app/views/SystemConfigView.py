@@ -496,7 +496,8 @@ def api_save_system(request):
     try:
         values = _sanitize_values(params or {}, posted_keys)
     except ValueError as exc:
-        return f_responseJson({"code": 0, "msg": str(exc)})
+        logger.warning("system configuration rejected error_type=%s", type(exc).__name__)
+        return f_responseJson({"code": 0, "msg": "系统配置参数无效"})
 
     err = _validate_required_when_enabled(values)
     if err:

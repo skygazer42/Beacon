@@ -49,7 +49,23 @@ def _run(callable_obj, *args, **kwargs):
     try:
         return _success(callable_obj(*args, **kwargs))
     except dh_service.DigitalHumanError as exc:
-        return _error(exc)
+        message = {
+            "invalid_device_id": "deviceId 不合法",
+            "invalid_alert_id": "告警 ID 不合法",
+            "invalid_route_id": "路由 ID 不合法",
+            "invalid_log_id": "日志 ID 不合法",
+            "invalid_device_authorization_id": "设备授权 ID 不合法",
+            "invalid_command_id": "commandId 不合法",
+            "invalid_id": "ID 不合法",
+        }.get(exc.error_code)
+        if not message:
+            message = {
+                401: "数字人身份验证失败",
+                403: "数字人操作权限不足",
+                404: "数字人资源不存在",
+                503: "数字人监管服务暂不可用",
+            }.get(int(exc.status_code or 400), "数字人监管请求失败")
+        return _error(message)
 
 
 @_require_beacon_admin

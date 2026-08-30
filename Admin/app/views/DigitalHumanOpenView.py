@@ -33,7 +33,24 @@ def _run(callable_obj, *args, **kwargs):
     try:
         return _open_success(callable_obj(*args, **kwargs))
     except dh_service.DigitalHumanError as exc:
-        return _open_error(exc, status_code=exc.status_code)
+        status_code = int(exc.status_code or 400)
+        message = {
+            "invalid_device_id": "deviceId is invalid",
+            "invalid_alert_id": "alert ID is invalid",
+            "invalid_route_id": "route ID is invalid",
+            "invalid_log_id": "log ID is invalid",
+            "invalid_device_authorization_id": "device authorization ID is invalid",
+            "invalid_command_id": "commandId is invalid",
+            "invalid_id": "ID is invalid",
+        }.get(exc.error_code)
+        if not message:
+            message = {
+                401: "authentication failed",
+                403: "operation forbidden",
+                404: "resource not found",
+                503: "service unavailable",
+            }.get(status_code, "request failed")
+        return _open_error(message, status_code=status_code)
 
 
 @_require_method("POST")

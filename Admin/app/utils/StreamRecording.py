@@ -181,11 +181,12 @@ class StreamRecorder:
             if self._is_process_running(process):
                 self._send_stop_command(process)
                 self._wait_or_kill_process(process)
-        except Exception as e:
+        except Exception as exc:
             if self._is_process_running(process):
+                logger.warning("recording process stop failed error_type=%s", type(exc).__name__)
                 return {
                     'success': False,
-                    'message': f'停止录像失败：{str(e)}'
+                    'message': '停止录像失败'
                 }
         return None
 
@@ -315,10 +316,11 @@ class StreamRecorder:
                 'save_path': recording_info['relative_path']
             }
 
-        except Exception as e:
+        except Exception as exc:
+            logger.warning("recording process start failed error_type=%s", type(exc).__name__)
             return {
                 'success': False,
-                'message': f'启动录像失败：{str(e)}'
+                'message': '启动录像失败'
             }
 
     def stop_recording(self, stream_code: str) -> Dict:
@@ -499,10 +501,11 @@ class StreamSnapshotter:
                     'message': '截图失败'
                 }
 
-        except Exception as e:
+        except Exception as exc:
+            logger.warning("snapshot capture failed error_type=%s", type(exc).__name__)
             return {
                 'success': False,
-                'message': f'截图失败：{str(e)}'
+                'message': '截图失败'
             }
 
     def _capture_with_ffmpeg(self, stream_url: str, save_path: str) -> bool:

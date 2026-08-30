@@ -267,8 +267,9 @@ def _persist_license_state(raw: str, payload: dict, result: dict, *, limits: dic
             last_error_code=str(result.get("error_code", "") or "").strip(),
             last_error_message=str(result.get("error_message", "") or "").strip(),
         )
-    except Exception as e:
-        return str(e)
+    except Exception as exc:
+        logger.warning("license state persistence failed error_type=%s", type(exc).__name__)
+        return "license state persistence failed"
     return ""
 
 

@@ -351,8 +351,9 @@ def api_check_version(request):
 
         data.update(latest_info)
         data["hasUpdate"] = _version_check_has_update(PROJECT_VERSION, latest_version=latest_version, version_code=version_code)
-    except Exception as e:
-        msg = str(e)
+    except Exception as exc:
+        logger.warning("version check failed error_type=%s", type(exc).__name__)
+        msg = "version check failed"
 
     _version_check_cache_set(cache_key, now, data)
 
@@ -368,7 +369,8 @@ api_checkVersion = api_check_version  # pragma: no cover - compatibility alias
 class _ImageDetectApiError(Exception):
     def __init__(self, msg: str, *, data=None):
         """处理`init`。"""
-        super().__init__(str(msg or ""))
+        self.public_message = str(msg or "image detection failed")
+        super().__init__(self.public_message)
         self.data = data
 
 
@@ -582,7 +584,7 @@ def _image_detect_api_response(api_url: str, payload: dict):
     if not isinstance(api_data, dict):
         raise _ImageDetectApiError(MSG_INVALID_API_RESPONSE)
     if api_data.get("code") != 1000:
-        raise _ImageDetectApiError(str(api_data.get("msg") or MSG_INFER_FAILED), data=api_data)
+        raise _ImageDetectApiError(MSG_INFER_FAILED, data=api_data)
     return api_data
 
 
@@ -674,7 +676,7 @@ def _image_detect_load_local(algo, *, analyzer_code: str, abs_path: str, class_n
     if (not state) and ("already loaded" in str(msg or "").lower()):
         state = True
     if not state:
-        raise _ImageDetectApiError(str(msg or "load failed"))
+        raise _ImageDetectApiError("load failed")
 
 
 def _image_detect_local_success_response(*, base_code: str, analyzer_code: str, device: str, test_data):
@@ -748,7 +750,7 @@ def _image_detect_local_infer(algo, *, analyzer_code: str, device: str, image_b6
         timeout_seconds=30,
     )
     if not test_state:
-        raise _ImageDetectApiError(str(test_msg or MSG_INFER_FAILED))
+        raise _ImageDetectApiError(MSG_INFER_FAILED)
     return test_data
 
 
@@ -803,7 +805,7 @@ def api_open_image_detect(request):
             nms_thresh=nms_thresh,
         )
     except _ImageDetectApiError as exc:
-        return _image_detect_error_response(str(exc), data=exc.data)
+        return _image_detect_error_response(exc.public_message, data=exc.data)
 
     return _image_detect_local_success_response(
         base_code=base_code,
@@ -841,7 +843,7 @@ def api_open_audio_detect(request):
             segments=segments,
         )
     except _AudioDetectApiError as exc:
-        return _audio_detect_error_response(str(exc), data=exc.data)
+        return _audio_detect_error_response(exc.public_message, data=exc.data)
 
     return _audio_detect_success_response(
         base_code=base_code,
@@ -856,7 +858,8 @@ api_openAudioDetect = api_open_audio_detect  # pragma: no cover - compatibility 
 class _AudioDetectApiError(Exception):
     def __init__(self, msg: str, *, data=None):
         """处理`init`。"""
-        super().__init__(str(msg or ""))
+        self.public_message = str(msg or "audio detection failed")
+        super().__init__(self.public_message)
         self.data = data
 
 
@@ -1323,8 +1326,9 @@ def api_open_basic_info(request):
             "cpu": os_info.get_machine_cpu(),
         }
         return f_responseJson({"code": 1000, "msg": "success", "data": data})
-    except Exception as e:
-        return f_responseJson({"code": 0, "msg": str(e)})
+    except Exception as exc:
+        logger.warning("platform basic-info lookup failed error_type=%s", type(exc).__name__)
+        return f_responseJson({"code": 0, "msg": "basic info unavailable"})
 api_openBasicInfo = api_open_basic_info  # pragma: no cover - compatibility alias
 
 
@@ -1367,8 +1371,9 @@ def api_open_storage_info(request):
             },
         }
         return f_responseJson({"code": 1000, "msg": "success", "data": data})
-    except Exception as e:
-        return f_responseJson({"code": 0, "msg": str(e)})
+    except Exception as exc:
+        logger.warning("platform storage-info lookup failed error_type=%s", type(exc).__name__)
+        return f_responseJson({"code": 0, "msg": "storage info unavailable"})
 api_openStorageInfo = api_open_storage_info  # pragma: no cover - compatibility alias
 
 
@@ -1434,8 +1439,9 @@ def api_open_restart_software(request):
     try:
         _schedule_admin_restart(delay_seconds=1.0)
         return f_responseJson({"code": 1000, "msg": "restarting"})
-    except Exception as e:
-        return f_responseJson({"code": 0, "msg": str(e)})
+    except Exception as exc:
+        logger.warning("software restart scheduling failed error_type=%s", type(exc).__name__)
+        return f_responseJson({"code": 0, "msg": "restart scheduling failed"})
 api_openRestartSoftware = api_open_restart_software  # pragma: no cover - compatibility alias
 
 
@@ -1450,8 +1456,9 @@ def api_open_restart_system(request):
     try:
         _schedule_system_restart(delay_seconds=1.0)
         return f_responseJson({"code": 1000, "msg": "restarting"})
-    except Exception as e:
-        return f_responseJson({"code": 0, "msg": str(e)})
+    except Exception as exc:
+        logger.warning("system restart scheduling failed error_type=%s", type(exc).__name__)
+        return f_responseJson({"code": 0, "msg": "restart scheduling failed"})
 api_openRestartSystem = api_open_restart_system  # pragma: no cover - compatibility alias
 
 
@@ -1487,8 +1494,8 @@ def _create_recording_plan_from_params(params):
 
     try:
         code = validate_control_code(code)
-    except Exception as e:
-        return None, str(e)
+    except Exception:
+        return None, "recording plan code is invalid"
 
     if not stream_code:
         return None, MSG_STREAM_CODE_REQUIRED
@@ -1654,8 +1661,9 @@ def api_open_delete_recording_plan(request):
     try:
         plan.delete()
         return f_responseJson({"code": 1000, "msg": "success", "data": {"deleted": 1}})
-    except Exception as e:
-        return f_responseJson({"code": 0, "msg": str(e)})
+    except Exception as exc:
+        logger.warning("recording plan delete failed error_type=%s", type(exc).__name__)
+        return f_responseJson({"code": 0, "msg": "recording plan delete failed"})
 api_openDeleteRecordingPlan = api_open_delete_recording_plan  # pragma: no cover - compatibility alias
 
 
@@ -1747,8 +1755,8 @@ def _create_task_plan_from_params(params: dict):
 
     try:
         code = validate_control_code(code)
-    except Exception as e:
-        return None, str(e)
+    except Exception:
+        return None, "task plan code is invalid"
 
     if TaskPlan.objects.filter(code=code).exists():
         return None, "task plan code already exists"
@@ -1894,8 +1902,9 @@ def api_open_delete_task_plan(request):
     try:
         plan.delete()
         return f_responseJson({"code": 1000, "msg": "success", "data": {"deleted": 1}})
-    except Exception as e:
-        return f_responseJson({"code": 0, "msg": str(e)})
+    except Exception as exc:
+        logger.warning("task plan delete failed error_type=%s", type(exc).__name__)
+        return f_responseJson({"code": 0, "msg": "task plan delete failed"})
 api_openDeleteTaskPlan = api_open_delete_task_plan  # pragma: no cover - compatibility alias
 
 
@@ -2045,8 +2054,8 @@ def api_open_recording_file_play_url(request):
 
     try:
         rel = validate_upload_rel_path(rel_path, required_prefix="recordings/")
-    except Exception as e:
-        return f_responseJson({"code": 0, "msg": str(e)})
+    except Exception:
+        return f_responseJson({"code": 0, "msg": "recording path is invalid"})
 
     root = _file_service_root_dir(g_config)
     if not root:
@@ -2054,8 +2063,8 @@ def api_open_recording_file_play_url(request):
 
     try:
         abs_path = resolve_under_base(root, rel)
-    except Exception as e:
-        return f_responseJson({"code": 0, "msg": str(e)})
+    except Exception:
+        return f_responseJson({"code": 0, "msg": "recording path is invalid"})
 
     if not os.path.isfile(abs_path):
         return f_responseJson({"code": 0, "msg": "recording file not found"})
@@ -2063,8 +2072,9 @@ def api_open_recording_file_play_url(request):
     try:
         play_url = _file_service_play_url(request, rel)
         return f_responseJson({"code": 1000, "msg": "success", "data": {"rel_path": rel, "play_url": play_url}})
-    except Exception as e:
-        return f_responseJson({"code": 0, "msg": str(e)})
+    except Exception as exc:
+        logger.warning("recording play URL generation failed error_type=%s", type(exc).__name__)
+        return f_responseJson({"code": 0, "msg": "recording play URL unavailable"})
 api_openRecordingFilePlayUrl = api_open_recording_file_play_url  # pragma: no cover - compatibility alias
 
 
@@ -2337,8 +2347,8 @@ def api_open_face_add(request):
     params["id"] = face_id
     try:
         params = _normalize_face_feature_algorithm_code(params, require_for_image=True)
-    except Exception as e:
-        return f_responseJson({"code": 0, "msg": str(e)})
+    except Exception:
+        return f_responseJson({"code": 0, "msg": "face feature algorithm is invalid"})
 
     ok, msg, data = g_analyzer.face_add(params)
     if not ok:
@@ -2385,8 +2395,8 @@ def api_open_face_search(request):
     params = f_parsePostParams(request)
     try:
         params = _normalize_face_feature_algorithm_code(params, require_for_image=True)
-    except Exception as e:
-        return f_responseJson({"code": 0, "msg": str(e)})
+    except Exception:
+        return f_responseJson({"code": 0, "msg": "face feature algorithm is invalid"})
 
     ok, msg, data = g_analyzer.face_search(params)
     if not ok:
@@ -2472,8 +2482,9 @@ def api_alarm_poll(request):
 
     try:
         data = build_alarm_poll_summary(params, after_id=after_id)
-    except Exception as e:
-        return f_responseJson({"code": 0, "msg": str(e)})
+    except Exception as exc:
+        logger.warning("alarm poll failed error_type=%s", type(exc).__name__)
+        return f_responseJson({"code": 0, "msg": "alarm poll failed"})
 
     res = {
         "code": 1000,
@@ -2535,8 +2546,9 @@ def api_cross_camera_search(request):
             object_code=object_code,
             track_id=track_id,
         )
-    except Exception as e:
-        return f_responseJson({"code": 0, "msg": str(e)})
+    except Exception as exc:
+        logger.warning("cross-camera alarm lookup failed error_type=%s", type(exc).__name__)
+        return f_responseJson({"code": 0, "msg": "cross-camera lookup failed"})
 
     return f_responseJson(
         {
@@ -3614,13 +3626,15 @@ def _core_process_probe(analyzer, *, cache_ttl_seconds=0):
     err = ""
     try:
         ok_resource, _m, resource = analyzer.resource_info(timeout_seconds=2, cache_ttl_seconds=cache_ttl_seconds)
-    except Exception as e:
-        err = str(e)
+    except Exception as exc:
+        logger.warning("analyzer resource probe failed error_type=%s", type(exc).__name__)
+        err = "Analyzer resource probe failed"
     try:
         ok_sched, _m, sched = analyzer.scheduler_info(timeout_seconds=2, cache_ttl_seconds=cache_ttl_seconds)
-    except Exception as e:
+    except Exception as exc:
         if not err:
-            err = str(e)
+            logger.warning("analyzer scheduler probe failed error_type=%s", type(exc).__name__)
+            err = "Analyzer scheduler probe failed"
     return ok_resource, ok_sched, resource if ok_resource else {}, sched if ok_sched else {}, err or "success"
 
 
@@ -4319,8 +4333,9 @@ def _upload_alarm_handle_post(request, params: dict):
         alarm, data = _upload_alarm_save_alarm(values)
         _upload_alarm_emit_event(alarm=alarm, values=values)
         return f_responseJson({"code": 1000, "msg": "success", "data": data})
-    except ValueError as e:
-        return f_responseJson({"code": 0, "msg": str(e)})
+    except ValueError as exc:
+        logger.warning("alarm upload rejected error_type=%s", type(exc).__name__)
+        return f_responseJson({"code": 0, "msg": "alarm upload payload is invalid"})
     except Exception as e:
         logger.exception("api_uploadAlarm failed error_type=%s", type(e).__name__)
         return f_responseJson({"code": 0, "msg": "internal error", "data": {}})
@@ -5167,8 +5182,9 @@ def api_post_add_control(request):
                 msg = save_msg
             else:
                 msg = "布控请求参数不完整！"
-        except Exception as e:
-            msg = "布控请求参数存在错误: %s" % str(e)
+        except Exception as exc:
+            logger.warning("control create request failed error_type=%s", type(exc).__name__)
+            msg = "布控请求参数存在错误"
     else:
         msg = "请求方法不合法！"
 
@@ -5255,8 +5271,9 @@ def _control_edit_full(control_code: str, params: dict) -> dict:
         if control.id:
             return {"code": 1000, "msg": "更新布控成功"}
         return {"code": 0, "msg": "更新布控失败"}
-    except Exception as e:
-        return {"code": 0, "msg": "更新布控数据失败：" + str(e)}
+    except Exception as exc:
+        logger.warning("control update failed error_type=%s", type(exc).__name__)
+        return {"code": 0, "msg": "更新布控数据失败"}
 
 
 def api_post_edit_control(request):
@@ -5273,8 +5290,9 @@ def api_post_edit_control(request):
         if not _control_edit_is_legacy_full_update(params):
             return f_responseJson(_control_edit_patch(control_code, params))
         return f_responseJson(_control_edit_full(control_code, params))
-    except Exception as e:
-        return f_responseJson({"code": 0, "msg": "布控请求参数存在错误: %s" % str(e)})
+    except Exception as exc:
+        logger.warning("control edit request failed error_type=%s", type(exc).__name__)
+        return f_responseJson({"code": 0, "msg": "布控请求参数存在错误"})
 api_postEditControl = api_post_edit_control  # pragma: no cover - compatibility alias
 
 
@@ -5577,7 +5595,7 @@ def _audio_detect_api_response(api_url: str, payload: dict):
     if not isinstance(api_data, dict):
         raise _AudioDetectApiError(MSG_INVALID_API_RESPONSE)
     if api_data.get("code") != 1000:
-        raise _AudioDetectApiError(str(api_data.get("msg") or MSG_INFER_FAILED), data=api_data)
+        raise _AudioDetectApiError(MSG_INFER_FAILED, data=api_data)
     return api_data
 
 
@@ -5603,9 +5621,11 @@ def _audio_detect_alarm_info(*, base_code: str, params: dict, text: str, result_
             segments=segments,
         )
     except ValueError as exc:
-        raise _AudioDetectApiError(str(exc))
+        logger.warning("audio review alarm rejected error_type=%s", type(exc).__name__)
+        raise _AudioDetectApiError("audio review alarm payload is invalid") from exc
     except Exception as exc:
-        raise _AudioDetectApiError(str(exc))
+        logger.warning("audio review alarm creation failed error_type=%s", type(exc).__name__)
+        raise _AudioDetectApiError("audio review alarm creation failed") from exc
 
 
 def _audio_detect_success_response(*, base_code: str, text: str, result_language: str, segments, alarm_info):
