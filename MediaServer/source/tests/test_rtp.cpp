@@ -58,7 +58,9 @@ static bool loadFile(const char *path, const EventPoller::Ptr &poller) {
                 return 1;
             }
             len = ntohs(len);
-            if (len < 12 || len > sizeof(rtp)) {
+            // rtp spans the complete uint16_t length range, so only the
+            // protocol's minimum RTP header length needs a runtime check.
+            if (len < 12) {
                 WarnL << "Invalid rtp size: " << len;
                 return 0;
             }

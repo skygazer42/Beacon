@@ -12,6 +12,8 @@
 #include "Util/util.h"
 #include <iostream>
 #include <map>
+#include <memory>
+#include <vector>
 
 
 using namespace std;
@@ -69,24 +71,33 @@ private:
 };
 
 static bool loadFile(const char *path, const EventPoller::Ptr &poller) {
-    FILE *fp = fopen(path, "rb");
+    std::unique_ptr<FILE, decltype(&fclose)> fp(fopen(path, "rb"), &fclose);
     if (!fp) {
-        WarnL << "open eqq failed:" << path;
+        WarnL << "open file failed:" << path;
         return false;
     }
-    fseek(fp, 0, SEEK_END);
-    long lSize = ftell(fp);
-    uint8_t *text = (uint8_t *)malloc(lSize);
-    rewind(fp);
-    fread(text, sizeof(char), lSize, fp);
+    if (fseek(fp.get(), 0, SEEK_END) != 0) {
+        WarnL << "seek file failed:" << path;
+        return false;
+    }
+    long lSize = ftell(fp.get());
+    if (lSize <= 0) {
+        WarnL << "invalid file size:" << path;
+        return false;
+    }
+    std::vector<uint8_t> text(static_cast<size_t>(lSize));
+    rewind(fp.get());
+    if (fread(text.data(), sizeof(uint8_t), text.size(), fp.get()) != text.size()) {
+        WarnL << "read file failed:" << path;
+        return false;
+    }
 
     PsProcess::Ptr  ps_process = std::make_shared<PsProcess>();
     DecoderImp::Ptr ps_decoder = DecoderImp::createDecoder(DecoderImp::decoder_ps, ps_process.get());
     if (ps_decoder) {
-        ps_decoder->input(text, lSize);
+        ps_decoder->input(text.data(), text.size());
     }
     WarnL << (lSize >> 10) << "KB";
-    fclose(fp);
     return true;
 }
 

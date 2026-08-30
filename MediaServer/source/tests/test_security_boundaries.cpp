@@ -11,6 +11,7 @@
 #include "Http/HttpChunkedSplitter.h"
 #include "flv-parser.h"
 #include <cerrno>
+#include <cstdlib>
 #include <cstring>
 #include <stdexcept>
 #include <string>
@@ -67,6 +68,19 @@ static int ignoreFlvPacket(void *, int, const void *, size_t, uint32_t, uint32_t
     return 0;
 }
 
+struct FlvAllocationProbe {
+    size_t requested = 0;
+};
+
+static void *recordFlvAllocation(void *param, size_t bytes) {
+    static_cast<FlvAllocationProbe *>(param)->requested = bytes;
+    return std::malloc(bytes);
+}
+
+static void releaseFlvAllocation(void *, void *ptr) {
+    std::free(ptr);
+}
+
 static void testFlvTagUnderflow() {
     const uint8_t malformed[] = {
         'F', 'L', 'V', 1, 5, 0, 0, 0, 9,
@@ -79,6 +93,25 @@ static void testFlvTagUnderflow() {
     require(flv_parser_input(&parser, malformed, sizeof(malformed), ignoreFlvPacket, nullptr) < 0,
             "malformed FLV tag size was accepted");
     require(parser.body == nullptr, "FLV body allocated before size validation");
+}
+
+static void testFlvAllocationUsesFixedSizeClass() {
+    const uint8_t valid[] = {
+        'F', 'L', 'V', 1, 5, 0, 0, 0, 9,
+        0, 0, 0, 0,
+        18, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
+        0,
+    };
+    FlvAllocationProbe probe;
+    flv_parser_t parser;
+    std::memset(&parser, 0, sizeof(parser));
+    parser.alloc = recordFlvAllocation;
+    parser.free = releaseFlvAllocation;
+
+    require(flv_parser_input(&parser, valid, sizeof(valid), ignoreFlvPacket, &probe) == 0,
+            "valid FLV tag was rejected");
+    require(probe.requested == 64, "FLV tag length reached the allocator directly");
+    require(parser.body == nullptr, "FLV body pointer was retained after release");
 }
 
 static void testMovExtraDataBoundaries() {
@@ -100,6 +133,7 @@ static void testMovExtraDataBoundaries() {
 int main() {
     testHttpChunkBoundaries();
     testFlvTagUnderflow();
+    testFlvAllocationUsesFixedSizeClass();
     testMovExtraDataBoundaries();
     return 0;
 }

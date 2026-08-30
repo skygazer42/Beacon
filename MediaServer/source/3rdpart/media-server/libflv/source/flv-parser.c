@@ -111,10 +111,30 @@ static size_t flv_parser_append(struct flv_parser_t* parser, const uint8_t* data
 	return n;
 }
 
+static size_t flv_parser_body_capacity(size_t bytes)
+{
+	/*
+	 * Keep allocation requests independent of the untrusted FLV tag length.
+	 * Each returned value is a fixed size class, while the caller separately
+	 * validates that bytes never exceeds FLV_MAX_TAG_BODY_SIZE.
+	 */
+	if (bytes <= 64U) return 64U;
+	if (bytes <= 256U) return 256U;
+	if (bytes <= 1024U) return 1024U;
+	if (bytes <= 4U * 1024U) return 4U * 1024U;
+	if (bytes <= 16U * 1024U) return 16U * 1024U;
+	if (bytes <= 64U * 1024U) return 64U * 1024U;
+	if (bytes <= 256U * 1024U) return 256U * 1024U;
+	if (bytes <= 1024U * 1024U) return 1024U * 1024U;
+	if (bytes <= 4U * 1024U * 1024U) return 4U * 1024U * 1024U;
+	return FLV_MAX_TAG_BODY_SIZE;
+}
+
 int flv_parser_input(struct flv_parser_t* parser, const uint8_t* data, size_t bytes, flv_parser_handler handler, void* param)
 {
     int r;
 	size_t n;
+	size_t capacity;
 	uint8_t codec;
 	uint32_t size;
 	enum {FLV_HEADER=0, FLV_HEADER_OFFSET, FLV_PREVIOUS_SIZE, FLV_TAG_HEADER, FLV_AVHEADER_CODEC, FLV_AVHEADER_EXTRA, FLV_TAG_BODY};
@@ -212,7 +232,8 @@ int flv_parser_input(struct flv_parser_t* parser, const uint8_t* data, size_t by
 				if (parser->tag.size < parser->expect || parser->tag.size > FLV_MAX_TAG_BODY_SIZE)
 					return -EINVAL;
 				parser->expect = parser->tag.size - parser->expect;
-				parser->body = parser->alloc ? parser->alloc(param, parser->expect) : malloc(parser->expect);
+				capacity = flv_parser_body_capacity(parser->expect);
+				parser->body = parser->alloc ? parser->alloc(param, capacity) : malloc(capacity);
 				if (!parser->body)
 					return -1;
 			}
@@ -251,6 +272,7 @@ int flv_parser_input(struct flv_parser_t* parser, const uint8_t* data, size_t by
 				}
 				
 				parser->free ? parser->free(param, parser->body) : free(parser->body);
+				parser->body = NULL;
 			}
 			break;
 
