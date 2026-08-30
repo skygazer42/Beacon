@@ -286,7 +286,11 @@ int start_main(int argc,char *argv[]) {
                   << g_ini_file;
         }
 
-        if (!File::is_dir(ssl_file)) {
+        if (ssl_file.empty()) {
+            // TLS is opt-in. Avoid trying to load an empty certificate path when
+            // all SSL listeners are disabled by the runtime configuration.
+            g_reload_certificates = []() {};
+        } else if (!File::is_dir(ssl_file)) {
             // 不是文件夹，加载证书，证书包含公钥和私钥  [AUTO-TRANSLATED:5d3a5e49]
             // Not a folder, load certificate, certificate contains public key and private key
             g_reload_certificates = [ssl_file] () {
