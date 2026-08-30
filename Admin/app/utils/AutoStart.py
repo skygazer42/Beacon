@@ -11,6 +11,8 @@ logger = logging.getLogger(__name__)
 _LINUX_SYSTEMD_UNIT_NAME = "beacon-videoanalyzer.service"
 _MACOS_LAUNCH_AGENT_LABEL = "com.beacon.videoanalyzer"
 _MACOS_LAUNCH_AGENT_PLIST = _MACOS_LAUNCH_AGENT_LABEL + ".plist"
+_AUTOSTART_COMMAND_TIMEOUT_SECONDS = 15
+_AUTOSTART_ERROR_MAX_LENGTH = 512
 
 
 def _system_name() -> str:
@@ -76,10 +78,52 @@ def _write_text_atomic(path: str, content: str) -> None:
     os.replace(tmp, path)
 
 
+def _run_autostart_command(argv: List[str]):
+    """Run a bounded OS integration command without leaking its output."""
+    return subprocess.run(
+        list(argv),
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=_AUTOSTART_COMMAND_TIMEOUT_SECONDS,
+    )
+
+
+def _command_failure_detail(action: str, result) -> str:
+    """Return a compact, user-visible failure without claiming success."""
+    return_code = int(getattr(result, "returncode", 1) or 0)
+    raw = str(getattr(result, "stderr", "") or getattr(result, "stdout", "") or "")
+    message = " ".join(raw.split())[:_AUTOSTART_ERROR_MAX_LENGTH]
+    detail = f"{action} failed (exit {return_code})"
+    return f"{detail}: {message}" if message else detail
+
+
+def _systemd_quote(value: str) -> str:
+    """Quote one systemd directive argument and escape percent specifiers."""
+    escaped = str(value or "").replace("%", "%%").replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def _systemd_join(argv: List[str]) -> str:
+    return " ".join(_systemd_quote(value) for value in argv)
+
+
+def _desktop_quote(value: str) -> str:
+    """Quote one freedesktop Exec argument without invoking a shell."""
+    escaped = str(value or "").replace("%", "%%")
+    for source, replacement in (("\\", "\\\\"), ('"', '\\"'), ("`", "\\`"), ("$", "\\$")):
+        escaped = escaped.replace(source, replacement)
+    return f'"{escaped}"'
+
+
+def _desktop_join(argv: List[str]) -> str:
+    return " ".join(_desktop_quote(value) for value in argv)
+
+
 def _remove_file_quiet(path: str) -> None:
     """处理`remove`文件`quiet`。"""
     try:
-        if os.path.exists(path):
+        if os.path.lexists(path):
             os.remove(path)
     except Exception:
         logger.debug("suppressed exception in app/utils/AutoStart.py:82", exc_info=True)
@@ -112,6 +156,8 @@ def _apply_linux_autostart(*, enabled: bool) -> Tuple[bool, str]:
     # systemd user unit (preferred on modern distros)
     systemctl = shutil.which("systemctl")
     if enabled:
+        systemd_working_directory = _systemd_quote(root_dir)
+        systemd_environment = _systemd_quote(f"BEACON_ROOT_DIR={root_dir}")
         unit_text = "\n".join(
             [
                 "[Unit]",
@@ -120,9 +166,9 @@ def _apply_linux_autostart(*, enabled: bool) -> Tuple[bool, str]:
                 "",
                 "[Service]",
                 "Type=simple",
-                f"WorkingDirectory={root_dir}",
-                f"Environment=BEACON_ROOT_DIR={root_dir}",
-                f"ExecStart={argv[0] if len(argv) == 1 else ' '.join(argv)}",
+                f"WorkingDirectory={systemd_working_directory}",
+                f"Environment={systemd_environment}",
+                f"ExecStart={_systemd_join(argv)}",
                 "Restart=on-failure",
                 "RestartSec=5",
                 "",
@@ -135,20 +181,23 @@ def _apply_linux_autostart(*, enabled: bool) -> Tuple[bool, str]:
 
         if systemctl:
             try:
-                subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)
-                subprocess.run(
+                reload_result = _run_autostart_command(["systemctl", "--user", "daemon-reload"])
+                if reload_result.returncode != 0:
+                    return False, _command_failure_detail("systemd daemon-reload", reload_result)
+                enable_result = _run_autostart_command(
                     ["systemctl", "--user", "enable", "--now", _LINUX_SYSTEMD_UNIT_NAME],
-                    check=False,
                 )
+                if enable_result.returncode != 0:
+                    return False, _command_failure_detail("systemd enable", enable_result)
+                _remove_file_quiet(_linux_xdg_desktop_path())
                 return True, "enabled via systemd --user"
-            except Exception:
-                # Fall back to XDG autostart when systemd isn't usable in the current environment.
-                logger.debug("suppressed exception in app/utils/AutoStart.py:143", exc_info=True)
+            except (OSError, subprocess.SubprocessError) as exc:
+                return False, f"systemd enable failed: {type(exc).__name__}"
 
-        # Fallback: XDG Autostart (.desktop), effective for GUI logins.
+        # Fallback only on hosts without systemctl. A present-but-failing systemd
+        # command must be reported instead of silently claiming XDG equivalence.
         desktop_path = _linux_xdg_desktop_path()
-        # Desktop entry Exec is a string; keep it minimal and stable.
-        exec_cmd = argv[0] if len(argv) == 1 else " ".join(argv)
+        exec_cmd = _desktop_join(argv)
         desktop_text = "\n".join(
             [
                 "[Desktop Entry]",
@@ -163,15 +212,26 @@ def _apply_linux_autostart(*, enabled: bool) -> Tuple[bool, str]:
         return True, "enabled via XDG autostart"
 
     # disable
-    if systemctl:
+    unit_exists = os.path.lexists(unit_path)
+    if systemctl and unit_exists:
         try:
-            subprocess.run(["systemctl", "--user", "disable", "--now", _LINUX_SYSTEMD_UNIT_NAME], check=False)
-            subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)
-        except Exception:
-            logger.debug("suppressed exception in app/utils/AutoStart.py:168", exc_info=True)
+            disable_result = _run_autostart_command(
+                ["systemctl", "--user", "disable", "--now", _LINUX_SYSTEMD_UNIT_NAME]
+            )
+            if disable_result.returncode != 0:
+                return False, _command_failure_detail("systemd disable", disable_result)
+        except (OSError, subprocess.SubprocessError) as exc:
+            return False, f"systemd disable failed: {type(exc).__name__}"
 
     _remove_file_quiet(unit_path)
     _remove_file_quiet(_linux_xdg_desktop_path())
+    if systemctl and unit_exists:
+        try:
+            reload_result = _run_autostart_command(["systemctl", "--user", "daemon-reload"])
+            if reload_result.returncode != 0:
+                return False, _command_failure_detail("systemd daemon-reload", reload_result)
+        except (OSError, subprocess.SubprocessError) as exc:
+            return False, f"systemd daemon-reload failed: {type(exc).__name__}"
     return True, "disabled"
 
 

@@ -99,6 +99,7 @@ jobs:
             sleep 1
           done
           if [ "${ready}" -ne 1 ]; then
+            echo "packaged Admin did not become ready after ${attempt} attempts" >&2
             sed -n '1,160p' "${RUNNER_TEMP}/packaged-admin.log"
             exit 1
           fi
