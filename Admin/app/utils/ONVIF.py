@@ -651,7 +651,7 @@ class ONVIFClient:
                 flags |= os.O_CLOEXEC
             if hasattr(os, "O_NOFOLLOW"):
                 flags |= os.O_NOFOLLOW
-            descriptor = os.open(tmp_path, flags, 0o640)
+            descriptor = os.open(tmp_path, flags, 0o600)
             written = 0
             header = bytearray()
             with os.fdopen(descriptor, "wb") as output:

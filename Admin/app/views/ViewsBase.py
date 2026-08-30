@@ -342,10 +342,36 @@ def f_calcu_file_base64_str(filepath):
     """处理`f`计算文件Base64字符串。"""
     base64_str = "encode error"
     try:
-        if not os.path.exists(filepath):
-            raise FileNotFoundError("filepath not found")
-        with open(filepath, 'rb') as f:
-            f_byte = f.read()
+        import stat
+
+        upload_root = os.path.realpath(os.path.abspath(str(getattr(g_config, "uploadDir", "") or "")))
+        raw_filepath = str(filepath or "").strip()
+        if not raw_filepath or not str(getattr(g_config, "uploadDir", "") or "").strip():
+            raise FileNotFoundError("managed upload storage is not configured")
+        candidate = os.path.realpath(os.path.abspath(raw_filepath))
+        if os.path.commonpath((upload_root, candidate)) != upload_root or candidate == upload_root:
+            raise ValueError("filepath escapes managed upload storage")
+        if os.path.islink(raw_filepath):
+            raise ValueError("symbolic links are not allowed")
+
+        flags = os.O_RDONLY
+        if hasattr(os, "O_CLOEXEC"):
+            flags |= os.O_CLOEXEC
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        descriptor = os.open(candidate, flags)
+        try:
+            file_stat = os.fstat(descriptor)
+            if not stat.S_ISREG(file_stat.st_mode) or int(file_stat.st_size) > 20 * 1024 * 1024:
+                raise ValueError("managed upload is not a bounded regular file")
+            with os.fdopen(descriptor, "rb") as f:
+                descriptor = None
+                f_byte = f.read(20 * 1024 * 1024 + 1)
+        finally:
+            if descriptor is not None:
+                os.close(descriptor)
+        if len(f_byte) > 20 * 1024 * 1024:
+            raise ValueError("managed upload exceeds the base64 size limit")
         base64_str = base64.b64encode(f_byte)
         base64_str = base64_str.decode("utf-8")  # str类型
     except Exception as e:

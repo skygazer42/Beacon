@@ -31,7 +31,10 @@ def truncate_text(text: str, max_len: int = 256) -> str:
     """Return a bounded, single-line representation suitable for logs."""
     if max_len < 8:
         max_len = 8
-    raw = str(text)
+    # Keep these explicit replacements at the trust boundary. Besides making
+    # the CR/LF guarantee obvious, standard static analyzers recognize this as
+    # the canonical log-forging sanitizer.
+    raw = str(text).replace("\r", "\\r").replace("\n", "\\n")
     parts = []
     rendered_len = 0
     for char in raw:
@@ -45,10 +48,6 @@ def truncate_text(text: str, max_len: int = 256) -> str:
 
 def _escaped_log_character(value: str) -> str:
     codepoint = ord(value)
-    if value == "\n":
-        return "\\n"
-    if value == "\r":
-        return "\\r"
     if value == "\t":
         return "\\t"
     if codepoint < 32 or codepoint == 127:

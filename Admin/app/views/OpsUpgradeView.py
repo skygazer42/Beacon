@@ -25,6 +25,7 @@ import logging
 import os
 import re
 import shutil
+import stat
 import zipfile
 import runtime_paths  # type: ignore
 from datetime import datetime
@@ -33,6 +34,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from django.core.serializers.json import DjangoJSONEncoder
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
+from app.utils.SafeLog import safe_log_text
 
 from app.views.ViewsBase import getUser
 from framework.settings import PROJECT_VERSION
@@ -134,6 +136,8 @@ def _write_json_atomic(path: str, data: dict) -> None:
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
     if hasattr(os, "O_CLOEXEC"):
         flags |= os.O_CLOEXEC
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
     try:
         descriptor = os.open(tmp, flags, 0o600)
         with os.fdopen(descriptor, "w", encoding="utf-8") as f:
@@ -155,11 +159,30 @@ def _read_json_file(path: str) -> dict:
     if not path or not os.path.exists(path):
         return {}
     try:
-        with open(path, "r", encoding="utf-8") as f:
-            raw = f.read()
-    except UnicodeDecodeError:
-        with open(path, "r", encoding="gbk") as f:
-            raw = f.read()
+        if os.path.islink(path):
+            return {}
+        flags = os.O_RDONLY
+        if hasattr(os, "O_CLOEXEC"):
+            flags |= os.O_CLOEXEC
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        descriptor = os.open(path, flags)
+        try:
+            file_stat = os.fstat(descriptor)
+            if not stat.S_ISREG(file_stat.st_mode) or int(file_stat.st_size) > 4 * 1024 * 1024:
+                return {}
+            with os.fdopen(descriptor, "rb") as f:
+                descriptor = None
+                raw_bytes = f.read(4 * 1024 * 1024 + 1)
+        finally:
+            if descriptor is not None:
+                os.close(descriptor)
+        if len(raw_bytes) > 4 * 1024 * 1024:
+            return {}
+        try:
+            raw = raw_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            raw = raw_bytes.decode("gbk")
     except Exception:
         return {}
 
@@ -597,7 +620,11 @@ def _cleanup_partial_extract(abs_path: str) -> None:
         if os.path.exists(abs_path):
             os.remove(abs_path)
     except Exception:
-        logger.debug("cleanup partial extract failed path=%r", abs_path, exc_info=True)
+        logger.debug(
+            "cleanup partial extract failed path=%r",
+            safe_log_text(abs_path, max_len=256),
+            exc_info=True,
+        )
 
 
 def _extract_file_entry(zf, info, abs_path: str, *, max_file_bytes: int, max_total_bytes: int, extracted_bytes: int) -> int:

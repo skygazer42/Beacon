@@ -41,6 +41,7 @@ from app.utils.CloudRemotePermissions import (
 from app.utils.CloudEdgeClient import CloudEdgeClient, CloudEdgeClientError
 from app.utils.DeploymentMode import is_cloud_mode
 from app.utils.SystemConfigHelper import get_int, get_value
+from app.utils.UploadSecurity import atomic_write_chunks
 from app.utils.Utils import gen_random_code_s
 from app.views import (
     AlarmView,
@@ -2502,6 +2503,7 @@ def api_license_upload(request):
 
 
 _CONTROL_OSD_ASSET_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
+MAX_CONTROL_OSD_ASSET_BYTES = 10 * 1024 * 1024
 
 
 def _control_osd_asset_base_url():
@@ -2636,6 +2638,12 @@ def api_control_osd_assets_upload(request):
     content_type = str(getattr(file_obj, "content_type", "") or "").strip().lower()
     if content_type and not content_type.startswith("image/"):
         return f_responseJson({"code": 0, "msg": "上传文件必须是图片", "data": _build_control_osd_assets_payload()})
+    declared_size = getattr(file_obj, "size", None)
+    try:
+        if declared_size is not None and (int(declared_size) < 1 or int(declared_size) > MAX_CONTROL_OSD_ASSET_BYTES):
+            return f_responseJson({"code": 0, "msg": "图片大小必须在 1 字节到 10MB 之间", "data": _build_control_osd_assets_payload()})
+    except (TypeError, ValueError):
+        return f_responseJson({"code": 0, "msg": "图片大小无效", "data": _build_control_osd_assets_payload()})
 
     from app.utils.Security import resolve_under_base
 
@@ -2643,16 +2651,21 @@ def api_control_osd_assets_upload(request):
         now = datetime.now()
         date_prefix = now.strftime("%Y%m%d")
         rel_dir = f"osd/{date_prefix}"
-        abs_dir = resolve_under_base(upload_root, rel_dir)
-        os.makedirs(abs_dir, exist_ok=True)
         rel_path = f"{rel_dir}/{now.strftime('%H%M%S')}_{gen_random_code_s(8)}{ext}"
         abs_path = resolve_under_base(upload_root, rel_path)
-        with open(abs_path, "wb") as handle:
-            for chunk in file_obj.chunks():
-                handle.write(chunk)
+        atomic_write_chunks(
+            abs_path,
+            file_obj.chunks(),
+            allowed_root=upload_root,
+            max_bytes=MAX_CONTROL_OSD_ASSET_BYTES,
+            media_extension=ext,
+        )
         asset = _control_osd_asset_row_from_rel_path(rel_path)
-    except Exception as exc:
+    except ValueError as exc:
         return f_responseJson({"code": 0, "msg": str(exc or "贴图上传失败"), "data": _build_control_osd_assets_payload()})
+    except Exception as exc:
+        logger.exception("control OSD upload failed error_type=%s", type(exc).__name__)
+        return f_responseJson({"code": 0, "msg": "贴图上传失败", "data": _build_control_osd_assets_payload()})
 
     payload = _build_control_osd_assets_payload()
     payload["asset"] = asset

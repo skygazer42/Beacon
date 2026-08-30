@@ -162,7 +162,9 @@ postgres:
   auth:
     database: beacon
     username: beacon
-    password: ''
+    # Intentionally unset: templates/secret.yaml uses Helm's `required` and
+    # refuses to render unless an operator supplies this or an existing Secret.
+    password: null
   service:
     port: 5432
   persistence:

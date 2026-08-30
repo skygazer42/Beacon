@@ -2416,7 +2416,11 @@ def _alarm_openadd_validate_media_path(raw, *, field_name: str) -> str:
     path = validate_upload_rel_path(path, required_prefix=UPLOAD_PREFIX_ALARM)
     abs_path = resolve_under_base(g_config.uploadDir, path)
     if not os.path.isfile(abs_path):
-        logger.warning("AlarmView.openAdd() dropping missing %r=%r", field_name, path)
+        logger.warning(
+            "AlarmView.openAdd() dropping missing %r=%r",
+            safe_log_text(field_name, max_len=64),
+            safe_log_text(path, max_len=256),
+        )
         return ""
     return path
 

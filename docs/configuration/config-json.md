@@ -75,13 +75,13 @@ icon: material/code-json
     |--------|------|--------|------|
     | `siteName` | string | 同 `name` 或 `"Beacon"` | 站点名称，显示在页面导航栏 |
     | `siteTitle` | string | `"Beacon 新一代 AI 视频分析系统"` | 浏览器标签页标题 |
-    | `siteLogo` | string | `"/static/images/logo.png"` | 站点 Logo 图片路径（支持相对路径和绝对 URL） |
+    | `siteLogo` | string | `"/static/images/logo.png"` | 站点 Logo 图片路径（本地仅允许 `/static/`、`/managed-upload/`，外部仅允许 HTTPS） |
     | `authorName` | string | `""` | 作者/公司名称，显示在页面底部 |
-    | `authorLink` | string | `""` | 作者/公司链接 |
+    | `authorLink` | string | `""` | 作者/公司链接（站内路径或 HTTPS URL） |
     | `siteIcp` | string | `""` | ICP 备案号（中国大陆部署时填写） |
-    | `customCss` | string | `""` | 自定义 CSS 代码，注入到页面 `<head>` 中 |
-    | `customScript` | string | `""` | 自定义 JavaScript 代码，注入到页面中 |
-    | `loginBg` | string | `""` | 登录页背景图片 URL |
+    | `customCss` | string | `""` | 自定义 CSS 资源 URL（仅允许本地 `/static/` 路径，不接受内联代码） |
+    | `customScript` | string | `""` | 自定义 JavaScript 资源 URL（仅允许本地 `/static/` 路径，不接受内联代码） |
+    | `loginBg` | string | `""` | 登录页背景图片 URL（本地受管路径或 HTTPS URL） |
     | `loginCaptchaEnabled` | bool | `false` | 是否启用登录验证码 :material-swap-horizontal: `BEACON_LOGIN_CAPTCHA_ENABLED` |
 
 ---

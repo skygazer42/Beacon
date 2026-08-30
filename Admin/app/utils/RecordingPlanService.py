@@ -7,7 +7,7 @@ from typing import Any, Dict, Optional, Tuple
 from django.db import close_old_connections
 
 from app.models import RecordingPlan, Stream
-from app.utils.SafeLog import safe_json_dumps
+from app.utils.SafeLog import safe_json_dumps, safe_log_text
 from app.utils.StreamRecording import get_stream_recorder
 
 
@@ -118,7 +118,10 @@ class RecordingPlanService:
 
         stream_url = self._resolve_stream_url(plan)
         if not stream_url:
-            logger.warning("RecordingPlan start skipped: stream_url empty, plan=%r", plan_code)
+            logger.warning(
+                "RecordingPlan start skipped: stream_url empty, plan=%r",
+                safe_log_text(plan_code, max_len=128),
+            )
             return
 
         key = f"plan_{plan_code}"
@@ -138,9 +141,17 @@ class RecordingPlanService:
         )
         if result.get("success"):
             self._active[plan_code] = key
-            logger.info("RecordingPlan started: plan=%r stream=%r", plan_code, str(getattr(plan, "stream_code", "")))
+            logger.info(
+                "RecordingPlan started: plan=%r stream=%r",
+                safe_log_text(plan_code, max_len=128),
+                safe_log_text(getattr(plan, "stream_code", ""), max_len=128),
+            )
         else:
-            logger.warning("RecordingPlan start failed: plan=%r msg=%r", plan_code, result.get("message"))
+            logger.warning(
+                "RecordingPlan start failed: plan=%r msg=%r",
+                safe_log_text(plan_code, max_len=128),
+                safe_log_text(result.get("message"), max_len=256),
+            )
 
     def _stop_plan(self, plan_code: str) -> Tuple[bool, str]:
         """停止计划。"""
@@ -158,7 +169,7 @@ class RecordingPlanService:
             logger.warning(
                 "RecordingPlan stop failed: %r",
                 safe_json_dumps(
-                    {"plan_code": plan_code, "message": message, "error": str(exc)},
+                    {"plan_code": plan_code, "message": message, "error_type": type(exc).__name__},
                     max_len=512,
                 ),
             )

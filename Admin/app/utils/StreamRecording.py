@@ -543,7 +543,7 @@ class StreamSnapshotter:
             return result.returncode == 0 and os.path.exists(save_path)
 
         except Exception as e:
-            logger.warning("FFmpeg capture failed: %s", e)
+            logger.warning("FFmpeg capture failed error_type=%s", type(e).__name__)
             return False
 
     def _capture_with_opencv(self, stream_url: str, save_path: str) -> bool:

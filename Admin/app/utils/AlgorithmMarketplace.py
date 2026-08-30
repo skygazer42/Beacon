@@ -1,13 +1,17 @@
 import json
+import logging
 import os
 import zipfile
 
 from app.models import AlgorithmModel
+from app.utils.SafeLog import safe_log_text
 
 
 PACKAGE_FORMAT = ".beacon-algo"
 METADATA_NAME = "metadata.json"
 REQUIRED_METADATA_FIELDS = ("code", "name", "version")
+MAX_METADATA_BYTES = 1024 * 1024
+logger = logging.getLogger(__name__)
 
 
 def _clean_text(value, limit: int = 0) -> str:
@@ -43,8 +47,14 @@ def _metadata_runtime(value) -> dict:
 def _read_package_metadata(package_path: str) -> dict:
     """读取算法包元数据。"""
     with zipfile.ZipFile(package_path, "r") as zf:
+        info = zf.getinfo(METADATA_NAME)
+        if int(info.file_size or 0) > MAX_METADATA_BYTES:
+            raise ValueError("metadata.json is too large")
         with zf.open(METADATA_NAME) as fp:
-            raw = fp.read().decode("utf-8")
+            raw = fp.read(MAX_METADATA_BYTES + 1)
+    if len(raw) > MAX_METADATA_BYTES:
+        raise ValueError("metadata.json is too large")
+    raw = raw.decode("utf-8")
     data = json.loads(raw)
     if not isinstance(data, dict):
         raise ValueError("metadata.json must be a JSON object")
@@ -136,7 +146,12 @@ def list_algorithm_packages(package_dir: str) -> dict:
         try:
             items.append(parse_algorithm_package(package_path))
         except (OSError, KeyError, ValueError, zipfile.BadZipFile) as exc:
-            items.append(_error_package_item(package_path, str(exc)))
+            logger.warning(
+                "invalid algorithm package filename=%r error_type=%s",
+                safe_log_text(os.path.basename(package_path), max_len=180),
+                type(exc).__name__,
+            )
+            items.append(_error_package_item(package_path, "invalid algorithm package"))
 
     items = mark_algorithm_packages_installed(items)
     return {

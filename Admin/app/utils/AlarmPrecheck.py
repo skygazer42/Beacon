@@ -4,6 +4,7 @@ import os
 from typing import Any, Dict, Optional, Tuple
 
 import requests
+from app.utils.SafeLog import safe_log_text
 
 
 logger = logging.getLogger(__name__)
@@ -137,13 +138,17 @@ def _try_read_file_as_base64(abs_path: str, *, max_bytes: int = 5 * 1024 * 1024)
         if size <= 0:
             return ""
         if size > int(max_bytes):
-            logger.warning("AlarmPrecheck read file too large (%s bytes), skip base64: %s", size, path)
+            logger.warning(
+                "AlarmPrecheck read file too large (%s bytes), skip base64: %s",
+                int(size),
+                safe_log_text(path, max_len=256),
+            )
             return ""
         with open(path, "rb") as f:
             data = f.read()
         return base64.b64encode(data).decode("utf-8")
     except Exception as e:
-        logger.debug("AlarmPrecheck read file error: %s", e)
+        logger.debug("AlarmPrecheck read file error_type=%s", type(e).__name__)
         return ""
 
 
@@ -183,7 +188,8 @@ def _precheck_invalid_response_result(*, fail_open: bool) -> Tuple[bool, str]:
 
 def _precheck_exception_result(err: Exception, *, fail_open: bool) -> Tuple[bool, str]:
     """返回预检`exception`结果。"""
-    return _precheck_bool_result(fail_open, reason=f"precheck error: {err}")
+    logger.warning("alarm precheck request failed error_type=%s", type(err).__name__)
+    return _precheck_bool_result(fail_open, reason="precheck service unavailable")
 
 
 def _precheck_response_body(res) -> Dict[str, Any]:

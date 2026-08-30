@@ -46,8 +46,8 @@ class SystemSettingsTest(TestCase):
         SystemConfig.objects.create(key="authorName", value="ACME", remark="作者名称")
         SystemConfig.objects.create(key="authorLink", value="https://acme.example.com", remark="作者链接")
         SystemConfig.objects.create(key="siteIcp", value="粤ICP备000000号", remark="ICP备案")
-        SystemConfig.objects.create(key="customCss", value=".demo{color:red;}", remark="自定义CSS")
-        SystemConfig.objects.create(key="customScript", value="console.log('demo')", remark="自定义脚本")
+        SystemConfig.objects.create(key="customCss", value="/static/css/custom.css", remark="自定义CSS")
+        SystemConfig.objects.create(key="customScript", value="/static/js/custom.js", remark="自定义脚本")
         SystemConfig.objects.create(key="loginBg", value="/static/images/bg.png", remark="登录背景")
 
         rf = RequestFactory()
@@ -71,10 +71,33 @@ class SystemSettingsTest(TestCase):
         self.assertEqual(ctx.get("author_name"), "ACME")
         self.assertEqual(ctx.get("author_link"), "https://acme.example.com")
         self.assertEqual(ctx.get("site_icp"), "粤ICP备000000号")
-        self.assertEqual(ctx.get("custom_css"), ".demo{color:red;}")
-        self.assertEqual(ctx.get("custom_script"), "console.log('demo')")
+        self.assertEqual(ctx.get("custom_css"), "/static/css/custom.css")
+        self.assertEqual(ctx.get("custom_script"), "/static/js/custom.js")
         self.assertEqual(ctx.get("login_bg"), "/static/images/bg.png")
         self.assertEqual(ctx.get("deployment_mode"), "edge")
+
+    def test_branding_context_rejects_unsafe_persisted_urls(self):
+        unsafe_values = {
+            "siteLogo": "javascript:alert(1)",
+            "authorLink": "http://insecure.example.com",
+            "customCss": "data:text/css,body{}",
+            "customScript": "https://cdn.example.com/plugin.js",
+            "loginBg": "//tracker.example.com/pixel.png",
+            "docsUrl": "javascript:alert(2)",
+            "downloadUrl": "/%2e%2e/private/file",
+        }
+        for key, value in unsafe_values.items():
+            SystemConfig.objects.create(key=key, value=value, remark="unsafe test value")
+
+        ctx = branding(RequestFactory().get("/"))
+
+        self.assertEqual(ctx.get("site_logo"), "/static/images/logo.png")
+        self.assertEqual(ctx.get("author_link"), "")
+        self.assertEqual(ctx.get("custom_css"), "")
+        self.assertEqual(ctx.get("custom_script"), "")
+        self.assertEqual(ctx.get("login_bg"), "")
+        self.assertEqual(ctx.get("docs_url"), "")
+        self.assertEqual(ctx.get("download_url"), "")
 
     def test_save_system_settings_persists_db_and_updates_config_json(self):
         payload = {
@@ -84,8 +107,8 @@ class SystemSettingsTest(TestCase):
             "authorName": "Beacon Team X",
             "authorLink": "https://example.com/x",
             "siteIcp": "京ICP备123456号",
-            "customCss": "body{background:#000;}",
-            "customScript": "window.__beacon=1;",
+            "customCss": "/static/css/custom.css?v=1",
+            "customScript": "/static/js/custom.js?v=1",
             "loginBg": "/static/images/login.png",
             "alarmVideoSeconds": "7",
             "alarmSegmentMaxSeconds": "120",
@@ -103,11 +126,30 @@ class SystemSettingsTest(TestCase):
         self.assertEqual(SystemConfig.objects.filter(key="alarmVideoSeconds").first().value, "7")
         self.assertEqual(SystemConfig.objects.filter(key="alarmSegmentMaxSeconds").first().value, "120")
         self.assertEqual(SystemConfig.objects.filter(key="siteIcp").first().value, "京ICP备123456号")
-        self.assertEqual(SystemConfig.objects.filter(key="customCss").first().value, "body{background:#000;}")
+        self.assertEqual(SystemConfig.objects.filter(key="customCss").first().value, "/static/css/custom.css?v=1")
         self.assertEqual(SystemConfig.objects.filter(key="modelCacheSeconds").first().value, "120")
 
         runtime_values = mocked_update.call_args[0][0]
         self.assertEqual(runtime_values.get("alarmSegmentMaxSeconds"), 120)
+
+    def test_save_system_settings_rejects_unsafe_ui_urls(self):
+        unsafe_payloads = (
+            {"siteLogo": "http://insecure.example.com/logo.png"},
+            {"loginBg": "//tracker.example.com/background.png"},
+            {"authorLink": "javascript:alert(1)"},
+            {"docsUrl": "data:text/html,unsafe"},
+            {"downloadUrl": "/static/%2e%2e/private/file"},
+            {"customCss": "https://cdn.example.com/custom.css"},
+            {"customScript": "/managed-upload/plugin.js"},
+        )
+
+        for payload in unsafe_payloads:
+            with self.subTest(payload=payload):
+                response = self.client.post("/api/app-shell/config/action/system/save", data=payload)
+                body = json.loads(response.content.decode("utf-8"))
+                self.assertEqual(body.get("code"), 0)
+                key = next(iter(payload))
+                self.assertFalse(SystemConfig.objects.filter(key=key).exists())
 
     def test_save_system_settings_persists_software_auto_start_to_config_json(self):
         payload = {

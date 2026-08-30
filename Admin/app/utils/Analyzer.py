@@ -31,6 +31,15 @@ def _requests_post(**kwargs):
     return requests.post(**_request_kwargs_without_env_proxy(kwargs))
 
 
+def _analyzer_request_error(operation: str, exc: Exception) -> str:
+    logger.warning(
+        "Analyzer request failed operation=%s error_type=%s",
+        str(operation or "unknown"),
+        type(exc).__name__,
+    )
+    return "analyzer request failed"
+
+
 def _parse_analyzer_json_response(response, *, service_name="Analyzer"):
     """Return parsed Analyzer JSON or a readable transport error message."""
     status_code = int(getattr(response, "status_code", 0) or 0)
@@ -39,9 +48,14 @@ def _parse_analyzer_json_response(response, *, service_name="Analyzer"):
         return None, f"{service_name} HTTP {status_code} empty response"
     try:
         return response.json(), ""
-    except Exception:
-        snippet = text.strip().replace("\n", " ")[:200]
-        return None, f"{service_name} HTTP {status_code} non-JSON response: {snippet}"
+    except Exception as exc:
+        logger.warning(
+            "Analyzer returned a non-JSON response service=%s status=%s error_type=%s",
+            str(service_name or "Analyzer"),
+            status_code,
+            type(exc).__name__,
+        )
+        return None, f"{service_name} HTTP {status_code} non-JSON response"
 
 _CONTROL_ADD_ARGUMENT_NAMES = (
     "code",
@@ -367,7 +381,7 @@ class Analyzer():
             self.analyzer_server_state = True
         except Exception as e:
             self.analyzer_server_state = False
-            __msg = str(e)
+            __msg = _analyzer_request_error("controls", e)
         return __state, __msg, __data
 
     def control(self, code):
@@ -398,7 +412,7 @@ class Analyzer():
             self.analyzer_server_state = True
         except Exception as e:
             self.analyzer_server_state = False
-            __msg = str(e)
+            __msg = _analyzer_request_error("control", e)
 
         return __state, __msg, __control
 
@@ -482,7 +496,7 @@ class Analyzer():
             self.analyzer_server_state = True
         except Exception as e:
             self.analyzer_server_state = False
-            __msg = str(e)
+            __msg = _analyzer_request_error("algorithm_load", e)
 
         return __state, __msg
 
@@ -509,7 +523,7 @@ class Analyzer():
             self.analyzer_server_state = True
         except Exception as e:
             self.analyzer_server_state = False
-            __msg = str(e)
+            __msg = _analyzer_request_error("algorithm_unload", e)
 
         return __state, __msg
 
@@ -616,7 +630,7 @@ class Analyzer():
             self.analyzer_server_state = True
         except Exception as e:
             self.analyzer_server_state = False
-            __msg = str(e)
+            __msg = _analyzer_request_error("algorithm_list", e)
 
         return __state, __msg, __items
 
@@ -715,7 +729,7 @@ class Analyzer():
             self.analyzer_server_state = True
         except Exception as e:
             self.analyzer_server_state = False
-            __msg = str(e)
+            __msg = _analyzer_request_error("algorithm_test_infer", e)
 
         return __state, __msg, __data
 
@@ -761,7 +775,7 @@ class Analyzer():
             self.analyzer_server_state = True
         except Exception as e:
             self.analyzer_server_state = False
-            __msg = str(e)
+            __msg = _analyzer_request_error("device_info", e)
 
         self._ops_probe_update_cache("_device_info_cache", __state, __msg, __data)
         return __state, __msg, __data
@@ -805,7 +819,7 @@ class Analyzer():
             self.analyzer_server_state = True
         except Exception as e:
             self.analyzer_server_state = False
-            __msg = str(e)
+            __msg = _analyzer_request_error("license_info", e)
 
         self._ops_probe_update_cache("_license_info_cache", __state, __msg, __data)
         return __state, __msg, __data
@@ -849,7 +863,7 @@ class Analyzer():
             self.analyzer_server_state = True
         except Exception as e:
             self.analyzer_server_state = False
-            __msg = str(e)
+            __msg = _analyzer_request_error("resource_info", e)
 
         self._ops_probe_update_cache("_resource_info_cache", __state, __msg, __data)
         return __state, __msg, __data
@@ -895,7 +909,7 @@ class Analyzer():
             self.analyzer_server_state = True
         except Exception as e:
             self.analyzer_server_state = False
-            __msg = str(e)
+            __msg = _analyzer_request_error("scheduler_info", e)
 
         return __state, __msg, __stats
 
@@ -1008,7 +1022,7 @@ class Analyzer():
             self.analyzer_server_state = True
         except Exception as e:
             self.analyzer_server_state = False
-            __msg = str(e)
+            __msg = _analyzer_request_error("control_add", e)
 
         return __state, __msg
 
@@ -1052,7 +1066,7 @@ class Analyzer():
             self.analyzer_server_state = True
         except Exception as e:
             self.analyzer_server_state = False
-            __msg = str(e)
+            __msg = _analyzer_request_error("large_model_calcu", e)
 
         return __state, __msg, __content
 
@@ -1084,7 +1098,7 @@ class Analyzer():
             self.analyzer_server_state = True
         except Exception as e:
             self.analyzer_server_state = False
-            __msg = str(e)
+            __msg = _analyzer_request_error("face_list", e)
         return __state, __msg, __data
 
     def face_add(self, payload: dict, *, timeout_seconds=None):
@@ -1111,7 +1125,7 @@ class Analyzer():
             self.analyzer_server_state = True
         except Exception as e:
             self.analyzer_server_state = False
-            __msg = str(e)
+            __msg = _analyzer_request_error("face_add", e)
         return __state, __msg, __data
 
     def face_delete(self, payload: dict, *, timeout_seconds=None):
@@ -1138,7 +1152,7 @@ class Analyzer():
             self.analyzer_server_state = True
         except Exception as e:
             self.analyzer_server_state = False
-            __msg = str(e)
+            __msg = _analyzer_request_error("face_delete", e)
         return __state, __msg, __data
 
     def face_search(self, payload: dict, *, timeout_seconds=None):
@@ -1166,7 +1180,7 @@ class Analyzer():
             self.analyzer_server_state = True
         except Exception as e:
             self.analyzer_server_state = False
-            __msg = str(e)
+            __msg = _analyzer_request_error("face_search", e)
         return __state, __msg, __data
 
     def face_enable(self, *, timeout_seconds=None):
@@ -1194,7 +1208,7 @@ class Analyzer():
             self.analyzer_server_state = True
         except Exception as e:
             self.analyzer_server_state = False
-            __msg = str(e)
+            __msg = _analyzer_request_error("face_enable", e)
         return __state, __msg, __data
 
     def face_disable(self, *, timeout_seconds=None):
@@ -1222,7 +1236,7 @@ class Analyzer():
             self.analyzer_server_state = True
         except Exception as e:
             self.analyzer_server_state = False
-            __msg = str(e)
+            __msg = _analyzer_request_error("face_disable", e)
         return __state, __msg, __data
 
     # ============================================================
@@ -1254,6 +1268,6 @@ class Analyzer():
             self.analyzer_server_state = True
         except Exception as e:
             self.analyzer_server_state = False
-            __msg = str(e)
+            __msg = _analyzer_request_error("control_cancel", e)
 
         return __state, __msg

@@ -25,6 +25,7 @@ from app.utils.AlgorithmRegistry import (
 from app.utils.Utils import buildPageLabels
 from app.utils.UploadPath import resolve_upload_url_to_abs_path, split_paired_path
 from app.utils.OutboundUrl import validate_outbound_http_url
+from app.utils.SafeLog import safe_log_text
 
 # 模型和动态库上传目录
 _UPLOAD_BASE_DIR = getattr(g_config, "uploadDir", "") or os.path.join(
@@ -184,10 +185,18 @@ def _xor_encrypt_stream(src_abs: str, dst_abs: str, *, key: str, trial_seconds: 
     idx = 0
     klen = len(key_bytes)
     chunk_size = 4 * 1024 * 1024
+    descriptor = None
     try:
-        with open(src_abs, "rb") as src, open(tmp_abs, "xb") as dst:
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+        if hasattr(os, "O_CLOEXEC"):
+            flags |= os.O_CLOEXEC
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        descriptor = os.open(tmp_abs, flags, 0o600)
+        with open(src_abs, "rb") as src, os.fdopen(descriptor, "wb") as dst:
+            descriptor = None
             if os.name != "nt":
-                os.fchmod(dst.fileno(), 0o640)
+                os.fchmod(dst.fileno(), 0o600)
             dst.write(_ENC_V2_MAGIC)
             dst.write(header_fixed)
             if cid_bytes:
@@ -203,13 +212,20 @@ def _xor_encrypt_stream(src_abs: str, dst_abs: str, *, key: str, trial_seconds: 
                 idx += len(buf)
                 dst.write(buf)
             dst.flush()
+            os.fsync(dst.fileno())
         os.replace(tmp_abs, dst_abs)
     finally:
+        if descriptor is not None:
+            os.close(descriptor)
         try:
             if os.path.exists(tmp_abs):
                 os.remove(tmp_abs)
         except Exception:
-            logger.debug("cleanup temporary encrypted model file failed path=%r", tmp_abs, exc_info=True)
+            logger.debug(
+                "cleanup temporary encrypted model file failed path=%r",
+                safe_log_text(tmp_abs, max_len=256),
+                exc_info=True,
+            )
 
 
 def _maybe_auto_encrypt_file(abs_path: str, *, url_path: str, key: str, suffix: str, custom_id: str):
@@ -249,7 +265,11 @@ def _maybe_auto_encrypt_file(abs_path: str, *, url_path: str, key: str, suffix: 
     try:
         os.remove(abs_path)
     except Exception:
-        logger.debug("remove original model file after encryption failed path=%r", abs_path, exc_info=True)
+        logger.debug(
+            "remove original model file after encryption failed path=%r",
+            safe_log_text(abs_path, max_len=256),
+            exc_info=True,
+        )
 
     return dst_abs, dst_url
 
@@ -304,18 +324,17 @@ def save_uploaded_file(file, code, target_dir, *, filename_stem=None, url_subdir
 
     # Mutable upload directories are created only when an upload is handled.
     # Importing the URL configuration must remain safe on a read-only image.
-    os.makedirs(target_real, mode=0o750, exist_ok=True)
+    os.makedirs(target_real, mode=0o700, exist_ok=True)
     if os.path.islink(target_real):
         raise ValueError("algorithm upload target is invalid")
     if os.name != "nt":
-        # Directory traversal requires execute; owner rwx + service-group rx is intentional.
-        os.chmod(target_real, 0o750)  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+        os.chmod(target_real, 0o700)  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
     file_path = resolve_direct_child(target_real, filename)
     tmp_path = resolve_direct_child(target_real, f".{filename}.{secrets.token_hex(8)}.part")
     try:
         with open(tmp_path, "xb") as destination:
             if os.name != "nt":
-                os.fchmod(destination.fileno(), 0o640)
+                os.fchmod(destination.fileno(), 0o600)
             written = 0
             for chunk in file.chunks():
                 written += len(chunk)
@@ -386,7 +405,8 @@ def _algorithm_index_analyzer_lookup():
                 if code:
                     analyzer_by_code[code] = item or {}
     except Exception as e:
-        analyzer_msg = str(e)
+        logger.warning("algorithm index analyzer lookup failed error_type=%s", type(e).__name__)
+        analyzer_msg = "analyzer request failed"
     return analyzer_state, analyzer_msg, analyzer_by_code
 
 
@@ -967,8 +987,11 @@ def _algorithm_add_post_response(request):
         )
         msg = "添加成功"
         is_success = True
-    except Exception as exc:
+    except ValueError as exc:
         msg = str(exc)
+    except Exception as exc:
+        logger.exception("algorithm add failed error_type=%s", type(exc).__name__)
+        msg = "添加失败，请稍后重试"
 
     redirect_url = _algorithm_form_message_redirect(
         is_success=is_success,
@@ -1038,8 +1061,11 @@ def _algorithm_edit_post_response(request):
         )
         msg = "编辑成功"
         is_success = True
-    except Exception as exc:
+    except ValueError as exc:
         msg = str(exc)
+    except Exception as exc:
+        logger.exception("algorithm edit failed error_type=%s", type(exc).__name__)
+        msg = "编辑失败，请稍后重试"
 
     redirect_url = _algorithm_form_message_redirect(
         is_success=is_success,

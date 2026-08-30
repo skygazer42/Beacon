@@ -1,7 +1,8 @@
-import base64
 import json
 import logging
+import math
 import os
+import secrets
 import time
 from datetime import datetime
 
@@ -9,11 +10,16 @@ from django.shortcuts import render
 
 from app.models import Alarm, Stream
 from app.utils.SafeLog import safe_log_text
+from app.utils.UploadSecurity import atomic_write_bytes, decode_base64_limited, detect_raster_extension
 from app.views.ViewsBase import f_responseJson, g_config
 from framework.settings import PROJECT_VERSION
 
 
 logger = logging.getLogger(__name__)
+MAX_CALLBACK_IMAGE_BYTES = 20 * 1024 * 1024
+MAX_CALLBACK_DETECTIONS = 1000
+MAX_CALLBACK_FRAME_INDEX = (1 << 63) - 1
+MAX_CALLBACK_TIMESTAMP = 253402300799
 
 MSG_METHOD_NOT_ALLOWED = "Method not allowed"
 def _algo_callback_error(msg: str):
@@ -27,8 +33,10 @@ def _validate_detection_confidence(idx: int, detection: dict):
         return None
 
     conf = detection.get("confidence")
-    if not isinstance(conf, (int, float)):
+    if isinstance(conf, bool) or not isinstance(conf, (int, float)):
         return f"detections[{idx}].confidence must be a number"
+    if not math.isfinite(float(conf)):
+        return f"detections[{idx}].confidence must be finite"
     if conf < 0 or conf > 1:
         return f"detections[{idx}].confidence must be between 0 and 1"
     return None
@@ -44,8 +52,10 @@ def _validate_detection_bbox(idx: int, detection: dict):
         return f"detections[{idx}].bbox must be an array of 4 numbers [x1, y1, x2, y2]"
 
     for i, val in enumerate(bbox):
-        if not isinstance(val, (int, float)):
+        if isinstance(val, bool) or not isinstance(val, (int, float)):
             return f"detections[{idx}].bbox[{i}] must be a number"
+        if not math.isfinite(float(val)):
+            return f"detections[{idx}].bbox[{i}] must be finite"
 
     return None
 
@@ -59,6 +69,13 @@ def _validate_detection_item(idx: int, detection):
         return f"detections[{idx}].class_name is required"
     if not isinstance(detection.get("class_name"), str):
         return f"detections[{idx}].class_name must be a string"
+    class_name = detection.get("class_name")
+    if not class_name.strip():
+        return f"detections[{idx}].class_name is required"
+    if len(class_name) > 128:
+        return f"detections[{idx}].class_name is too long"
+    if any(ord(char) < 32 or ord(char) == 127 for char in class_name):
+        return f"detections[{idx}].class_name contains control characters"
 
     err = _validate_detection_confidence(idx, detection)
     if err:
@@ -75,19 +92,36 @@ def _parse_algorithm_callback_payload(data: dict):
         return None, "control_code is required"
     if not isinstance(control_code, str) or len(control_code) == 0:
         return None, "control_code must be a non-empty string"
+    try:
+        from app.utils.Security import validate_control_code
+
+        control_code = validate_control_code(control_code)
+    except ValueError as exc:
+        return None, str(exc)
 
     # 可选字段验证
     frame_index = data.get("frame_index", 0)
-    if not isinstance(frame_index, int) or frame_index < 0:
+    if (
+        isinstance(frame_index, bool)
+        or not isinstance(frame_index, int)
+        or not 0 <= frame_index <= MAX_CALLBACK_FRAME_INDEX
+    ):
         return None, "frame_index must be a non-negative integer"
 
     timestamp = data.get("timestamp", 0)
-    if not isinstance(timestamp, (int, float)) or timestamp < 0:
+    if (
+        isinstance(timestamp, bool)
+        or not isinstance(timestamp, (int, float))
+        or not math.isfinite(float(timestamp))
+        or not 0 <= timestamp <= MAX_CALLBACK_TIMESTAMP
+    ):
         return None, "timestamp must be a non-negative number"
 
     detections = data.get("detections", [])
     if not isinstance(detections, list):
         return None, "detections must be an array"
+    if len(detections) > MAX_CALLBACK_DETECTIONS:
+        return None, "detections contains too many items"
 
     for idx, detection in enumerate(detections):
         err = _validate_detection_item(idx, detection)
@@ -101,6 +135,9 @@ def _parse_algorithm_callback_payload(data: dict):
     image_base64 = data.get("image_base64", "")
     if not isinstance(image_base64, str):
         return None, "image_base64 must be a string"
+    max_encoded = ((MAX_CALLBACK_IMAGE_BYTES + 2) // 3) * 4
+    if len(image_base64) > max_encoded + 256:
+        return None, "image_base64 is too large"
 
     return (control_code, frame_index, timestamp, detections, trigger_alarm, image_base64), None
 
@@ -130,19 +167,24 @@ def _save_callback_alarm_image(control_code, image_base64, image_ext="jpg"):
         return ""
 
     control_code = validate_control_code(control_code)
-    value = str(image_base64 or "").strip()
-    if "," in value:
-        value = value.split(",", 1)[1]
-    data_bytes = base64.b64decode(value)
+    data_bytes = decode_base64_limited(image_base64, max_bytes=MAX_CALLBACK_IMAGE_BYTES)
+    detected_ext = detect_raster_extension(data_bytes[:16])
+    requested_ext = str(image_ext or "").strip().lower().lstrip(".")
+    if requested_ext not in ("", "jpg", "jpeg") and requested_ext != detected_ext:
+        raise ValueError("callback image extension does not match its content")
 
     day = datetime.now().strftime("%Y%m%d")
-    filename = f"img_{int(time.time() * 1000)}.{str(image_ext or 'jpg').strip('.').lower() or 'jpg'}"
+    filename = f"img_{time.time_ns()}_{secrets.token_hex(6)}.{detected_ext}"
     rel_path = f"alarm/{control_code}/{day}/{filename}"
     rel_path = validate_upload_rel_path(rel_path, required_prefix="alarm/")
     abs_path = resolve_under_base(g_config.uploadDir, rel_path)
-    os.makedirs(os.path.dirname(abs_path), exist_ok=True)
-    with open(abs_path, "wb") as f:
-        f.write(data_bytes)
+    atomic_write_bytes(
+        abs_path,
+        data_bytes,
+        allowed_root=g_config.uploadDir,
+        max_bytes=MAX_CALLBACK_IMAGE_BYTES,
+        media_extension=detected_ext,
+    )
     return rel_path
 
 
@@ -388,7 +430,8 @@ def api_algorithm_callback(request):
     except json.JSONDecodeError:
         return _algo_callback_error("Invalid JSON format")
     except Exception as e:
-        return _algo_callback_error(f"处理失败: {str(e)}")
+        logger.exception("algorithm callback parse failed error_type=%s", type(e).__name__)
+        return _algo_callback_error("处理失败")
 
     parsed, err = _parse_algorithm_callback_payload(data if isinstance(data, dict) else {})
     if err:
@@ -405,10 +448,10 @@ def api_algorithm_callback(request):
 
         logger.debug(
             "[算法回调] control=%r frame=%r detections=%s alarm=%r",
-            control_code,
-            frame_index,
+            safe_log_text(control_code, max_len=64),
+            int(frame_index),
             len(detections),
-            trigger_alarm,
+            bool(trigger_alarm),
         )
 
         if trigger_alarm:
@@ -423,7 +466,8 @@ def api_algorithm_callback(request):
         return f_responseJson({"code": 1000, "msg": "success"})
 
     except Exception as e:
-        return _algo_callback_error(f"处理失败: {str(e)}")
+        logger.exception("algorithm callback failed error_type=%s", type(e).__name__)
+        return _algo_callback_error("处理失败")
 api_algorithmCallback = api_algorithm_callback  # pragma: no cover - compatibility alias
 
 

@@ -9,6 +9,11 @@ from django.shortcuts import render
 from app.models import ConfigHistorySnapshot
 from app.utils.ConfigHistory import apply_system_snapshot, build_system_snapshot, record_system_change, snapshot_equals, snapshot_payload
 from app.utils.SystemConfigHelper import get_value, set_value
+from app.utils.UiUrlPolicy import (
+    normalize_ui_image_url,
+    normalize_ui_link_url,
+    normalize_ui_static_asset_url,
+)
 from app.views.ViewsBase import f_parsePostParams, f_responseJson, g_config, getUser
 from framework.settings import BASE_DIR
 from runtime_permissions import write_private_text_atomic
@@ -141,6 +146,16 @@ _STRING_LIMITS = {
     "webrtcStunUrls": 2000,
     "cloudBaseUrl": 500,
     "cloudEdgeToken": 4096,
+}
+
+_UI_URL_NORMALIZERS = {
+    "siteLogo": (normalize_ui_image_url, "siteLogo must be a local image path or HTTPS URL"),
+    "loginBg": (normalize_ui_image_url, "loginBg must be a local image path or HTTPS URL"),
+    "authorLink": (normalize_ui_link_url, "authorLink must be a local path or HTTPS URL"),
+    "docsUrl": (normalize_ui_link_url, "docsUrl must be a local path or HTTPS URL"),
+    "downloadUrl": (normalize_ui_link_url, "downloadUrl must be a local path or HTTPS URL"),
+    "customCss": (normalize_ui_static_asset_url, "customCss must be a local /static/ URL"),
+    "customScript": (normalize_ui_static_asset_url, "customScript must be a local /static/ URL"),
 }
 
 _DEFAULTS = {
@@ -380,6 +395,14 @@ def _normalize_sanitized_values(values: dict, posted_keys) -> None:
         suffix = ".enc"
     values["modelEncryptSuffix"] = suffix
 
+    posted = set(posted_keys or ())
+    for key, (normalizer, error_message) in _UI_URL_NORMALIZERS.items():
+        raw = str(values.get(key) or "").strip()
+        normalized = normalizer(raw)
+        if key in posted and raw and not normalized:
+            raise ValueError(error_message)
+        values[key] = normalized
+
 
 
 def _sanitize_values(params, posted_keys):
@@ -469,7 +492,10 @@ def api_save_system(request):
     before_snapshot = build_system_snapshot()
     params = f_parsePostParams(request)
     posted_keys = set((params or {}).keys()) if isinstance(params, dict) else set()
-    values = _sanitize_values(params or {}, posted_keys)
+    try:
+        values = _sanitize_values(params or {}, posted_keys)
+    except ValueError as exc:
+        return f_responseJson({"code": 0, "msg": str(exc)})
 
     err = _validate_required_when_enabled(values)
     if err:

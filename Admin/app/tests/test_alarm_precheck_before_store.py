@@ -27,7 +27,7 @@ class AlarmPrecheckBeforeStoreTest(TestCase):
                 payload = {
                     "control_code": "C001",
                     "desc": "precheck filter",
-                    "image_base64": base64.b64encode(b"img-bytes-precheck").decode("utf-8"),
+                    "image_base64": base64.b64encode(b"\xff\xd8\xffimg-bytes-precheck").decode("utf-8"),
                     "image_ext": "jpg",
                 }
 
@@ -70,7 +70,7 @@ class AlarmPrecheckBeforeStoreTest(TestCase):
         with mock.patch("app.utils.AlarmPrecheck.requests.post", side_effect=RuntimeError("offline")):
             self.assertEqual(
                 AlarmPrecheck.should_store_alarm(config, control_code="c1", desc="alarm"),
-                (False, "precheck error: offline"),
+                (False, "precheck service unavailable"),
             )
 
         unavailable = SimpleNamespace(status_code=503, json=lambda: {}, text="")

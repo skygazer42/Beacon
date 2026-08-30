@@ -14,7 +14,7 @@ from django.db import transaction
 from django.db.models import Q
 
 from app.utils.AlgorithmRegistry import resolve_algorithm_runtime_config
-from app.utils.SafeLog import safe_json_dumps
+from app.utils.SafeLog import safe_json_dumps, safe_log_text
 from app.utils.UploadPath import resolve_upload_url_to_abs_path, split_paired_path
 
 
@@ -1485,7 +1485,11 @@ def _control_quickset_save_log(control_code: str, *, operator: str, changed: dic
             detail=json.dumps(changed, ensure_ascii=False),
         )
     except Exception:
-        logger.debug("save control quick-set log failed control_code=%r", control_code, exc_info=True)
+        logger.debug(
+            "save control quick-set log failed control_code=%r",
+            safe_log_text(control_code, max_len=128),
+            exc_info=True,
+        )
 
 
 def api_open_quick_set(request):

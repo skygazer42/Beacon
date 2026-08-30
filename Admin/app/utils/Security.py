@@ -73,10 +73,10 @@ def resolve_under_base(base_dir, rel_path):
     raw_base = str(base_dir or "").strip()
     if not raw_base:
         raise ValueError("base_dir is required")
-    base = os.path.abspath(raw_base)
+    base = os.path.realpath(os.path.abspath(raw_base))
 
     normalized_rel = validate_upload_rel_path(rel_path)
-    target = os.path.abspath(os.path.join(base, normalized_rel))
+    target = os.path.realpath(os.path.abspath(os.path.join(base, normalized_rel)))
 
     if os.path.commonpath((base, target)) != base or target == base:
         raise ValueError("path escapes base_dir")

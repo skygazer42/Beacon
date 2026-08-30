@@ -268,7 +268,12 @@ def _cleanup_stale_login_lockout_rows(*, lockout_key: str, source_ip: str, now_t
             .delete()
         )
     except Exception:
-        logger.debug("login lockout cleanup failed key=%r ip=%r", lockout_key, source_ip, exc_info=True)
+        logger.debug(
+            "login lockout cleanup failed key=%r ip=%r",
+            safe_log_text(lockout_key, max_len=128),
+            safe_log_text(source_ip, max_len=64),
+            exc_info=True,
+        )
 
 
 def _strip_wrapping_quotes(raw_value) -> str:
@@ -532,7 +537,11 @@ def _write_login_security_audit_event(
             detail_json=json.dumps(detail, ensure_ascii=False),
         )
     except Exception:
-        logger.debug("login audit failure event write failed username=%r", username, exc_info=True)
+        logger.debug(
+            "login audit failure event write failed username=%r",
+            safe_log_text(username, max_len=128),
+            exc_info=True,
+        )
 
 
 def web_get_verify_code(request):
@@ -547,7 +556,11 @@ def web_get_verify_code(request):
         request.session[f"{_VERIFY_CODE_SESSION_KEY_PREFIX}{action}"] = str(code).strip().lower()
         request.session.modified = True
     except Exception:
-        logger.debug("captcha session write failed action=%r", action, exc_info=True)
+        logger.debug(
+            "captcha session write failed action=%r",
+            safe_log_text(action, max_len=64),
+            exc_info=True,
+        )
 
     svg = _build_captcha_svg(code)
     resp = HttpResponse(svg, content_type="image/svg+xml")
@@ -2055,7 +2068,11 @@ def _web_login_update_lockout_best_effort(lockout_state: dict, *, request, user,
             lockout_identifier=lockout_state["identifier"],
         )
     except Exception:
-        logger.debug("login lockout failure recording failed identifier=%r", lockout_state.get("identifier"), exc_info=True)
+        logger.debug(
+            "login lockout failure recording failed identifier=%r",
+            safe_log_text(lockout_state.get("identifier"), max_len=128),
+            exc_info=True,
+        )
 
 
 def _web_login_finalize_attempt(request, *, user, auth_ok: bool, totp_code: str, not_found_msg: str):

@@ -205,8 +205,8 @@ def api_upload(request):
             code = 1000
             msg = "上传成功"
 
-        except ValueError as exc:
-            msg = f"上传失败: {exc}"
+        except ValueError:
+            msg = "上传失败：文件不符合要求"
         except Exception:
             logger.exception("alarm sound upload failed")
             msg = "上传失败，请稍后重试"

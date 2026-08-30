@@ -33,6 +33,7 @@ from urllib.parse import urlsplit, urlunsplit
 from app.utils.SafeLog import safe_json_dumps, safe_log_text
 from app.utils.OutboundUrl import validate_outbound_http_url
 from app.utils.SystemConfigHelper import get_int, get_value
+from app.utils.UploadSecurity import atomic_write_bytes, atomic_write_chunks, decode_base64_limited
 from app.utils.LicenseManager import extract_license_runtime_policy_from_json
 from framework.settings import PROJECT_ADMIN_START_TIMESTAMP, PROJECT_BUILT, PROJECT_FLAG, PROJECT_UA, PROJECT_VERSION
 
@@ -56,6 +57,8 @@ EVENT_LICENSE_LEASE_RENEW = "license.lease.renew"
 EVENT_LICENSE_LEASE_RELEASE = "license.lease.release"
 
 ALARM_UPLOAD_PREFIX = "alarm/"
+MAX_ALARM_IMAGE_UPLOAD_BYTES = 20 * 1024 * 1024
+MAX_ALARM_VIDEO_UPLOAD_BYTES = 128 * 1024 * 1024
 DEFAULT_UPLOAD_URL_PREFIX = "/static/upload/"
 DEFAULT_OSD_FONT_COLOR = "255,255,255"
 MSG_ALARM_ID_LIST_EMPTY = "告警 ID 列表为空"
@@ -3719,8 +3722,11 @@ def _upload_alarm_validate_control_code(control_code: str) -> str:
 
     try:
         return validate_control_code(control_code)
-    except Exception as e:
-        raise ValueError(str(e))
+    except ValueError:
+        raise
+    except Exception as exc:
+        logger.warning("alarm multipart upload failed error_type=%s", type(exc).__name__)
+        raise ValueError("media upload failed") from exc
 
 
 def _upload_alarm_validate_existing_rel_path(rel_path: str) -> str:
@@ -3863,21 +3869,31 @@ def _upload_alarm_save_uploaded_file(*, file_obj, control_code: str, prefix: str
     ext = (ext or str(default_ext or "")).strip(".").lower()
     if ext not in allowed_exts:
         raise ValueError(f"{prefix}_file extension not allowed: {ext}")
+    max_bytes = MAX_ALARM_IMAGE_UPLOAD_BYTES if prefix == "img" else MAX_ALARM_VIDEO_UPLOAD_BYTES
+    declared_size = getattr(file_obj, "size", None)
+    if declared_size is not None:
+        try:
+            declared_size_int = int(declared_size)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{prefix}_file size is invalid") from exc
+        if declared_size_int < 1 or declared_size_int > max_bytes:
+            raise ValueError(f"{prefix}_file exceeds the maximum size")
 
     day = datetime.now().strftime("%Y%m%d")
-    filename = f"{prefix}_{int(time.time()*1000)}.{ext}"
+    filename = f"{prefix}_{time.time_ns()}_{uuid.uuid4().hex[:12]}.{ext}"
     rel_path = f"alarm/{control_code}/{day}/{filename}"
     rel_path = validate_upload_rel_path(rel_path, required_prefix=ALARM_UPLOAD_PREFIX)
     abs_path = resolve_under_base(g_config.uploadDir, rel_path)
-    os.makedirs(os.path.dirname(abs_path), exist_ok=True)
-
-    with open(abs_path, "wb") as f:
-        try:
-            for chunk in file_obj.chunks():
-                f.write(chunk)
-        except Exception:
-            # fallback for non-standard file objects
-            f.write(file_obj.read())
+    chunks_method = getattr(file_obj, "chunks", None)
+    if not callable(chunks_method):
+        raise ValueError(f"{prefix}_file does not support streaming upload")
+    atomic_write_chunks(
+        abs_path,
+        chunks_method(),
+        allowed_root=g_config.uploadDir,
+        max_bytes=max_bytes,
+        media_extension=ext,
+    )
     return rel_path
 
 
@@ -3887,23 +3903,21 @@ def _upload_alarm_save_base64(*, b64_str: str, control_code: str, prefix: str, e
 
     if not b64_str:
         return ""
-    try:
-        if "," in b64_str:
-            b64_str = b64_str.split(",", 1)[1]
-        data_bytes = base64.b64decode(b64_str)
-        day = datetime.now().strftime("%Y%m%d")
-        filename = f"{prefix}_{int(time.time()*1000)}.{ext}"
-        rel_path = f"alarm/{control_code}/{day}/{filename}"
-        rel_path = validate_upload_rel_path(rel_path, required_prefix=ALARM_UPLOAD_PREFIX)
-        abs_path = resolve_under_base(g_config.uploadDir, rel_path)
-        os.makedirs(os.path.dirname(abs_path), exist_ok=True)
-        with open(abs_path, "wb") as f:
-            f.write(data_bytes)
-        return rel_path
-    except Exception as e:
-        # Industrial default policy: prechecks/auxiliary storage should not block the main alarm pipeline.
-        logger.warning("api_uploadAlarm save_base64 error: %s", e)
-        return ""
+    max_bytes = MAX_ALARM_IMAGE_UPLOAD_BYTES if prefix == "img" else MAX_ALARM_VIDEO_UPLOAD_BYTES
+    data_bytes = decode_base64_limited(b64_str, max_bytes=max_bytes)
+    day = datetime.now().strftime("%Y%m%d")
+    filename = f"{prefix}_{time.time_ns()}_{uuid.uuid4().hex[:12]}.{ext}"
+    rel_path = f"alarm/{control_code}/{day}/{filename}"
+    rel_path = validate_upload_rel_path(rel_path, required_prefix=ALARM_UPLOAD_PREFIX)
+    abs_path = resolve_under_base(g_config.uploadDir, rel_path)
+    atomic_write_bytes(
+        abs_path,
+        data_bytes,
+        allowed_root=g_config.uploadDir,
+        max_bytes=max_bytes,
+        media_extension=ext,
+    )
+    return rel_path
 
 
 def _upload_alarm_resolve_image_abs_path_best_effort(values: dict, resolve_under_base) -> str:
@@ -4092,8 +4106,11 @@ def _upload_alarm_emit_event(*, alarm, values: dict):
             if dispatcher:
                 dispatcher.enqueue(payload)
     except AlarmOutboxEnqueueError:
-        event_id = str(payload.get("event_id", "") or "")
-        control_code = str(values.get("control_code", "") or getattr(alarm, "control_code", "") or "")
+        event_id = safe_log_text(payload.get("event_id", ""), max_len=128)
+        control_code = safe_log_text(
+            values.get("control_code", "") or getattr(alarm, "control_code", ""),
+            max_len=128,
+        )
         logger.exception(
             "Alarm outbox enqueue failed event_id=%s alarm_id=%s control_code=%s",
             event_id,
@@ -4264,7 +4281,7 @@ def _upload_alarm_apply_multipart_files(request, values: dict) -> dict:
 
 
 def _upload_alarm_apply_base64(values: dict) -> dict:
-    # base64 upload takes precedence (fail-open on decode errors)
+    # Base64 upload takes precedence and is validated before persistence.
     """执行上传告警应用Base64。"""
     if values.get("image_base64"):
         values["image_path"] = _upload_alarm_save_base64(
@@ -4305,7 +4322,8 @@ def _upload_alarm_handle_post(request, params: dict):
     except ValueError as e:
         return f_responseJson({"code": 0, "msg": str(e)})
     except Exception as e:
-        return f_responseJson({"code": 0, "msg": str(e), "data": {}})
+        logger.exception("api_uploadAlarm failed error_type=%s", type(e).__name__)
+        return f_responseJson({"code": 0, "msg": "internal error", "data": {}})
 
 
 def api_upload_alarm(request):

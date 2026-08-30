@@ -1,5 +1,10 @@
 from app.views import ViewsBase
 from app.utils.SystemConfigHelper import get_value
+from app.utils.UiUrlPolicy import (
+    normalize_ui_image_url,
+    normalize_ui_link_url,
+    normalize_ui_static_asset_url,
+)
 from django.conf import settings
 from django.contrib.auth.models import User
 
@@ -182,17 +187,22 @@ def _tenant_branding_overrides(tenant) -> dict:
     branding_obj = _parse_json_object(getattr(tenant, "branding_json", ""))
     overrides = {}
 
-    mapping = {
+    text_mapping = {
         "siteName": "site_name",
         "siteTitle": "site_title",
-        "siteLogo": "site_logo",
-        "loginBg": "login_bg",
     }
 
-    for json_key, context_key in mapping.items():
+    for json_key, context_key in text_mapping.items():
         v = str(branding_obj.get(json_key) or "").strip()
         if v:
             overrides[context_key] = v
+
+    site_logo = normalize_ui_image_url(branding_obj.get("siteLogo"))
+    if site_logo:
+        overrides["site_logo"] = site_logo
+    login_bg = normalize_ui_image_url(branding_obj.get("loginBg"))
+    if login_bg:
+        overrides["login_bg"] = login_bg
 
     theme_color = _sanitize_hex_color(str(branding_obj.get("themeColor") or ""))
     if theme_color:
@@ -206,19 +216,31 @@ def branding(request):
     cfg = ViewsBase.g_config
     bootstrap_is_staff, bootstrap_is_superuser = _session_admin_flags(request)
 
+    site_logo = normalize_ui_image_url(
+        _branding_value_with_cfg_fallback(cfg, "siteLogo", default="/static/images/logo.png")
+    ) or "/static/images/logo.png"
+
     context = {
         "debug_enabled": bool(getattr(settings, "DEBUG", False)),
         "site_name": _branding_value_with_cfg_fallback(cfg, "siteName", default="Beacon"),
         "site_title": _branding_value_with_cfg_fallback(cfg, "siteTitle", default="Beacon 新一代 AI 视频分析系统"),
-        "site_logo": _branding_value_with_cfg_fallback(cfg, "siteLogo", default="/static/images/logo.png"),
+        "site_logo": site_logo,
         "author_name": _branding_value("authorName", default=getattr(cfg, "authorName", "")),
-        "author_link": _branding_value("authorLink", default=getattr(cfg, "authorLink", "")),
+        "author_link": normalize_ui_link_url(
+            _branding_value("authorLink", default=getattr(cfg, "authorLink", ""))
+        ),
         "site_icp": _branding_value("siteIcp", default=getattr(cfg, "siteIcp", "")),
-        "custom_css": _branding_value("customCss", default=getattr(cfg, "customCss", "")),
-        "custom_script": _branding_value("customScript", default=getattr(cfg, "customScript", "")),
-        "login_bg": _branding_value("loginBg", default=getattr(cfg, "loginBg", "")),
-        "docs_url": _branding_value("docsUrl", default=""),
-        "download_url": _branding_value("downloadUrl", default=""),
+        "custom_css": normalize_ui_static_asset_url(
+            _branding_value("customCss", default=getattr(cfg, "customCss", ""))
+        ),
+        "custom_script": normalize_ui_static_asset_url(
+            _branding_value("customScript", default=getattr(cfg, "customScript", ""))
+        ),
+        "login_bg": normalize_ui_image_url(
+            _branding_value("loginBg", default=getattr(cfg, "loginBg", ""))
+        ),
+        "docs_url": normalize_ui_link_url(_branding_value("docsUrl", default="")),
+        "download_url": normalize_ui_link_url(_branding_value("downloadUrl", default="")),
         "theme_color": "",
         "project_version": str(getattr(settings, "PROJECT_VERSION", "") or "dev"),
         "deployment_mode": "cloud" if _cloud_mode_enabled() else "edge",

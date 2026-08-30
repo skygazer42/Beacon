@@ -62,7 +62,7 @@ class DeveloperAlgorithmCallbackTest(TestCase):
                     }
                 ],
                 "trigger_alarm": True,
-                "image_base64": base64.b64encode(b"developer-callback-image").decode("utf-8"),
+                "image_base64": base64.b64encode(b"\xff\xd8\xffdeveloper-callback-image").decode("utf-8"),
             }
             res = self.client.post(
                 "/developer/algorithmCallback",
@@ -90,7 +90,7 @@ class DeveloperAlgorithmCallbackTest(TestCase):
 
         image_path = Path(tmp) / alarm.image_path
         self.assertTrue(image_path.exists())
-        self.assertEqual(image_path.read_bytes(), b"developer-callback-image")
+        self.assertEqual(image_path.read_bytes(), b"\xff\xd8\xffdeveloper-callback-image")
 
         metadata = json.loads(alarm.metadata or "{}")
         self.assertEqual(int(metadata.get("frame_index") or 0), 123)
@@ -152,6 +152,29 @@ class DeveloperAlgorithmCallbackTest(TestCase):
             developer_view._build_callback_alarm_desc([{"class_name": "person"}, {"class_name": "car"}]),
             "person, car",
         )
+
+    def test_callback_payload_rejects_non_finite_and_boolean_numbers(self):
+        base_payload = {
+            "control_code": "CTRL_DEV_CB_001",
+            "frame_index": 1,
+            "timestamp": 1.0,
+            "detections": [{"class_name": "person", "confidence": 0.9, "bbox": [0, 0, 1, 1]}],
+            "trigger_alarm": False,
+            "image_base64": "",
+        }
+        invalid_payloads = (
+            {**base_payload, "frame_index": True},
+            {**base_payload, "timestamp": float("nan")},
+            {**base_payload, "detections": [{"class_name": "person", "confidence": float("inf")}]},
+            {**base_payload, "detections": [{"class_name": "person", "bbox": [0, 0, True, 1]}]},
+            {**base_payload, "detections": [{"class_name": "  ", "confidence": 0.5}]},
+        )
+
+        for payload in invalid_payloads:
+            with self.subTest(payload=payload):
+                parsed, error = developer_view._parse_algorithm_callback_payload(payload)
+                self.assertIsNone(parsed)
+                self.assertTrue(error)
 
     def test_precheck_rejection_removes_staged_callback_image(self):
         with tempfile.TemporaryDirectory() as temp_dir:
