@@ -81,7 +81,7 @@ updates:
       cloud-images:
         patterns: ["*"]
 
-  - package-ecosystem: docker
+  - package-ecosystem: docker-compose
     directory: /deploy/observability/tracing
     schedule:
       interval: weekly
