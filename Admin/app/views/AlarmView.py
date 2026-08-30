@@ -900,8 +900,8 @@ def api_workflow_transition(request):
                     "handled_by",
                 ]
             )
-    except ValueError as exc:
-        return f_responseJson({"code": 0, "msg": str(exc)})
+    except ValueError:
+        return f_responseJson({"code": 0, "msg": "invalid workflow transition"})
 
     return f_responseJson({"code": 1000, "msg": f"workflow transition applied to {len(alarms)} alarm(s)"})
 
@@ -1779,8 +1779,8 @@ def _alarm_vector_search_response(params):
             upload_root=g_config.uploadDir,
             limit=_alarm_vector_limit(params),
         )
-    except ValueError as exc:
-        return f_responseJson({"code": 0, "msg": str(exc)})
+    except ValueError:
+        return f_responseJson({"code": 0, "msg": "invalid vector search request"})
     return f_responseJson({"code": 1000, "msg": "success", "data": data})
 
 
@@ -2853,8 +2853,12 @@ def api_open_add(request):
 
         msg = "success"
         code = 1000
-    except Exception as e:
-        msg = str(e)
+    except ValueError as exc:
+        logger.warning("AlarmView.openAdd() rejected request error_type=%s", type(exc).__name__)
+        msg = "invalid alarm request"
+    except Exception as exc:
+        logger.exception("AlarmView.openAdd() failed error_type=%s", type(exc).__name__)
+        msg = "internal error"
 
     res = {
         "code": code,

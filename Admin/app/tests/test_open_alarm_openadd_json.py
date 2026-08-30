@@ -1,6 +1,7 @@
 import json
 import os
 import tempfile
+from unittest import mock
 
 from django.test import TestCase
 
@@ -84,6 +85,24 @@ class OpenAlarmOpenAddJsonTest(TestCase):
         self.assertIsNotNone(alarm)
         self.assertEqual(alarm.control_code, "C_OPENADD_001")
         self.assertEqual(alarm.desc, "测试报警-json")
+
+    def test_alarm_openadd_does_not_return_internal_exception_details(self):
+        payload = {"control_code": "C_OPENADD_001", "desc": "redaction-test"}
+        with mock.patch(
+            "app.views.AlarmView._alarm_openadd_save_db",
+            side_effect=PermissionError("/secret/server/alarm-storage"),
+        ):
+            response = self.client.post(
+                "/alarm/openAdd",
+                data=json.dumps(payload),
+                content_type="application/json",
+                HTTP_X_BEACON_TOKEN="token-test-openadd",
+            )
+
+        body = json.loads(response.content.decode("utf-8"))
+        self.assertEqual(body.get("code"), 0)
+        self.assertEqual(body.get("msg"), "internal error")
+        self.assertNotIn("secret", body.get("msg", ""))
 
     def test_alarm_openadd_persists_stream_fields_and_draw_type(self):
         payload = {

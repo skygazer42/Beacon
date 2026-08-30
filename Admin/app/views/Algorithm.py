@@ -1205,8 +1205,11 @@ def api_open_version_gray(request):
 
     try:
         version = set_algorithm_gray_version(algo, version=version, gray_control_codes=gray_control_codes)
-    except Exception as e:
-        return f_responseJson({"code": 0, "msg": str(e)})
+    except ValueError:
+        return f_responseJson({"code": 0, "msg": "灰度版本参数无效"})
+    except Exception as exc:
+        logger.exception("set algorithm gray version failed error_type=%s", type(exc).__name__)
+        return f_responseJson({"code": 0, "msg": "设置灰度版本失败"})
 
     if not version:
         return f_responseJson({"code": 1000, "msg": "已清空灰度版本"})
