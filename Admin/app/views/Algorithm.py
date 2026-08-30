@@ -1326,6 +1326,27 @@ def _algorithm_resolve_analyzer_load_source(algo, *, default_subtype: str = ""):
     return algo_subtype, _algorithm_resolve_analyzer_abs_path(dll_path), None
 
 
+def _algorithm_analyzer_load_source_error(algo, *, default_subtype: str = "") -> str:
+    """Return a stable validation message without exposing exception details."""
+
+    algo_type = int(getattr(algo, "algorithm_type", 0) or 0)
+    algo_subtype = _algorithm_normalize_analyzer_subtype(
+        getattr(algo, "algorithm_subtype", ""),
+        default=default_subtype,
+    )
+    if algo_type == 0 and getattr(algo, "basic_source", "model") == "api":
+        return "该基础算法为 API 推理，无需预热加载"
+    if algo_type == 0:
+        if not str(getattr(algo, "model_path", "") or "").strip():
+            return "该算法未配置模型文件"
+        if algo_subtype != "tracking" and not str(getattr(algo, "object_str", "") or "").strip():
+            return "请先在算法里配置检测目标（object_str）"
+        return "无法解析模型文件路径"
+    if not str(getattr(algo, "dll_path", "") or "").strip():
+        return "该行为算法未配置动态库（dll/so/dylib）"
+    return "无法解析模型文件路径"
+
+
 def _algorithm_runtime_device_info():
     """返回算法运行时设备信息。"""
     try:
@@ -1506,8 +1527,10 @@ def _algorithm_test_infer_local_response(*, code: str, device: str, image_b64: s
             algo,
             default_subtype="detection",
         )
-    except ValueError as exc:
-        return f_responseJson({"code": 0, "msg": str(exc)})
+    except ValueError:
+        return f_responseJson(
+            {"code": 0, "msg": _algorithm_analyzer_load_source_error(algo, default_subtype="detection")}
+        )
 
     device_error = _algorithm_runtime_device_support_error(abs_path=abs_path, device=device)
     if device_error:
@@ -1563,8 +1586,8 @@ def api_open_analyzer_load(request):
 
     try:
         algo_subtype, abs_path, class_names = _algorithm_resolve_analyzer_load_source(algo)
-    except ValueError as exc:
-        return f_responseJson({"code": 0, "msg": str(exc)})
+    except ValueError:
+        return f_responseJson({"code": 0, "msg": _algorithm_analyzer_load_source_error(algo)})
 
     device_error = _algorithm_runtime_device_support_error(abs_path=abs_path, device=device)
     if device_error:

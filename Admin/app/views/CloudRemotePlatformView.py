@@ -1,3 +1,5 @@
+import logging
+
 from django.shortcuts import render
 
 from app.models import CloudEdgeCluster
@@ -13,6 +15,9 @@ from app.views.CloudConsoleView import (
     _require_cloud_mode,
 )
 from app.views.ViewsBase import f_parseGetParams
+
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_int(value, default: int = 0) -> int:
@@ -44,8 +49,9 @@ def _fetch_remote_platform_data(selected_cluster):
         core_process_data = list(core_payload.get("data") or [])
         core_process_info = core_payload.get("info") or {}
         return "", algorithm_flows, core_process_data, core_process_info
-    except CloudEdgeClientError as e:
-        return str(e), [], [], {}
+    except CloudEdgeClientError as exc:
+        logger.warning("remote platform request failed error_type=%s", type(exc).__name__)
+        return "远端平台暂不可用", [], [], {}
 
 
 def platform(request):

@@ -478,8 +478,9 @@ def _apply_software_autostart_best_effort(values: dict, posted_keys) -> str:
         ok, detail = apply_autostart(enabled=enabled)
         if not ok:
             return str(detail or "unknown error")
-    except Exception as e:
-        return str(e)
+    except Exception as exc:
+        logger.warning("software autostart update failed error_type=%s", type(exc).__name__)
+        return "autostart update failed"
 
     return ""
 

@@ -316,8 +316,9 @@ def apply_autostart(*, enabled: bool) -> Tuple[bool, str]:
 
         try:
             return apply_windows_autostart(enabled=enabled)
-        except Exception as e:
-            return False, str(e)
+        except Exception as exc:
+            logger.warning("Windows autostart update failed error_type=%s", type(exc).__name__)
+            return False, "autostart update failed"
 
     if system == "darwin":
         return _apply_macos_autostart(enabled=enabled)

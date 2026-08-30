@@ -138,3 +138,17 @@ class LinuxAutoStartTest(SimpleTestCase):
             self.assertFalse(unit_path.exists())
             self.assertFalse(desktop_path.exists())
             self.assertEqual(run.call_count, 2)
+
+    def test_windows_autostart_exception_is_redacted(self):
+        with (
+            mock.patch.object(AutoStart, "_system_name", return_value="Windows"),
+            mock.patch(
+                "app.utils.WindowsAutoStart.apply_windows_autostart",
+                side_effect=PermissionError("C:\\secret\\startup-path"),
+            ),
+        ):
+            ok, detail = AutoStart.apply_autostart(enabled=True)
+
+        self.assertFalse(ok)
+        self.assertEqual(detail, "autostart update failed")
+        self.assertNotIn("secret", detail)

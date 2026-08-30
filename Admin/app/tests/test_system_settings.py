@@ -320,3 +320,18 @@ class SystemSettingsTest(TestCase):
         self.assertEqual(body.get("code"), 1000)
         mocked_update.assert_called()
         mocked_apply.assert_called_once_with(enabled=True)
+
+    def test_save_system_settings_redacts_autostart_exception(self):
+        payload = {"stream_auto_start": "0", "software_auto_start": "1"}
+        with mock.patch("app.views.SystemConfigView._update_config_json"):
+            with mock.patch(
+                "app.utils.AutoStart.apply_autostart",
+                side_effect=PermissionError("/secret/systemd/unit"),
+            ):
+                response = self.client.post("/api/app-shell/config/action/system/save", data=payload)
+
+        body = json.loads(response.content.decode("utf-8"))
+        self.assertEqual(body.get("code"), 1000)
+        warning = str((body.get("data") or {}).get("softwareAutoStartWarning") or "")
+        self.assertEqual(warning, "autostart update failed")
+        self.assertNotIn("secret", warning)
