@@ -74,6 +74,12 @@ attestation 资产重名。两个工作流都禁止覆盖已有资产；名称�
 但该文件本身不会强制审批。远端分支规则仍必须启用“Require review from Code Owners”，
 并保护 `CODEOWNERS` 与规则配置不被未经审批的提交绕过。
 
+两个发布工作流还会同时读取分页 Release 列表与 `releases/latest`，执行
+`validate-history`：每个已发布 Release 都必须使用受支持的严格 SemVer 标签、保留可
+解析到 commit 的同名 Git tag，并且新版本的 SemVer precedence 必须严格高于其他已
+发布版本。列表与 latest 视图不一致时两边取并集验证，因此已删除 tag 的“幽灵 Release”、
+旧版本线回退或非标准版本号都会使发布失败，必须先由仓库所有者完成版本治理。
+
 触发有两种：
 
 - 发布 GitHub Release 时，源码与容器工作流自动运行。源码只有 `build-evidence` 成功才
@@ -95,6 +101,22 @@ python tools/release_evidence.py validate-ref \
 跟踪与未跟踪文件都为空，并确认 `LICENSE`、`THIRD_PARTY_NOTICES.md` 和 `SECURITY.md`
 存在。未跟踪文件也会被拒绝，因为它们可能进入 Docker build context，造成镜像内容与
 标签源码不一致。
+
+如需在打标签前复核远端历史，可先导出与工作流相同的两个 API 视图，再离线运行门禁：
+
+```bash
+gh api --paginate 'repos/skygazer42/Beacon/releases?per_page=100' \
+  | jq -s 'add // []' > published-releases.json
+gh api 'repos/skygazer42/Beacon/releases/latest' > latest-release.json
+python tools/release_evidence.py validate-history \
+  --root . \
+  --tag v1.2.3 \
+  --releases published-releases.json \
+  --latest-release latest-release.json
+```
+
+仓库从未发布 Release 时，`latest-release.json` 使用 JSON `null`。上述 JSON 只用于临时
+验收，不应提交到仓库。
 
 ## 3. 下载后验证
 
