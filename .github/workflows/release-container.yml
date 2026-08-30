@@ -36,9 +36,25 @@ jobs:
       - name: Validate release ref and prepare metadata
         id: release
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           python tools/release_evidence.py validate-ref --root . --tag "${RELEASE_TAG}"
+          release_history_path="${RUNNER_TEMP}/beacon-published-releases.json"
+          latest_release_path="${RUNNER_TEMP}/beacon-latest-release.json"
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+            | jq -s 'add // []' > "${release_history_path}"
+          if jq -e 'length == 0' "${release_history_path}" >/dev/null; then
+            printf 'null\n' > "${latest_release_path}"
+          else
+            gh api "repos/${GITHUB_REPOSITORY}/releases/latest" > "${latest_release_path}"
+          fi
+          python tools/release_evidence.py validate-history \
+            --root . \
+            --tag "${RELEASE_TAG}" \
+            --releases "${release_history_path}" \
+            --latest-release "${latest_release_path}"
           release_commit="$(git rev-parse --verify 'HEAD^{commit}')"
           repository_lower="$(printf '%s' "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
           image_name="ghcr.io/${repository_lower}"

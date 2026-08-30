@@ -98,6 +98,40 @@ class ReleaseEvidenceTest(unittest.TestCase):
             "sbom-verification": "sbom-verification.json",
         }
 
+    @staticmethod
+    def _create_history_repo(root: Path, tags: tuple[str, ...]) -> None:
+        root.mkdir(parents=True, exist_ok=True)
+        subprocess.run(["git", "init", "--quiet"], cwd=root, check=True)
+        subprocess.run(
+            ["git", "config", "user.email", "release-history@example.invalid"],
+            cwd=root,
+            check=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Release History Test"],
+            cwd=root,
+            check=True,
+        )
+        (root / "README.md").write_text("release history fixture\n", encoding="utf-8")
+        subprocess.run(["git", "add", "README.md"], cwd=root, check=True)
+        subprocess.run(
+            ["git", "commit", "--quiet", "-m", "release history fixture"],
+            cwd=root,
+            check=True,
+        )
+        for tag in tags:
+            subprocess.run(["git", "tag", tag], cwd=root, check=True)
+
+    @staticmethod
+    def _published_release(tag: str, release_id: int = 1) -> dict[str, object]:
+        return {
+            "id": release_id,
+            "tag_name": tag,
+            "draft": False,
+            "prerelease": "-" in tag,
+            "published_at": "2026-01-01T00:00:00Z",
+        }
+
     def _assemble(self, project_root: Path, evidence_dir: Path):
         return release_evidence.assemble_evidence(
             project_root=project_root,
@@ -225,6 +259,92 @@ class ReleaseEvidenceTest(unittest.TestCase):
                     expected_commit=commit,
                 )
 
+    def test_validate_release_history_accepts_monotonic_semver(self):
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            project_root = Path(temporary_dir) / "repo"
+            self._create_history_repo(
+                project_root,
+                ("v1.0.0", "v1.1.0-rc.1", "v1.1.0"),
+            )
+            releases = [
+                self._published_release("v1.0.0", 1),
+                self._published_release("v1.1.0-rc.1", 2),
+                self._published_release("v1.1.0", 3),
+            ]
+
+            report = release_evidence.validate_release_history(
+                project_root=project_root,
+                tag="v1.1.0",
+                releases=releases,
+                latest_release=releases[-1],
+            )
+
+            self.assertEqual(report["published_release_count"], 3)
+            self.assertEqual(report["highest_published_tag"], "v1.1.0")
+
+    def test_validate_release_history_rejects_version_rollback(self):
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            project_root = Path(temporary_dir) / "repo"
+            self._create_history_repo(project_root, ("v1.2.0",))
+
+            with self.assertRaisesRegex(
+                release_evidence.EvidenceError,
+                "does not advance published release",
+            ):
+                release_evidence.validate_release_history(
+                    project_root=project_root,
+                    tag="v1.1.0",
+                    releases=[self._published_release("v1.2.0")],
+                )
+
+    def test_validate_release_history_rejects_invalid_latest_release(self):
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            project_root = Path(temporary_dir) / "repo"
+            self._create_history_repo(project_root, ("v1.0.0",))
+
+            with self.assertRaisesRegex(
+                release_evidence.EvidenceError,
+                "unsupported tag: 'v4.747'",
+            ):
+                release_evidence.validate_release_history(
+                    project_root=project_root,
+                    tag="v1.1.0",
+                    releases=[self._published_release("v1.0.0")],
+                    latest_release=self._published_release("v4.747", 2),
+                )
+
+    def test_validate_release_history_requires_matching_git_tag(self):
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            project_root = Path(temporary_dir) / "repo"
+            self._create_history_repo(project_root, ())
+
+            with self.assertRaisesRegex(
+                release_evidence.EvidenceError,
+                "has no matching fetched Git tag",
+            ):
+                release_evidence.validate_release_history(
+                    project_root=project_root,
+                    tag="v1.1.0",
+                    releases=[self._published_release("v1.0.0")],
+                )
+
+    def test_semver_comparison_handles_prerelease_and_build_metadata(self):
+        self.assertGreater(release_evidence._compare_semver("v1.0.0", "v1.0.0-rc.1"), 0)
+        self.assertGreater(
+            release_evidence._compare_semver("v1.0.0-beta.11", "v1.0.0-beta.2"),
+            0,
+        )
+        self.assertLess(
+            release_evidence._compare_semver("v1.0.0-alpha", "v1.0.0-alpha.1"),
+            0,
+        )
+        self.assertEqual(
+            release_evidence._compare_semver("v1.0.0+build.1", "v1.0.0+build.2"),
+            0,
+        )
+        with self.assertRaisesRegex(release_evidence.EvidenceError, "supported SemVer"):
+            release_evidence._compare_semver("v1.0.0-01", "v1.0.0")
+
 
 class ReleaseWorkflowAssetNamingTest(unittest.TestCase):
     ROOT = Path(__file__).resolve().parents[1]
@@ -258,6 +378,17 @@ class ReleaseWorkflowAssetNamingTest(unittest.TestCase):
             self.assertIn(name, container_workflow)
 
         self.assertTrue(source_names.isdisjoint(container_names))
+
+    def test_release_workflows_validate_paged_and_latest_history(self):
+        for workflow_name in ("release-evidence.yml", "release-container.yml"):
+            workflow = (self.ROOT / ".github" / "workflows" / workflow_name).read_text(
+                encoding="utf-8"
+            )
+
+            self.assertIn("tools/release_evidence.py validate-history", workflow)
+            self.assertIn("/releases?per_page=100", workflow)
+            self.assertIn("/releases/latest", workflow)
+            self.assertIn("GH_TOKEN: ${{ github.token }}", workflow)
 
 
 if __name__ == "__main__":

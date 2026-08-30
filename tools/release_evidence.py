@@ -38,11 +38,14 @@ REQUIRED_ROLES = {
     "sbom-verification",
 }
 TAG_PATTERN = re.compile(
-    r"v(?:0|[1-9][0-9]*)\."
-    r"(?:0|[1-9][0-9]*)\."
-    r"(?:0|[1-9][0-9]*)"
-    r"(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
-    r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
+    r"v(?P<major>0|[1-9][0-9]*)\."
+    r"(?P<minor>0|[1-9][0-9]*)\."
+    r"(?P<patch>0|[1-9][0-9]*)"
+    r"(?:-(?P<prerelease>"
+    r"(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)"
+    r"(?:\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*"
+    r"))?"
+    r"(?:\+(?P<build>[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?"
 )
 COMMIT_PATTERN = re.compile(r"[0-9a-f]{40}")
 ROLE_PATTERN = re.compile(r"[a-z][a-z0-9-]{0,63}")
@@ -115,6 +118,13 @@ def _read_json_object(path: Path, *, label: str) -> Dict[str, object]:
     return payload
 
 
+def _read_json_value(path: Path, *, label: str) -> object:
+    try:
+        return json.loads(_read_limited(path, label=label).decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise EvidenceError(f"{label} is not valid UTF-8 JSON: {path}: {exc}") from exc
+
+
 def _sha256_file(path: Path) -> Tuple[str, int]:
     digest = hashlib.sha256()
     total = 0
@@ -136,6 +146,42 @@ def _validate_tag(tag: str) -> str:
     if not TAG_PATTERN.fullmatch(tag):
         raise EvidenceError(f"release tag is not a supported SemVer tag: {tag!r}")
     return tag
+
+
+def _semver_parts(tag: str) -> Tuple[Tuple[int, int, int], Optional[Tuple[str, ...]]]:
+    tag = _validate_tag(tag)
+    match = TAG_PATTERN.fullmatch(tag)
+    if match is None:  # Defensive: _validate_tag already enforces this invariant.
+        raise EvidenceError(f"release tag is not a supported SemVer tag: {tag!r}")
+    core = tuple(int(match.group(name)) for name in ("major", "minor", "patch"))
+    prerelease = match.group("prerelease")
+    return core, tuple(prerelease.split(".")) if prerelease else None
+
+
+def _compare_semver(left: str, right: str) -> int:
+    """Compare supported release tags using SemVer precedence rules."""
+    left_core, left_prerelease = _semver_parts(left)
+    right_core, right_prerelease = _semver_parts(right)
+    if left_core != right_core:
+        return 1 if left_core > right_core else -1
+    if left_prerelease is None or right_prerelease is None:
+        if left_prerelease is right_prerelease:
+            return 0
+        return 1 if left_prerelease is None else -1
+
+    for left_identifier, right_identifier in zip(left_prerelease, right_prerelease):
+        if left_identifier == right_identifier:
+            continue
+        left_numeric = left_identifier.isdigit()
+        right_numeric = right_identifier.isdigit()
+        if left_numeric and right_numeric:
+            return 1 if int(left_identifier) > int(right_identifier) else -1
+        if left_numeric != right_numeric:
+            return -1 if left_numeric else 1
+        return 1 if left_identifier > right_identifier else -1
+    if len(left_prerelease) == len(right_prerelease):
+        return 0
+    return 1 if len(left_prerelease) > len(right_prerelease) else -1
 
 
 def _validate_commit(commit: str) -> str:
@@ -240,6 +286,102 @@ def validate_release_ref(
         "tag": tag,
         "commit": head_commit,
     }
+
+
+def validate_release_history(
+    *,
+    project_root: Path,
+    tag: str,
+    releases: Sequence[object],
+    latest_release: Optional[Mapping[str, object]] = None,
+) -> Dict[str, object]:
+    """Require a monotonic, fully tagged history of published releases.
+
+    The GitHub ``releases/latest`` response is accepted separately because it
+    can expose a published release that is temporarily absent from the paged
+    releases response.  Combining both views makes the gate fail closed when
+    repository release metadata and Git refs drift apart.
+    """
+    project_root = _require_directory(project_root, label="project root")
+    candidate_tag = _validate_tag(tag)
+    if isinstance(releases, (str, bytes)) or not isinstance(releases, Sequence):
+        raise EvidenceError("release history JSON root must be an array")
+
+    records = list(releases)
+    if latest_release is not None:
+        if not isinstance(latest_release, Mapping):
+            raise EvidenceError("latest release JSON root must be an object or null")
+        records.append(latest_release)
+
+    release_tags: list[str] = []
+    seen_tags = set()
+    for index, record in enumerate(records):
+        if not isinstance(record, Mapping):
+            raise EvidenceError(f"release history item {index} must be an object")
+        if record.get("draft") is True:
+            continue
+        if not isinstance(record.get("published_at"), str) or not str(
+            record.get("published_at")
+        ).strip():
+            raise EvidenceError(f"release history item {index} is not a published release")
+
+        raw_tag = str(record.get("tag_name") or "").strip()
+        try:
+            release_tag = _validate_tag(raw_tag)
+        except EvidenceError as exc:
+            raise EvidenceError(
+                f"published release has an unsupported tag: {raw_tag!r}"
+            ) from exc
+        if release_tag in seen_tags:
+            continue
+        seen_tags.add(release_tag)
+
+        try:
+            release_commit = _git(
+                project_root,
+                "rev-parse",
+                "--verify",
+                f"refs/tags/{release_tag}^{{commit}}",
+            )
+        except EvidenceError as exc:
+            raise EvidenceError(
+                f"published release {release_tag!r} has no matching fetched Git tag"
+            ) from exc
+        _validate_commit(release_commit)
+        release_tags.append(release_tag)
+
+    highest_tag: Optional[str] = None
+    for release_tag in release_tags:
+        if highest_tag is None or _compare_semver(release_tag, highest_tag) > 0:
+            highest_tag = release_tag
+        if release_tag != candidate_tag and _compare_semver(candidate_tag, release_tag) <= 0:
+            raise EvidenceError(
+                f"candidate release {candidate_tag!r} does not advance published release "
+                f"{release_tag!r}"
+            )
+
+    return {
+        "status": "ok",
+        "candidate_tag": candidate_tag,
+        "published_release_count": len(release_tags),
+        "highest_published_tag": highest_tag,
+    }
+
+
+def _load_release_history(path: Path) -> Sequence[object]:
+    payload = _read_json_value(path, label="release history")
+    if isinstance(payload, (str, bytes)) or not isinstance(payload, list):
+        raise EvidenceError("release history JSON root must be an array")
+    return payload
+
+
+def _load_latest_release(path: Path) -> Optional[Mapping[str, object]]:
+    payload = _read_json_value(path, label="latest release")
+    if payload is None:
+        return None
+    if not isinstance(payload, dict):
+        raise EvidenceError("latest release JSON root must be an object or null")
+    return payload
 
 
 def _artifact_path(
@@ -621,7 +763,7 @@ def _parse_artifacts(values: Sequence[str]) -> Dict[str, str]:
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Validate, assemble, or verify Beacon release evidence"
+        description="Validate refs/history, assemble, or verify Beacon release evidence"
     )
     commands = parser.add_subparsers(dest="command", required=True)
 
@@ -629,6 +771,15 @@ def _parser() -> argparse.ArgumentParser:
     validate.add_argument("--root", type=Path, default=Path.cwd())
     validate.add_argument("--tag", required=True)
     validate.add_argument("--commit")
+
+    history = commands.add_parser(
+        "validate-history",
+        help="Validate published release tags and monotonic version precedence",
+    )
+    history.add_argument("--root", type=Path, default=Path.cwd())
+    history.add_argument("--tag", required=True)
+    history.add_argument("--releases", type=Path, required=True)
+    history.add_argument("--latest-release", type=Path, required=True)
 
     assemble = commands.add_parser("assemble", help="Write release manifest and SHA256SUMS")
     assemble.add_argument("--project-root", type=Path, default=Path.cwd())
@@ -656,6 +807,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 project_root=arguments.root,
                 tag=arguments.tag,
                 expected_commit=arguments.commit,
+            )
+        elif arguments.command == "validate-history":
+            result = validate_release_history(
+                project_root=arguments.root,
+                tag=arguments.tag,
+                releases=_load_release_history(arguments.releases),
+                latest_release=_load_latest_release(arguments.latest_release),
             )
         elif arguments.command == "assemble":
             result = assemble_evidence(
