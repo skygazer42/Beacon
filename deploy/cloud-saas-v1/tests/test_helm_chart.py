@@ -77,7 +77,7 @@ class CloudSaaSV1HelmChartTest(unittest.TestCase):
         self.assertIn("BEACON_ROOT_DIR=/app/data", dockerfile)
         self.assertIn("BEACON_CONFIG_PATH=/app/config.json", dockerfile)
         self.assertIn(
-            "COPY --chown=beacon:beacon deploy/cloud-saas-v1/config.cloud.json /app/config.json",
+            "COPY --chown=beacon:beacon --chmod=0444 deploy/cloud-saas-v1/config.cloud.json /app/config.json",
             dockerfile,
         )
         self.assertNotIn("COPY --chown=beacon:beacon config.json /app/config.json", dockerfile)

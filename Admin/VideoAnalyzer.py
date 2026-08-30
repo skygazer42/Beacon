@@ -2,6 +2,7 @@ import configparser
 import io
 import psutil  # type: ignore
 import runtime_paths  # type: ignore
+from runtime_permissions import ensure_runtime_config_private
 import os
 import time
 import logging
@@ -56,6 +57,13 @@ def _read_config_json(filepath):
     except UnicodeDecodeError:
         with open(filepath, 'r', encoding='gbk') as f:
             return json.loads(f.read())
+
+
+def _read_runtime_config_json(filepath):
+    """Read runtime configuration and enforce private Edge permissions."""
+    config_data = _read_config_json(filepath)
+    ensure_runtime_config_private(filepath, config_data)
+    return config_data
 
 def _pick_first_existing(paths, require_file=False):
     """选择首个现有。"""
@@ -1627,7 +1635,7 @@ if __name__ == '__main__':
         filename = os.path.join(ROOT_DIR, "config.json")
         if not os.path.exists(filename):
             raise FileNotFoundError("启动配置文件config.json不存在!")
-        config_data = _read_config_json(filename)
+        config_data = _read_runtime_config_json(filename)
         if not run_environment_check(config_data):
             sys.exit(1)
 

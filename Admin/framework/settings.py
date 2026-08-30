@@ -17,6 +17,7 @@ import time
 from typing import List, Optional
 
 from framework.versioning import get_project_version
+from runtime_permissions import ensure_sqlite_files_private
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 PROJECT_UA = "admin"
@@ -208,6 +209,9 @@ if _cloud_db_url:
         DATABASES = {"default": cloud_database}
     except Exception as e:
         raise RuntimeError(f"invalid BEACON_CLOUD_DB_URL: {e}")
+
+if DATABASES.get("default", {}).get("ENGINE") == "django.db.backends.sqlite3":
+    ensure_sqlite_files_private(DATABASES["default"]["NAME"])
 
 
 # Password validation

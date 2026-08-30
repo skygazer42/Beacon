@@ -3,6 +3,7 @@ import os
 import logging
 import re
 from framework.settings import BASE_DIR
+from runtime_permissions import ensure_runtime_config_private
 
 
 logger = logging.getLogger(__name__)
@@ -233,6 +234,7 @@ class Config:
             logger.debug("Config.__init__ filepath=%s", filepath)
 
         config_data = _load_config_data(filepath)
+        ensure_runtime_config_private(filepath, config_data)
         self._init_site_identity(config_data)
         self._init_network_and_media_settings(config_data)
         self._init_path_and_model_settings(config_data, base_dir_parent_dir)

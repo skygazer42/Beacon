@@ -4,6 +4,7 @@
 
 - 安全边界与端口暴露策略
 - OpenAPI/Ops 鉴权与密钥资产治理（Token / ApiKey / Pepper）
+- 运行时配置与 SQLite 文件权限
 - IP allowlist/denylist、速率限制（Rate Limit）、WAF 轻量防护
 - 登录安全（验证码、登录锁定、反代场景的真实源 IP）
 - TOTP 敏感操作二次确认（re-auth）
@@ -124,6 +125,35 @@ TLS/反代相关（可选，建议在反代启用 HTTPS 时配置）：
 - `BEACON_DJANGO_CSRF_COOKIE_SECURE=1`
 - `BEACON_DJANGO_CSRF_TRUSTED_ORIGINS=https://beacon.example.com`
 - `BEACON_DJANGO_HSTS_SECONDS=31536000`（确认全站 HTTPS 稳定后再开启）
+
+### 3.5 运行时配置与 SQLite 文件权限
+
+在 POSIX 系统上，Edge 运行时会将下列现有文件收敛为仅服务账号可访问
+（通常为 `0600`，也允许原本更严格的 owner-only 权限）；如果无法完成或验证
+权限收敛，进程会拒绝继续使用该文件：
+
+- `config.json`（即使当前仅包含占位值，也按可能保存明文密钥处理）
+- SQLite 主库及其 `-wal`、`-shm`、`-journal` 辅助文件
+
+管理端更新配置或运行参数时使用同目录的私有临时文件原子替换，避免写入期间
+出现可被其他本机账号读取的中间文件。生产环境仍应使用专用、非交互式服务账号，
+并限制配置与数据库所在目录的访问权限。
+
+Cloud 镜像内置的 `config.json` 只包含非工作占位值，权限固定为 `0444`，可兼容
+非 root、只读根文件系统。Cloud 密钥必须通过环境变量或 Kubernetes Secret 注入；
+不得把真实密钥写回镜像内置配置。
+
+Windows 不使用 POSIX `chmod` 语义。部署时必须以专用服务账号运行，并通过 NTFS
+ACL 限制该账号及受控管理员访问 `config.json`、数据库目录和备份目录。
+
+Linux 上可用以下命令核验运行态文件（不存在的 SQLite 辅助文件可忽略）：
+
+```bash
+stat -c '%a %n' config.json Admin/Admin.sqlite3 \
+  Admin/Admin.sqlite3-wal Admin/Admin.sqlite3-shm
+```
+
+Edge 文件应显示为 `600`；Cloud 镜像内置占位配置应显示为 `444`。
 
 ---
 

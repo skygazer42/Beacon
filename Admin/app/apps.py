@@ -6,6 +6,7 @@ import time
 from django.apps import AppConfig as DjangoAppConfig
 
 from app.utils.BackgroundRoles import get_background_role
+from runtime_permissions import ensure_sqlite_files_private
 
 
 logger = logging.getLogger(__name__)
@@ -36,9 +37,12 @@ def _exec_pragma_best_effort(cursor, sql: str) -> None:
 
 def _apply_sqlite_pragmas(sender, connection, **kwargs):  # type: ignore
     """处理应用SQLitePRAGMA 配置。"""
+    if getattr(connection, "vendor", "") != "sqlite":
+        return
+
+    database_name = (getattr(connection, "settings_dict", {}) or {}).get("NAME", "")
+    ensure_sqlite_files_private(database_name)
     try:
-        if getattr(connection, "vendor", "") != "sqlite":
-            return
         with connection.cursor() as cursor:
             # WAL improves concurrency: readers don't block writers.
             _exec_pragma_best_effort(cursor, "PRAGMA journal_mode=WAL;")
@@ -49,7 +53,8 @@ def _apply_sqlite_pragmas(sender, connection, **kwargs):  # type: ignore
             # Keep FK constraints on (Django already does, but keep it explicit).
             _exec_pragma_best_effort(cursor, "PRAGMA foreign_keys=ON;")
     except Exception:
-        return
+        pass
+    ensure_sqlite_files_private(database_name)
 
 
 def _install_sqlite_pragmas_best_effort() -> None:

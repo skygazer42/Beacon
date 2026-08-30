@@ -26,6 +26,27 @@ class TestVideoAnalyzerLauncherPaths(unittest.TestCase):
         va.logger = logging.getLogger("VideoAnalyzer.test")
         return va
 
+    @unittest.skipIf(os.name == "nt", "POSIX file mode assertion")
+    def test_runtime_config_read_restricts_edge_permissions(self):
+        va = self._import_video_analyzer()
+        with tempfile.TemporaryDirectory() as tmp:
+            target = os.path.join(tmp, "config.json")
+            with open(target, "w", encoding="utf-8") as stream:
+                stream.write("{}\n")
+            # Deliberately insecure fixture; the loader must tighten it.
+            # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+            os.chmod(target, 0o664)
+
+            with mock.patch.dict(
+                os.environ,
+                {"BEACON_DEPLOYMENT_MODE": "edge"},
+                clear=False,
+            ):
+                config_data = va._read_runtime_config_json(target)
+
+            self.assertEqual(config_data, {})
+            self.assertEqual(os.stat(target).st_mode & 0o777, 0o600)
+
     def test_build_admin_args_prefers_packaged_python_runtime(self):
         va = self._import_video_analyzer()
         with tempfile.TemporaryDirectory() as tmp:
