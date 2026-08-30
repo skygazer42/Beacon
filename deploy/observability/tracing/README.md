@@ -24,6 +24,11 @@ docker compose -f compose.yml ps
 
 Compose 会在未设置 `GF_SECURITY_ADMIN_PASSWORD` 时拒绝启动。如需更换默认用户名 `admin`，可同时设置 `GF_SECURITY_ADMIN_USER`。
 
+所有宿主机端口默认只绑定 `127.0.0.1`，且镜像使用不可变 OCI digest 固定。只有在受控
+私网中的其他主机确实需要访问时，才设置 `BEACON_BIND_ADDRESS=<明确的私网地址>`，并
+同步配置防火墙；不要使用 `0.0.0.0` 将 OTLP、Jaeger、Tempo 或 Grafana 直接暴露到公网。
+本目录仍是本地/开发验证栈，不替代生产级高可用、TLS、鉴权和持久化部署。
+
 ## 2) Access
 
 - Jaeger UI: `http://localhost:16686`

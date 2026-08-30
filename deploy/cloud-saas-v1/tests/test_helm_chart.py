@@ -115,6 +115,8 @@ class CloudSaaSV1HelmChartTest(unittest.TestCase):
         self.assertIn('user: "472:472"', monitoring_compose)
         self.assertIn('${BEACON_BIND_ADDRESS:-127.0.0.1}:${BEACON_PROMETHEUS_PORT:-9090}:9090', monitoring_compose)
         self.assertIn('${BEACON_BIND_ADDRESS:-127.0.0.1}:${BEACON_GRAFANA_PORT:-3000}:3000', monitoring_compose)
+        self.assertIn("http://127.0.0.1:9090/-/ready", monitoring_compose)
+        self.assertIn("http://127.0.0.1:3000/api/health", monitoring_compose)
         self.assertEqual(monitoring_compose.count("healthcheck:"), 2)
         self.assertIn('djangoDebug: "0"', values)
         self.assertNotIn('djangoAllowedHosts: "*"', values)

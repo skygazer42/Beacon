@@ -80,3 +80,13 @@ updates:
     groups:
       cloud-images:
         patterns: ["*"]
+
+  - package-ecosystem: docker
+    directory: /deploy/observability/tracing
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      tracing-images:
+        patterns: ["*"]

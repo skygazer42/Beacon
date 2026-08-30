@@ -70,6 +70,10 @@ attestation 资产重名。两个工作流都禁止覆盖已有资产；名称�
 4. 仓库规则保护 `main` 和发布标签；`.github/workflows/**` 的变更需要指定维护者审查，
    发布权限和 GitHub `release` environment 的审批人按组织制度配置。
 
+仓库内的 `.github/CODEOWNERS` 已为工作流、发布证据、安全策略和部署资源指定维护者；
+但该文件本身不会强制审批。远端分支规则仍必须启用“Require review from Code Owners”，
+并保护 `CODEOWNERS` 与规则配置不被未经审批的提交绕过。
+
 触发有两种：
 
 - 发布 GitHub Release 时，源码与容器工作流自动运行。源码只有 `build-evidence` 成功才

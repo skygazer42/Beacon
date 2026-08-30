@@ -109,8 +109,8 @@ services:
     tmpfs:
     - /tmp:mode=0700,uid=10001,gid=10001
     ports:
-    - "${BEACON_BIND_ADDRESS:-127.0.0.1}:${BEACON_MINIO_API_PORT:-9000}:9000"
-    - "${BEACON_BIND_ADDRESS:-127.0.0.1}:${BEACON_MINIO_CONSOLE_PORT:-9001}:9001"
+    - "${BEACON_BIND_ADDRESS:-127.0.0.1}:${BEACON_MINIO_API_PORT:-9000}:9000" # loopback default; nosemgrep: trailofbits.yaml.docker-compose.port-all-interfaces.port-all-interfaces
+    - "${BEACON_BIND_ADDRESS:-127.0.0.1}:${BEACON_MINIO_CONSOLE_PORT:-9001}:9001" # loopback default; nosemgrep: trailofbits.yaml.docker-compose.port-all-interfaces.port-all-interfaces
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "--show-error", "http://127.0.0.1:9000/minio/health/ready"]
       interval: 5s
@@ -208,7 +208,7 @@ services:
     security_opt:
     - no-new-privileges:true
     ports:
-    - "${BEACON_BIND_ADDRESS:-127.0.0.1}:${BEACON_ADMIN_PORT:-9991}:8000"
+    - "${BEACON_BIND_ADDRESS:-127.0.0.1}:${BEACON_ADMIN_PORT:-9991}:8000" # loopback default; nosemgrep: trailofbits.yaml.docker-compose.port-all-interfaces.port-all-interfaces
     healthcheck:
       test: ["CMD", "python", "/app/deploy/cloud-saas-v1/scripts/health_probe.py", "ready"]
       interval: 5s

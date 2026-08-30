@@ -1,0 +1,7 @@
+# Release, security, and deployment controls require an explicit maintainer review.
+/.github/CODEOWNERS @skygazer42
+/.github/dependabot.yml @skygazer42
+/.github/workflows/ @skygazer42
+/SECURITY.md @skygazer42
+/tools/release_evidence.py @skygazer42
+/deploy/ @skygazer42

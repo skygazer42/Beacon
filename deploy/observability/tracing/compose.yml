@@ -10,47 +10,50 @@
 #   cd deploy/observability/tracing
 #   export GF_SECURITY_ADMIN_PASSWORD='replace-with-a-strong-password'
 #   docker compose -f compose.yml up -d
+#
+# Host ports default to loopback. Set BEACON_BIND_ADDRESS to an explicitly
+# approved private address only when another host must reach this dev stack.
 
 services:
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.102.0
+    image: otel/opentelemetry-collector-contrib:0.102.0@sha256:26bce721ca2f83db1c2c4e8873514dfe5b3973401fe88a1208efdc74e32840c1
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
     volumes:
       - ./otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
     ports:
       # OTLP receivers (Beacon Admin/Analyzer exporters will hit these).
-      - "4317:4317" # OTLP/gRPC
-      - "4318:4318" # OTLP/HTTP
+      - "${BEACON_BIND_ADDRESS:-127.0.0.1}:4317:4317" # OTLP/gRPC; nosemgrep: trailofbits.yaml.docker-compose.port-all-interfaces.port-all-interfaces
+      - "${BEACON_BIND_ADDRESS:-127.0.0.1}:4318:4318" # OTLP/HTTP; nosemgrep: trailofbits.yaml.docker-compose.port-all-interfaces.port-all-interfaces
       # Zipkin receiver (Beacon MediaServer exports Zipkin v2 JSON).
-      - "9411:9411" # Zipkin
+      - "${BEACON_BIND_ADDRESS:-127.0.0.1}:9411:9411" # Zipkin; nosemgrep: trailofbits.yaml.docker-compose.port-all-interfaces.port-all-interfaces
       # Health check (optional).
-      - "13133:13133" # / (plain)
+      - "${BEACON_BIND_ADDRESS:-127.0.0.1}:13133:13133" # / (plain); nosemgrep: trailofbits.yaml.docker-compose.port-all-interfaces.port-all-interfaces
     depends_on:
       - jaeger
       - tempo
     restart: unless-stopped
 
   jaeger:
-    image: jaegertracing/all-in-one:1.53
+    image: jaegertracing/all-in-one:1.53@sha256:60e65bfffe1f66aee96d6fc8b6bf65afd42016be5dcc09d2e15d8462f7d9409c
     environment:
       # Enable OTLP ingestion (collector listens on 4317/4318 inside the container network).
       COLLECTOR_OTLP_ENABLED: "true"
     ports:
-      - "16686:16686" # Jaeger UI
+      - "${BEACON_BIND_ADDRESS:-127.0.0.1}:16686:16686" # Jaeger UI; nosemgrep: trailofbits.yaml.docker-compose.port-all-interfaces.port-all-interfaces
     restart: unless-stopped
 
   tempo:
-    image: grafana/tempo:2.4.1
+    image: grafana/tempo:2.4.1@sha256:5b9c08f6d8fb43b3b72dfd1252ba4f198b11a245257bf76ee2ca13e243bac565
     command: ["-config.file=/etc/tempo.yaml"]
     volumes:
       - ./tempo.yaml:/etc/tempo.yaml:ro
       - tempo_data:/tmp/tempo
     ports:
-      - "3200:3200" # Tempo HTTP API (Grafana datasource / query)
+      - "${BEACON_BIND_ADDRESS:-127.0.0.1}:3200:3200" # Tempo API; nosemgrep: trailofbits.yaml.docker-compose.port-all-interfaces.port-all-interfaces
     restart: unless-stopped
 
   grafana:
-    image: grafana/grafana:10.4.2
+    image: grafana/grafana:10.4.2@sha256:7d5faae481a4c6f436c99e98af11534f7fd5e8d3e35213552dd1dd02bc393d2e
     environment:
       GF_SECURITY_ADMIN_USER: "${GF_SECURITY_ADMIN_USER:-admin}"
       GF_SECURITY_ADMIN_PASSWORD: "${GF_SECURITY_ADMIN_PASSWORD:?set GF_SECURITY_ADMIN_PASSWORD}"
@@ -59,7 +62,7 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - grafana_data:/var/lib/grafana
     ports:
-      - "3000:3000" # Grafana UI
+      - "${BEACON_BIND_ADDRESS:-127.0.0.1}:3000:3000" # Grafana UI; nosemgrep: trailofbits.yaml.docker-compose.port-all-interfaces.port-all-interfaces
     depends_on:
       - tempo
     restart: unless-stopped
