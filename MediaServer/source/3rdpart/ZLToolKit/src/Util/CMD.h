@@ -206,13 +206,13 @@ private:
         size_t last = 0;
         auto index = s.find(delim, last);
         while (index != std::string::npos) {
-            if (index - last > 0) {
+            if (index > last) {
                 ret.push_back(s.substr(last, index - last));
             }
             last = index + strlen(delim);
             index = s.find(delim, last);
         }
-        if (s.size() - last > 0) {
+        if (last < s.size()) {
             ret.push_back(s.substr(last));
         }
     }

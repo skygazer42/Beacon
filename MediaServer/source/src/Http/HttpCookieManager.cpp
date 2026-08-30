@@ -68,7 +68,8 @@ void HttpServerCookie::setAttach(toolkit::Any attach) {
 string HttpServerCookie::cookieExpireTime() const {
     char buf[64];
     time_t tt = time(nullptr) + _max_elapsed;
-    strftime(buf, sizeof buf, "%a, %b %d %Y %H:%M:%S GMT", gmtime(&tt));
+    auto tm = getGMTTime(tt);
+    strftime(buf, sizeof buf, "%a, %b %d %Y %H:%M:%S GMT", &tm);
     return buf;
 }
 //////////////////////////////CookieManager////////////////////////////////////

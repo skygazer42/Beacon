@@ -15,6 +15,7 @@
 #include "RtspSession.h"
 #include "Util/MD5.h"
 #include "Util/base64.h"
+#include "Util/util.h"
 #include "RtpMultiCaster.h"
 #include "Rtcp/RtcpContext.h"
 
@@ -1070,7 +1071,8 @@ void RtspSession::startListenPeerUdpData(int track_idx) {
 static string dateStr(){
     char buf[64];
     time_t tt = time(NULL);
-    strftime(buf, sizeof buf, "%a, %b %d %Y %H:%M:%S GMT", gmtime(&tt));
+    auto tm = getGMTTime(tt);
+    strftime(buf, sizeof buf, "%a, %b %d %Y %H:%M:%S GMT", &tm);
     return buf;
 }
 

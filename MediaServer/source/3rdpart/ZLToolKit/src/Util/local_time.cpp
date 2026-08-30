@@ -168,7 +168,13 @@ void local_time_init() {
     _current_timezone = tz.tz_minuteswest * 60L;
 #endif
     time_t t = time(NULL);
-    struct tm *aux = localtime(&t);
-    _daylight_active = aux->tm_isdst;
+    struct tm aux = {};
+#ifdef _WIN32
+    if (0 == localtime_s(&aux, &t)) {
+#else
+    if (NULL != localtime_r(&t, &aux)) {
+#endif
+        _daylight_active = aux.tm_isdst;
+    }
 }
 } // namespace toolkit

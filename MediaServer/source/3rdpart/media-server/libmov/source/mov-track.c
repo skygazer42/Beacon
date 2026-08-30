@@ -5,6 +5,7 @@
 #include <assert.h>
 
 #define FREE(p) do { if(p) free(p); } while(0)
+#define MOV_MAX_EXTRA_DATA_SIZE (1024U * 1024U)
 
 struct mov_track_t* mov_add_track(struct mov_t* mov)
 {
@@ -86,6 +87,11 @@ int mov_add_audio(struct mov_track_t* track, const struct mov_mvhd_t* mvhd, uint
 {
     struct mov_sample_entry_t* audio;
 
+    if (extra_data_size > MOV_MAX_EXTRA_DATA_SIZE)
+        return -E2BIG;
+    if (extra_data_size > 0 && NULL == extra_data)
+        return -EINVAL;
+
     if (MOV_OBJECT_MP3 == object && sample_rate > 24000)
         object = MOV_OBJECT_MP1A; // use mpeg1 sample rate table, see more @libflv/source/mp3-header.c
 
@@ -120,9 +126,12 @@ int mov_add_audio(struct mov_track_t* track, const struct mov_mvhd_t* mvhd, uint
     track->mdhd.duration = 0; // placeholder
 
     audio->extra_data = malloc(extra_data_size + 1);
-    if (NULL == audio->extra_data)
+    if (NULL == audio->extra_data) {
         return -ENOMEM;
-    memcpy(audio->extra_data, extra_data, extra_data_size);
+    }
+    if (extra_data_size > 0) {
+        memcpy(audio->extra_data, extra_data, extra_data_size);
+    }
 	audio->extra_data_size = (int)extra_data_size;
 
     return 0;
@@ -131,6 +140,11 @@ int mov_add_audio(struct mov_track_t* track, const struct mov_mvhd_t* mvhd, uint
 int mov_add_video(struct mov_track_t* track, const struct mov_mvhd_t* mvhd, uint32_t timescale, uint8_t object, int width, int height, const void* extra_data, size_t extra_data_size)
 {
     struct mov_sample_entry_t* video;
+
+    if (extra_data_size > MOV_MAX_EXTRA_DATA_SIZE)
+        return -E2BIG;
+    if (extra_data_size > 0 && NULL == extra_data)
+        return -EINVAL;
 
     video = &track->stsd.entries[0];
     video->data_reference_index = 1;
@@ -166,9 +180,12 @@ int mov_add_video(struct mov_track_t* track, const struct mov_mvhd_t* mvhd, uint
     track->mdhd.duration = 0; // placeholder
 
 	video->extra_data = malloc(extra_data_size + 1);
-    if (NULL == video->extra_data)
+    if (NULL == video->extra_data) {
         return -ENOMEM;
-    memcpy(video->extra_data, extra_data, extra_data_size);
+    }
+    if (extra_data_size > 0) {
+        memcpy(video->extra_data, extra_data, extra_data_size);
+    }
 	video->extra_data_size = (int)extra_data_size;
 
     return 0;
@@ -199,6 +216,11 @@ int mov_add_subtitle(struct mov_track_t* track, const struct mov_mvhd_t* mvhd, u
     };
 
     struct mov_sample_entry_t* subtitle;
+
+    if (extra_data_size > MOV_MAX_EXTRA_DATA_SIZE)
+        return -E2BIG;
+    if (extra_data_size > 0 && NULL == extra_data)
+        return -EINVAL;
 
     subtitle = &track->stsd.entries[0];
     subtitle->data_reference_index = 1;
@@ -234,9 +256,12 @@ int mov_add_subtitle(struct mov_track_t* track, const struct mov_mvhd_t* mvhd, u
     }
 
 	subtitle->extra_data = malloc(extra_data_size + 1);
-    if (NULL == subtitle->extra_data)
+    if (NULL == subtitle->extra_data) {
         return -ENOMEM;
-    memcpy(subtitle->extra_data, extra_data, extra_data_size);
+    }
+    if (extra_data_size > 0) {
+        memcpy(subtitle->extra_data, extra_data, extra_data_size);
+    }
 	subtitle->extra_data_size = (int)extra_data_size;
 
     return 0;

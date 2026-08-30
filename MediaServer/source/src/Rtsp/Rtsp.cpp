@@ -204,8 +204,8 @@ void SdpParser::load(const string &sdp) {
                     break;
                 case 'm': {
                     track = std::make_shared<SdpTrack>();
-                    int pt, port, port_count;
-                    char rtp[16] = {0}, type[16];
+                    int pt = 0, port = 0, port_count = 0;
+                    char rtp[16] = {0}, type[16] = {0};
                     if (4 == sscanf(opt_val.data(), " %15[^ ] %d %15[^ ] %d", type, &port, rtp, &pt) ||
                         5 == sscanf(opt_val.data(), " %15[^ ] %d/%d %15[^ ] %d", type, &port, &port_count, rtp, &pt)) {
                         track->_pt = pt;
@@ -249,10 +249,13 @@ void SdpParser::load(const string &sdp) {
 
         for (it = track._attr.find("rtpmap"); it != track._attr.end() && it->first == "rtpmap";) {
             auto &rtpmap = it->second;
-            int pt, samplerate, channel;
+            int pt = 0, samplerate = 0, channel = 0;
             char codec[16] = { 0 };
 
-            sscanf(rtpmap.data(), "%d", &pt);
+            if (sscanf(rtpmap.data(), "%d", &pt) != 1) {
+                it = track._attr.erase(it);
+                continue;
+            }
             if (track._pt != pt && track._pt != 0xff) {
                 // pt不匹配  [AUTO-TRANSLATED:ce7abb0a]
                 // pt mismatch
@@ -273,8 +276,11 @@ void SdpParser::load(const string &sdp) {
 
         for (it = track._attr.find("fmtp"); it != track._attr.end() && it->first == "fmtp";) {
             auto &fmtp = it->second;
-            int pt;
-            sscanf(fmtp.data(), "%d", &pt);
+            int pt = 0;
+            if (sscanf(fmtp.data(), "%d", &pt) != 1) {
+                it = track._attr.erase(it);
+                continue;
+            }
             if (track._pt != pt && track._pt != 0xff) {
                 // pt不匹配  [AUTO-TRANSLATED:ce7abb0a]
                 // pt mismatch

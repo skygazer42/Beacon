@@ -378,6 +378,19 @@ Sdp::Ptr AACTrack::getSdp(uint8_t payload_type) const {
 
 namespace {
 
+int hexDigit(char c) {
+    if (c >= '0' && c <= '9') {
+        return c - '0';
+    }
+    if (c >= 'a' && c <= 'f') {
+        return c - 'a' + 10;
+    }
+    if (c >= 'A' && c <= 'F') {
+        return c - 'A' + 10;
+    }
+    return -1;
+}
+
 CodecId getCodec() {
     return CodecAAC;
 }
@@ -396,12 +409,17 @@ Track::Ptr getTrackBySdp(const SdpTrack::Ptr &track) {
         // If aac config information cannot be obtained from sdp, then it cannot be obtained from rtp either, so ignore this Track
         return nullptr;
     }
+    if (aac_cfg_str.size() % 2 != 0) {
+        return nullptr;
+    }
     string aac_cfg;
     for (size_t i = 0; i < aac_cfg_str.size() / 2; ++i) {
-        unsigned int cfg;
-        sscanf(aac_cfg_str.substr(i * 2, 2).data(), "%02X", &cfg);
-        cfg &= 0x00FF;
-        aac_cfg.push_back((char)cfg);
+        auto high = hexDigit(aac_cfg_str[i * 2]);
+        auto low = hexDigit(aac_cfg_str[i * 2 + 1]);
+        if (high < 0 || low < 0) {
+            return nullptr;
+        }
+        aac_cfg.push_back(static_cast<char>((high << 4) | low));
     }
     return std::make_shared<AACTrack>(aac_cfg);
 }

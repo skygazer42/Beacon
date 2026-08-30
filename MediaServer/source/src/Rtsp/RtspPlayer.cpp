@@ -304,19 +304,27 @@ void RtspPlayer::handleResSETUP(const Parser &parser, unsigned int track_idx) {
     RtspSplitter::enableRecvRtp(_rtp_type == Rtsp::RTP_TCP);
     string ssrc = transport_map["ssrc"];
     if (!ssrc.empty()) {
-        sscanf(ssrc.data(), "%x", &_sdp_track[track_idx]->_ssrc);
+        if (sscanf(ssrc.data(), "%x", &_sdp_track[track_idx]->_ssrc) != 1) {
+            _sdp_track[track_idx]->_ssrc = 0;
+        }
     } else {
         _sdp_track[track_idx]->_ssrc = 0;
     }
 
     if (_rtp_type == Rtsp::RTP_TCP) {
-        int interleaved_rtp, interleaved_rtcp;
-        sscanf(transport_map["interleaved"].data(), "%d-%d", &interleaved_rtp, &interleaved_rtcp);
+        int interleaved_rtp = 0, interleaved_rtcp = 0;
+        if (sscanf(transport_map["interleaved"].data(), "%d-%d", &interleaved_rtp, &interleaved_rtcp) != 2 ||
+            interleaved_rtp < 0 || interleaved_rtp > 255 || interleaved_rtcp < 0 || interleaved_rtcp > 255) {
+            throw std::runtime_error("invalid interleaved transport channels");
+        }
         _sdp_track[track_idx]->_interleaved = interleaved_rtp;
     } else {
         auto port_str = transport_map[(_rtp_type == Rtsp::RTP_MULTICAST ? "port" : "server_port")];
-        int rtp_port, rtcp_port;
-        sscanf(port_str.data(), "%d-%d", &rtp_port, &rtcp_port);
+        int rtp_port = 0, rtcp_port = 0;
+        if (sscanf(port_str.data(), "%d-%d", &rtp_port, &rtcp_port) != 2 ||
+            rtp_port <= 0 || rtp_port > 65535 || rtcp_port <= 0 || rtcp_port > 65535) {
+            throw std::runtime_error("invalid RTP transport ports");
+        }
         auto &pRtpSockRef = _rtp_sock[track_idx];
         auto &pRtcpSockRef = _rtcp_sock[track_idx];
 

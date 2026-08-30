@@ -9,6 +9,7 @@
 #define N_TAG_SIZE			4	// previous tag size
 #define FLV_HEADER_SIZE		9	// DataOffset included
 #define FLV_TAG_HEADER_SIZE	11	// StreamID included
+#define FLV_MAX_TAG_BODY_SIZE	(16U * 1024U * 1024U)
 
 #define FLV_VIDEO_CODEC_NAME(codecid) (FLV_VIDEO_H264==(codecid) ? FLV_VIDEO_AVCC : (FLV_VIDEO_H265==(codecid) ? FLV_VIDEO_HVCC : (FLV_VIDEO_H266==(codecid) ? FLV_VIDEO_VVCC : FLV_VIDEO_AV1C)))
 
@@ -118,7 +119,7 @@ int flv_parser_input(struct flv_parser_t* parser, const uint8_t* data, size_t by
 	uint32_t size;
 	enum {FLV_HEADER=0, FLV_HEADER_OFFSET, FLV_PREVIOUS_SIZE, FLV_TAG_HEADER, FLV_AVHEADER_CODEC, FLV_AVHEADER_EXTRA, FLV_TAG_BODY};
 
-	for (n = r = 0; bytes > 0 && n >= 0 && 0 == r; data += n, bytes -= n)
+	for (n = r = 0; bytes > 0 && 0 == r; data += n, bytes -= n)
 	{
 		switch (parser->state)
 		{
@@ -208,6 +209,8 @@ int flv_parser_input(struct flv_parser_t* parser, const uint8_t* data, size_t by
 				parser->bytes = 0;
 				parser->state = FLV_TAG_BODY;
 
+				if (parser->tag.size < parser->expect || parser->tag.size > FLV_MAX_TAG_BODY_SIZE)
+					return -EINVAL;
 				parser->expect = parser->tag.size - parser->expect;
 				parser->body = parser->alloc ? parser->alloc(param, parser->expect) : malloc(parser->expect);
 				if (!parser->body)

@@ -48,15 +48,11 @@ vector<string> split(const string& s, const char *delim) {
     size_t last = 0;
     auto index = s.find(delim, last);
     while (index != string::npos) {
-        if (index - last >= 0) {
-            ret.push_back(s.substr(last, index - last));
-        }
+        ret.push_back(s.substr(last, index - last));
         last = index + strlen(delim);
         index = s.find(delim, last);
     }
-    if (!s.size() || s.size() - last >= 0) {
-        ret.push_back(s.substr(last));
-    }
+    ret.push_back(s.substr(last));
     return ret;
 }
 

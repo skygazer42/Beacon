@@ -24,6 +24,15 @@
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
+static int dash_gmtime(const time_t* value, struct tm* result)
+{
+#if defined(_WIN32)
+	return 0 == gmtime_s(result, value);
+#else
+	return NULL != gmtime_r(value, result);
+#endif
+}
+
 struct dash_segment_t
 {
 	struct list_head link;
@@ -492,6 +501,8 @@ size_t dash_mpd_playlist(struct dash_mpd_t* mpd, char* playlist, size_t bytes)
 	int i;
 	size_t n;
 	time_t now;
+	struct tm availability_tm;
+	struct tm publish_tm;
 	char publishTime[32];
 	char availabilityStartTime[32];
 	unsigned int minimumUpdatePeriod;
@@ -501,8 +512,10 @@ size_t dash_mpd_playlist(struct dash_mpd_t* mpd, char* playlist, size_t bytes)
 	struct list_head *link;
 
 	now = time(NULL);
-	strftime(availabilityStartTime, sizeof(availabilityStartTime), "%Y-%m-%dT%H:%M:%SZ", gmtime(&mpd->time));
-	strftime(publishTime, sizeof(publishTime), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
+	if (!dash_gmtime(&mpd->time, &availability_tm) || !dash_gmtime(&now, &publish_tm))
+		return 0;
+	strftime(availabilityStartTime, sizeof(availabilityStartTime), "%Y-%m-%dT%H:%M:%SZ", &availability_tm);
+	strftime(publishTime, sizeof(publishTime), "%Y-%m-%dT%H:%M:%SZ", &publish_tm);
 	
 	minimumUpdatePeriod = (unsigned int)MAX(mpd->max_segment_duration / 1000, 1);
 

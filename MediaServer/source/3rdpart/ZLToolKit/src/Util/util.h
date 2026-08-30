@@ -369,6 +369,13 @@ std::string getTimeStr(const char *fmt,time_t time = 0);
 struct tm getLocalTime(time_t sec);
 
 /**
+ * Get UTC time based on a Unix timestamp without using shared static storage.
+ * @param sec Unix timestamp
+ * @return tm structure
+ */
+struct tm getGMTTime(time_t sec);
+
+/**
  * 设置线程名
  * Set thread name
  

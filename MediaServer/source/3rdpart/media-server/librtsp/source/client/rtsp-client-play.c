@@ -42,6 +42,15 @@ Date: 23 Jan 1997 15:35:06 GMT
 #include <assert.h>
 #include <time.h>
 
+static int rtsp_gmtime(const time_t* value, struct tm* result)
+{
+#if defined(_WIN32)
+	return 0 == gmtime_s(result, value);
+#else
+	return NULL != gmtime_r(value, result);
+#endif
+}
+
 static const char* sc_format = 
 	"PLAY %s RTSP/1.0\r\n"
 	"CSeq: %u\r\n"
@@ -58,8 +67,11 @@ int rtsp_header_range_write(char* s, int n, uint64_t npt)
 	if (npt / 1000 < 946656000 /* 2000-01-01 00:00:00 */ ) {
 		return snprintf(s, n, "Range: npt=%" PRIu64 ".%" PRIu64 "-\r\n", npt / 1000, npt % 1000);
 	} else {
+		struct tm tm;
 		now = npt / 1000; // ms -> s
-		return strftime(s, n, "Range: clock=%Y%m%dT%H%M%SZ-\r\n", gmtime(&now));
+		if (!rtsp_gmtime(&now, &tm))
+			return -1;
+		return strftime(s, n, "Range: clock=%Y%m%dT%H%M%SZ-\r\n", &tm);
 	}
 }
 

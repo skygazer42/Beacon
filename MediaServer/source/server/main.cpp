@@ -42,6 +42,7 @@
 #endif
 
 #if !defined(_WIN32)
+#include <sys/stat.h>
 #include "System.h"
 #endif//!defined(_WIN32)
 
@@ -495,6 +496,10 @@ int start_main(int argc,char *argv[]) {
 
 #ifndef DISABLE_MAIN
 int main(int argc,char *argv[]) {
+#if !defined(_WIN32)
+    // Keep files created by recorder and utility code private to the service user/group.
+    umask(0027);
+#endif
     return start_main(argc,argv);
 }
 #endif //DISABLE_MAIN

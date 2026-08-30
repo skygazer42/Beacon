@@ -228,13 +228,13 @@ vector<string> split(const string &s, const char *delim) {
     size_t last = 0;
     auto index = s.find(delim, last);
     while (index != string::npos) {
-        if (index - last > 0) {
+        if (index > last) {
             ret.push_back(s.substr(last, index - last));
         }
         last = index + strlen(delim);
         index = s.find(delim, last);
     }
-    if (!s.size() || s.size() - last > 0) {
+    if (s.empty() || last < s.size()) {
         ret.push_back(s.substr(last));
     }
     return ret;
@@ -465,6 +465,16 @@ struct tm getLocalTime(time_t sec) {
 #else
     no_locks_localtime(&tm, sec);
 #endif //_WIN32
+    return tm;
+}
+
+struct tm getGMTTime(time_t sec) {
+    struct tm tm = {};
+#ifdef _WIN32
+    gmtime_s(&tm, &sec);
+#else
+    gmtime_r(&sec, &tm);
+#endif
     return tm;
 }
 
