@@ -31,9 +31,9 @@ services:
     security_opt:
     - no-new-privileges:true
     ports:
-    - "${BEACON_BIND_ADDRESS:-127.0.0.1}:${BEACON_PROMETHEUS_PORT:-9090}:9090"
+    - "${BEACON_BIND_ADDRESS:-127.0.0.1}:${BEACON_PROMETHEUS_PORT:-9090}:9090" # loopback default; nosemgrep: trailofbits.yaml.docker-compose.port-all-interfaces.port-all-interfaces
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9090/-/ready >/dev/null"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9090/-/ready >/dev/null"] # container-local; nosemgrep: trailofbits.generic.wget-unencrypted-url.wget-unencrypted-url
       interval: 10s
       timeout: 3s
       retries: 12
@@ -59,9 +59,9 @@ services:
     security_opt:
     - no-new-privileges:true
     ports:
-    - "${BEACON_BIND_ADDRESS:-127.0.0.1}:${BEACON_GRAFANA_PORT:-3000}:3000"
+    - "${BEACON_BIND_ADDRESS:-127.0.0.1}:${BEACON_GRAFANA_PORT:-3000}:3000" # loopback default; nosemgrep: trailofbits.yaml.docker-compose.port-all-interfaces.port-all-interfaces
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health | grep -q '\"database\"[[:space:]]*:[[:space:]]*\"ok\"'"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health | grep -q '\"database\"[[:space:]]*:[[:space:]]*\"ok\"'"] # container-local; nosemgrep: trailofbits.generic.wget-unencrypted-url.wget-unencrypted-url
       interval: 10s
       timeout: 3s
       retries: 12

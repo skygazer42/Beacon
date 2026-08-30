@@ -219,9 +219,13 @@ jobs:
         with:
           version: v3.19.0
       - name: Validate Compose
+        env:
+          GF_SECURITY_ADMIN_PASSWORD: ci-only-observability-password
         run: |
           docker compose --env-file deploy/cloud-saas-v1/.env.example -f deploy/cloud-saas-v1/compose.yml config --quiet
           docker compose --env-file deploy/cloud-saas-v1/.env.example -f deploy/cloud-saas-v1/compose.yml -f deploy/cloud-saas-v1/compose.monitoring.yml config --quiet
+          docker compose -f deploy/observability/tracing/compose.yml config --quiet
+          python -m unittest tests.test_observability_compose -v
       - name: Build Cloud image
         run: |
           docker build -f deploy/cloud-saas-v1/Dockerfile -t beacon-cloud-ci:local .
