@@ -47,6 +47,20 @@ def _load_config_data(filepath: str) -> dict:
     return json.loads(content)
 
 
+def _resolve_runtime_config_path(default_root: str, environ=None) -> str:
+    """Resolve config.json explicitly so frozen builds do not depend on _MEIPASS."""
+    environ = environ if environ is not None else os.environ
+    explicit_path = str(environ.get("BEACON_CONFIG_PATH", "") or "").strip()
+    if explicit_path:
+        return os.path.abspath(os.path.expanduser(explicit_path))
+
+    root_dir = str(environ.get("BEACON_ROOT_DIR", "") or "").strip()
+    if root_dir:
+        return os.path.join(os.path.abspath(os.path.expanduser(root_dir)), "config.json")
+
+    return os.path.join(default_root, "config.json")
+
+
 def _config_bool_value(raw_value) -> bool:
     """返回配置布尔值值。"""
     if isinstance(raw_value, bool):
@@ -210,8 +224,9 @@ class Config:
 
     def __init__(self):
         """处理`init`。"""
-        base_dir_parent_dir = os.path.dirname(BASE_DIR)
-        filepath = os.path.join(base_dir_parent_dir, "config.json")
+        legacy_root_dir = os.path.dirname(os.fspath(BASE_DIR))
+        filepath = _resolve_runtime_config_path(legacy_root_dir)
+        base_dir_parent_dir = os.path.dirname(filepath)
         debug_startup_logs = os.environ.get("DJANGO_DEBUG_STARTUP_LOGS") == "1"
         if debug_startup_logs:
             logger.debug("Config.__init__ file=%s", os.path.abspath(__file__))

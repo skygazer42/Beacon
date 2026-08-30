@@ -74,7 +74,7 @@ def build_digital_human_screenshot_object_key(
     return f"digital-human/screenshots/{yyyy}/{mm}/{dd}/device_{device_token}/{leaf}{ext}"
 
 
-def make_s3_client_from_env():
+def make_s3_client_from_env(*, client_config=None):
     """生成`s3``client``from`环境变量。
     
     Create a boto3 S3 client using env config.
@@ -97,7 +97,29 @@ def make_s3_client_from_env():
         endpoint_url=endpoint_url,
         aws_access_key_id=access_key_id,
         aws_secret_access_key=secret_access_key,
+        config=client_config,
     )
+
+
+def check_bucket_access(bucket: str) -> None:
+    """Verify that the configured object store can access the required bucket."""
+    bucket = str(bucket or "").strip()
+    if not bucket:
+        raise ValueError("bucket is required")
+
+    try:
+        from botocore.config import Config  # type: ignore
+    except ImportError as exc:
+        raise RuntimeError(f"botocore dependency missing: {exc}") from exc
+
+    client = make_s3_client_from_env(
+        client_config=Config(
+            connect_timeout=1,
+            read_timeout=1,
+            retries={"total_max_attempts": 1, "mode": "standard"},
+        )
+    )
+    client.head_bucket(Bucket=bucket)
 
 
 def presign_put_image(bucket: str, key: str, content_type: str, expires_in: int) -> Dict[str, Any]:

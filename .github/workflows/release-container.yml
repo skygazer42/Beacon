@@ -1,0 +1,357 @@
+name: Release container
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-container-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build, attest, verify, and publish GHCR image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    environment: release
+    permissions:
+      contents: write # Read the tag and attach verified metadata to its Release.
+      packages: write # Push the image and its registry attestations to GHCR.
+      id-token: write # Request the short-lived Sigstore signing certificate.
+      attestations: write # Store signed attestations in the repository API.
+      artifact-metadata: write # Register metadata for the attested image.
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
+    steps:
+      - name: Check out the immutable release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ github.event.release.tag_name }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate release ref and prepare metadata
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/release_evidence.py validate-ref --root . --tag "${RELEASE_TAG}"
+          release_commit="$(git rev-parse --verify 'HEAD^{commit}')"
+          repository_lower="$(printf '%s' "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
+          image_name="ghcr.io/${repository_lower}"
+          image_created="$(git show -s --format=%cI "${release_commit}")"
+          image_version_tag="${RELEASE_TAG//+/_}"
+          if [[ ! "${image_version_tag}" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
+            echo "release tag cannot be represented safely as an OCI tag" >&2
+            exit 1
+          fi
+          evidence_dir="${RUNNER_TEMP}/Beacon-${RELEASE_TAG}-container-evidence"
+          mkdir -p "${evidence_dir}"
+          {
+            echo "release_commit=${release_commit}"
+            echo "image_name=${image_name}"
+            echo "image_created=${image_created}"
+            echo "image_version_tag=${image_version_tag}"
+            echo "image_sha_tag=sha-${release_commit}"
+            echo "evidence_dir=${evidence_dir}"
+            echo "sbom_path=${evidence_dir}/container.spdx.json"
+            echo "trivy_path=${evidence_dir}/container-vulnerability-report.json"
+            echo "image_index_path=${evidence_dir}/image-index.json"
+            echo "image_manifest_path=${evidence_dir}/linux-amd64-manifest.json"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build local image for vulnerability gate
+        id: scan-image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: deploy/cloud-saas-v1/Dockerfile
+          platforms: linux/amd64
+          pull: true
+          load: true
+          push: false
+          tags: ${{ steps.release.outputs.image_name }}:${{ steps.release.outputs.image_version_tag }}
+          build-args: |
+            BEACON_IMAGE_VERSION=${{ env.RELEASE_TAG }}
+            BEACON_IMAGE_REVISION=${{ steps.release.outputs.release_commit }}
+            BEACON_IMAGE_CREATED=${{ steps.release.outputs.image_created }}
+            BEACON_IMAGE_SOURCE=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha
+          provenance: false
+          sbom: false
+
+      - name: Reject high and critical image vulnerabilities before push
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ steps.release.outputs.image_name }}:${{ steps.release.outputs.image_version_tag }}
+          scanners: vuln
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: "1"
+          format: json
+          output: ${{ steps.release.outputs.trivy_path }}
+          hide-progress: true
+          timeout: 10m
+          version: v0.74.0
+
+      - name: Record scanned image identity
+        id: scan-metadata
+        shell: bash
+        env:
+          SCANNED_IMAGE_REF: ${{ steps.release.outputs.image_name }}:${{ steps.release.outputs.image_version_tag }}
+        run: |
+          set -euo pipefail
+          config_digest="$(docker image inspect "${SCANNED_IMAGE_REF}" --format '{{.Id}}')"
+          if [[ ! "${config_digest}" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            echo "local scan image returned an invalid config digest" >&2
+            exit 1
+          fi
+          echo "config_digest=${config_digest}" >> "${GITHUB_OUTPUT}"
+
+      - name: Build and push immutable image
+        id: image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          file: deploy/cloud-saas-v1/Dockerfile
+          platforms: linux/amd64
+          pull: true
+          push: true
+          tags: |
+            ${{ steps.release.outputs.image_name }}:${{ steps.release.outputs.image_version_tag }}
+            ${{ steps.release.outputs.image_name }}:${{ steps.release.outputs.image_sha_tag }}
+          build-args: |
+            BEACON_IMAGE_VERSION=${{ env.RELEASE_TAG }}
+            BEACON_IMAGE_REVISION=${{ steps.release.outputs.release_commit }}
+            BEACON_IMAGE_CREATED=${{ steps.release.outputs.image_created }}
+            BEACON_IMAGE_SOURCE=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: mode=max
+          sbom: true
+
+      - name: Verify pushed platform manifest matches scanned image
+        id: published-image
+        shell: bash
+        env:
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+          IMAGE_INDEX_PATH: ${{ steps.release.outputs.image_index_path }}
+          IMAGE_MANIFEST_PATH: ${{ steps.release.outputs.image_manifest_path }}
+          IMAGE_NAME: ${{ steps.release.outputs.image_name }}
+          SCANNED_IMAGE_CONFIG_DIGEST: ${{ steps.scan-metadata.outputs.config_digest }}
+        run: |
+          set -euo pipefail
+          docker buildx imagetools inspect --raw "${IMAGE_NAME}@${IMAGE_DIGEST}" > "${IMAGE_INDEX_PATH}"
+          platform_digest_path="${RUNNER_TEMP}/beacon-platform-manifest-digest"
+          python - "${IMAGE_INDEX_PATH}" "${platform_digest_path}" <<'PY'
+          import json
+          import os
+          import re
+          import sys
+          from pathlib import Path
+
+          digest_pattern = re.compile(r"sha256:[a-f0-9]{64}")
+          index_digest = os.environ["IMAGE_DIGEST"]
+          if not digest_pattern.fullmatch(index_digest):
+              raise SystemExit("build action returned an invalid image digest")
+          payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          manifests = payload.get("manifests")
+          if manifests is None:
+              platform_digest = index_digest
+          else:
+              candidates = [
+                  str(item.get("digest") or "")
+                  for item in manifests
+                  if (item.get("platform") or {}).get("os") == "linux"
+                  and (item.get("platform") or {}).get("architecture") == "amd64"
+              ]
+              if len(candidates) != 1 or not digest_pattern.fullmatch(candidates[0]):
+                  raise SystemExit("pushed index does not contain exactly one linux/amd64 image")
+              platform_digest = candidates[0]
+          Path(sys.argv[2]).write_text(platform_digest + "\n", encoding="utf-8")
+          PY
+          IFS= read -r platform_digest < "${platform_digest_path}"
+          docker buildx imagetools inspect --raw \
+            "${IMAGE_NAME}@${platform_digest}" > "${IMAGE_MANIFEST_PATH}"
+          python - "${IMAGE_MANIFEST_PATH}" <<'PY'
+          import json
+          import os
+          import re
+          import sys
+          from pathlib import Path
+
+          digest_pattern = re.compile(r"sha256:[a-f0-9]{64}")
+          expected = os.environ["SCANNED_IMAGE_CONFIG_DIGEST"]
+          payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          published = str((payload.get("config") or {}).get("digest") or "")
+          if not digest_pattern.fullmatch(published):
+              raise SystemExit("pushed linux/amd64 manifest has an invalid config digest")
+          if published != expected:
+              raise SystemExit("pushed linux/amd64 image differs from the Trivy-scanned image")
+          PY
+          echo "platform_manifest_digest=${platform_digest}" >> "${GITHUB_OUTPUT}"
+
+      - name: Generate standalone image SPDX SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          image: ${{ steps.release.outputs.image_name }}@${{ steps.image.outputs.digest }}
+          format: spdx-json
+          output-file: ${{ steps.release.outputs.sbom_path }}
+          syft-version: v1.42.3
+          dependency-snapshot: false
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Generate signed image provenance
+        id: provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ steps.release.outputs.image_name }}
+          subject-digest: ${{ steps.image.outputs.digest }}
+          subject-version: ${{ env.RELEASE_TAG }}
+          push-to-registry: true
+
+      - name: Generate signed image SBOM attestation
+        id: sbom-attestation
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ steps.release.outputs.image_name }}
+          subject-digest: ${{ steps.image.outputs.digest }}
+          subject-version: ${{ env.RELEASE_TAG }}
+          sbom-path: ${{ steps.release.outputs.sbom_path }}
+          push-to-registry: true
+
+      - name: Preserve and verify signed attestations
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+          IMAGE_NAME: ${{ steps.release.outputs.image_name }}
+          RELEASE_COMMIT: ${{ steps.release.outputs.release_commit }}
+          EVIDENCE_DIR: ${{ steps.release.outputs.evidence_dir }}
+          PROVENANCE_BUNDLE_PATH: ${{ steps.provenance.outputs.bundle-path }}
+          SBOM_BUNDLE_PATH: ${{ steps.sbom-attestation.outputs.bundle-path }}
+        run: |
+          set -euo pipefail
+          install -m 0600 "${PROVENANCE_BUNDLE_PATH}" "${EVIDENCE_DIR}/container-provenance.sigstore.json"
+          install -m 0600 "${SBOM_BUNDLE_PATH}" "${EVIDENCE_DIR}/container-sbom.sigstore.json"
+          gh attestation verify "oci://${IMAGE_NAME}@${IMAGE_DIGEST}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --bundle "${EVIDENCE_DIR}/container-provenance.sigstore.json" \
+            --source-ref "refs/tags/${RELEASE_TAG}" \
+            --source-digest "${RELEASE_COMMIT}" \
+            --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release-container.yml" \
+            --predicate-type "https://slsa.dev/provenance/v1" \
+            --format json > "${EVIDENCE_DIR}/container-provenance-verification.json"
+          gh attestation verify "oci://${IMAGE_NAME}@${IMAGE_DIGEST}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --bundle "${EVIDENCE_DIR}/container-sbom.sigstore.json" \
+            --source-ref "refs/tags/${RELEASE_TAG}" \
+            --source-digest "${RELEASE_COMMIT}" \
+            --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release-container.yml" \
+            --predicate-type "https://spdx.dev/Document" \
+            --format json > "${EVIDENCE_DIR}/container-sbom-verification.json"
+          chmod 0600 "${EVIDENCE_DIR}"/*-verification.json
+
+      - name: Assemble and verify container evidence
+        shell: bash
+        env:
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+          IMAGE_NAME: ${{ steps.release.outputs.image_name }}
+          IMAGE_SHA_TAG: ${{ steps.release.outputs.image_sha_tag }}
+          IMAGE_VERSION_TAG: ${{ steps.release.outputs.image_version_tag }}
+          PUBLISHED_IMAGE_MANIFEST_DIGEST: ${{ steps.published-image.outputs.platform_manifest_digest }}
+          SCANNED_IMAGE_CONFIG_DIGEST: ${{ steps.scan-metadata.outputs.config_digest }}
+          RELEASE_COMMIT: ${{ steps.release.outputs.release_commit }}
+          EVIDENCE_DIR: ${{ steps.release.outputs.evidence_dir }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          evidence_dir = Path(os.environ["EVIDENCE_DIR"])
+          image_name = os.environ["IMAGE_NAME"]
+          release_tag = os.environ["RELEASE_TAG"]
+          digest = os.environ["IMAGE_DIGEST"]
+          metadata = {
+              "schemaVersion": 1,
+              "image": image_name,
+              "digest": digest,
+              "immutableReference": f"{image_name}@{digest}",
+              "tags": [
+                  f"{image_name}:{os.environ['IMAGE_VERSION_TAG']}",
+                  f"{image_name}:{os.environ['IMAGE_SHA_TAG']}",
+              ],
+              "platforms": ["linux/amd64"],
+              "publishedImageManifestDigest": os.environ["PUBLISHED_IMAGE_MANIFEST_DIGEST"],
+              "scannedImageConfigDigest": os.environ["SCANNED_IMAGE_CONFIG_DIGEST"],
+              "vulnerabilityGate": {
+                  "ignoreUnfixed": False,
+                  "result": "passed",
+                  "scanner": "Trivy v0.74.0",
+                  "severities": ["HIGH", "CRITICAL"],
+              },
+              "sourceRepository": os.environ["GITHUB_REPOSITORY"],
+              "sourceRef": f"refs/tags/{release_tag}",
+              "sourceCommit": os.environ["RELEASE_COMMIT"],
+              "workflowRunUrl": (
+                  f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}"
+                  f"/actions/runs/{os.environ['GITHUB_RUN_ID']}"
+                  f"/attempts/{os.environ['GITHUB_RUN_ATTEMPT']}"
+              ),
+          }
+          (evidence_dir / "container-release.json").write_text(
+              json.dumps(metadata, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+          (
+            cd "${EVIDENCE_DIR}"
+            sha256sum \
+              container-release.json \
+              container.spdx.json \
+              container-vulnerability-report.json \
+              image-index.json \
+              linux-amd64-manifest.json \
+              container-provenance.sigstore.json \
+              container-provenance-verification.json \
+              container-sbom.sigstore.json \
+              container-sbom-verification.json > SHA256SUMS.container
+            sha256sum --check SHA256SUMS.container
+          )
+
+      - name: Upload immutable workflow evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Beacon-${{ env.RELEASE_TAG }}-container-evidence
+          path: ${{ steps.release.outputs.evidence_dir }}
+          if-no-files-found: error
+          retention-days: 90
+          overwrite: false
+
+      - name: Attach evidence to GitHub Release without replacement
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVIDENCE_DIR: ${{ steps.release.outputs.evidence_dir }}
+        run: |
+          set -euo pipefail
+          gh release upload "${RELEASE_TAG}" "${EVIDENCE_DIR}"/* \
+            --repo "${GITHUB_REPOSITORY}"

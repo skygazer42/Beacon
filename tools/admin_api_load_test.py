@@ -9,6 +9,7 @@ environments where tools like k6/wrk/hey are not installed.
 import argparse
 import json
 import math
+import re
 import ssl
 import threading
 import time
@@ -17,7 +18,19 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from http.client import HTTPConnection, HTTPSConnection, HTTPResponse
 from pathlib import Path
 from typing import Dict, List, Tuple
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlencode, urlparse
+
+
+HEADER_NAME_PATTERN = re.compile(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+")
+SENSITIVE_QUERY_FRAGMENTS = (
+    "authorization",
+    "credential",
+    "password",
+    "secret",
+    "signature",
+    "token",
+    "apikey",
+)
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:
@@ -33,6 +46,24 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--cookie-file", default="", help="Optional Netscape cookie jar path exported by curl")
     parser.add_argument("--body", default="", help="Optional request body")
     parser.add_argument("--output", default="", help="Optional JSON output path")
+    parser.add_argument(
+        "--max-error-rate",
+        type=float,
+        default=None,
+        help="Fail with exit code 2 when (non-2xx + exceptions) / requests exceeds this ratio",
+    )
+    parser.add_argument(
+        "--max-p95-ms",
+        type=float,
+        default=None,
+        help="Fail with exit code 2 when P95 latency exceeds this value",
+    )
+    parser.add_argument(
+        "--min-rps",
+        type=float,
+        default=None,
+        help="Fail with exit code 2 when measured requests per second is below this value",
+    )
     return parser
 
 
@@ -46,8 +77,55 @@ def _parse_headers(header_args: List[str]) -> Dict[str, str]:
         if ":" not in text:
             raise ValueError(f"invalid header format: {text!r}")
         key, value = text.split(":", 1)
-        headers[key.strip()] = value.strip()
+        key = key.strip()
+        value = value.strip()
+        if not HEADER_NAME_PATTERN.fullmatch(key) or "\r" in value or "\n" in value:
+            raise ValueError(f"invalid HTTP header: {text!r}")
+        headers[key] = value
     return headers
+
+
+def _redacted_url(url: str) -> str:
+    """Redact secret-bearing query values before including a URL in reports."""
+    parsed = urlparse(url)
+    redacted_query = []
+    for key, value in parse_qsl(parsed.query, keep_blank_values=True):
+        normalized_key = re.sub(r"[^a-z0-9]", "", key.lower())
+        is_sensitive = any(fragment in normalized_key for fragment in SENSITIVE_QUERY_FRAGMENTS)
+        redacted_query.append((key, "REDACTED" if is_sensitive else value))
+    return parsed._replace(query=urlencode(redacted_query, doseq=True)).geturl()
+
+
+def _validate_arguments(args) -> None:
+    """Reject nonsensical or unsafe load-test inputs before making requests."""
+    if int(args.requests) <= 0:
+        raise ValueError("--requests must be greater than zero")
+    if int(args.concurrency) <= 0:
+        raise ValueError("--concurrency must be greater than zero")
+    if float(args.timeout_seconds) <= 0:
+        raise ValueError("--timeout-seconds must be greater than zero")
+    if int(args.warmup_requests) < 0:
+        raise ValueError("--warmup-requests cannot be negative")
+    if args.max_error_rate is not None and not 0 <= float(args.max_error_rate) <= 1:
+        raise ValueError("--max-error-rate must be between 0 and 1")
+    if args.max_p95_ms is not None and float(args.max_p95_ms) < 0:
+        raise ValueError("--max-p95-ms cannot be negative")
+    if args.min_rps is not None and float(args.min_rps) < 0:
+        raise ValueError("--min-rps cannot be negative")
+    method = str(args.method or "").upper()
+    if not method or not HEADER_NAME_PATTERN.fullmatch(method):
+        raise ValueError(f"invalid HTTP method: {args.method!r}")
+    parsed = urlparse(args.url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ValueError(f"unsupported URL: {args.url!r}")
+    if parsed.username is not None or parsed.password is not None:
+        raise ValueError("URL userinfo is not allowed; use an Authorization header")
+    if parsed.fragment:
+        raise ValueError("URL fragments are not allowed")
+    try:
+        parsed.port
+    except ValueError as exc:
+        raise ValueError(f"invalid URL port: {exc}") from exc
 
 
 def _load_cookie_header(cookie_file: str) -> str:
@@ -185,10 +263,9 @@ def _worker(
 
 def _run_load_test(args) -> Dict[str, object]:
     """执行`load``test`。"""
+    _validate_arguments(args)
     method = str(args.method or "GET").upper()
     parsed = urlparse(args.url)
-    if parsed.scheme not in ("http", "https") or not parsed.hostname:
-        raise ValueError(f"unsupported URL: {args.url!r}")
 
     headers = _parse_headers(args.header)
     cookie_header = _load_cookie_header(args.cookie_file) if args.cookie_file else ""
@@ -257,10 +334,10 @@ def _run_load_test(args) -> Dict[str, object]:
     exception_count = sum(exception_counts.values())
     non_2xx_count = response_count - success_count
 
-    return {
+    payload = {
         "started_at_epoch": int(started_at),
         "target": {
-            "url": args.url,
+            "url": _redacted_url(args.url),
             "method": method,
         },
         "load": {
@@ -289,20 +366,50 @@ def _run_load_test(args) -> Dict[str, object]:
             },
         },
     }
+    error_rate = (non_2xx_count + exception_count) / total_requests
+    criteria = {}
+    failures = []
+    if args.max_error_rate is not None:
+        maximum = float(args.max_error_rate)
+        criteria["max_error_rate"] = maximum
+        if error_rate > maximum:
+            failures.append(f"error_rate {error_rate:.6f} exceeds {maximum:.6f}")
+    if args.max_p95_ms is not None:
+        maximum = float(args.max_p95_ms)
+        criteria["max_p95_ms"] = maximum
+        actual_p95 = float(payload["results"]["latency_ms"]["p95"])
+        if actual_p95 > maximum:
+            failures.append(f"p95_ms {actual_p95:.3f} exceeds {maximum:.3f}")
+    if args.min_rps is not None:
+        minimum = float(args.min_rps)
+        criteria["min_rps"] = minimum
+        actual_rps = float(payload["results"]["requests_per_second"])
+        if actual_rps < minimum:
+            failures.append(f"requests_per_second {actual_rps:.3f} is below {minimum:.3f}")
+    payload["gate"] = {
+        "passed": not failures,
+        "error_rate": round(error_rate, 6),
+        "criteria": criteria,
+        "failures": failures,
+    }
+    return payload
 
 
 def main() -> int:
     """处理`main`。"""
     parser = _build_arg_parser()
     args = parser.parse_args()
-    payload = _run_load_test(args)
+    try:
+        payload = _run_load_test(args)
+    except ValueError as exc:
+        parser.error(str(exc))
     output = json.dumps(payload, ensure_ascii=False, indent=2)
     print(output)
     if args.output:
         output_path = Path(args.output)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(output + "\n", encoding="utf-8")
-    return 0
+    return 0 if payload["gate"]["passed"] else 2
 
 
 if __name__ == "__main__":

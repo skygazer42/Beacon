@@ -60,6 +60,34 @@ BEACON_{SECTION}_{KEY}
 
 ---
 
+## Admin HTTP 服务 {#admin-http-server}
+
+| 变量名 | 类型 | 默认值 | 对应 config.json | 说明 |
+|--------|------|--------|-----------------|------|
+| `BEACON_ADMIN_SERVER` | string | `"waitress"` | `adminServer` | `waitress` 为生产默认；`django` 仅供显式开发调试 |
+| `BEACON_ADMIN_THREADS` | int | `4` | `adminThreads` | Waitress 工作线程数，范围 1–64 |
+| `BEACON_ADMIN_TRUSTED_PROXY` | IP | `""` | `adminTrustedProxy` | 唯一可信直连反向代理 IP；配置后信任其 `X-Forwarded-Proto` 与 `X-Forwarded-For`，禁止 `*` |
+
+---
+
+## Admin 进程角色 {#admin-process-roles}
+
+| 变量名 | 类型 | 默认值 | 说明 |
+|--------|------|--------|------|
+| `BEACON_BACKGROUND_ROLE` | enum | `all` | `all`（Edge 单进程兼容）、`web`、`worker`、`init` 或 `disabled`；Cloud 启动脚本要求显式设置 |
+| `BEACON_DISABLE_BACKGROUND` | bool | `false` | 旧版兼容开关；为真时等价于 `disabled` |
+| `BEACON_BACKGROUND_HEARTBEAT_PATH` | absolute path | `/tmp/beacon-background-worker.json` | Worker 健康状态文件，仅应位于该容器可写目录 |
+| `BEACON_BACKGROUND_HEARTBEAT_SECONDS` | number | `5` | leader heartbeat 周期，范围 1–30 秒 |
+| `BEACON_BACKGROUND_HEARTBEAT_MAX_AGE_SECONDS` | number | `20` | 健康探针允许的 heartbeat 最大年龄 |
+| `BEACON_BACKGROUND_STANDBY_POLL_SECONDS` | number | `5` | standby 重新竞争 PostgreSQL advisory lock 的周期，范围 1–30 秒 |
+| `BEACON_MIGRATION_WAIT_ATTEMPTS` | int | `180` | Web/Worker 等待 schema 就绪的最大尝试次数 |
+| `BEACON_MIGRATION_WAIT_DELAY_SECONDS` | number | `2` | migration 检查重试间隔 |
+
+Cloud 的 `worker` 角色必须使用 PostgreSQL；advisory lock 依赖一个持续存活的独立数据库
+会话。不要让 Web、Worker 和 init 共用同一个容器进程，也不要在每个 Web 入口重复执行 migration。
+
+---
+
 ## Open API 认证与网关 {#open-api}
 
 | 变量名 | 类型 | 默认值 | 对应 config.json | 说明 |
@@ -79,8 +107,19 @@ BEACON_{SECTION}_{KEY}
 | 变量名 | 类型 | 默认值 | 对应 config.json | 说明 |
 |--------|------|--------|-----------------|------|
 | `BEACON_ROOT_DIR` | string | — | — | Beacon 项目根目录路径 |
+| `BEACON_CONFIG_PATH` | string | `${BEACON_ROOT_DIR}/config.json` 或源码根目录下的 `config.json` | — | Admin 使用的配置文件绝对路径；打包运行时推荐显式设置 |
 | `BEACON_UPLOAD_DIR` | string | — | `uploadDir` | 上传文件目录 |
 | `BEACON_MODEL_DIR` | string | — | `modelDir` | 模型文件目录 |
+
+---
+
+## MediaServer {#mediaserver}
+
+| 变量名 | 类型 | 默认值 | 对应 config.json | 说明 |
+|--------|------|--------|-----------------|------|
+| `BEACON_MEDIA_SECRET` | string | 自动生成 | `mediaSecret` | MediaServer 管理 API 密钥；生产应显式注入独立随机值 |
+| `BEACON_MEDIA_RTP_PROXY_PORT` | int | `10000` | `mediaRtpProxyPort` | RTP Proxy 的 TCP/UDP 监听端口；启动器会预检两种协议 |
+| `BEACON_MEDIA_API_DEBUG` | bool | `false` | `mediaApiDebug` | API 请求元数据调试日志；生产必须关闭 |
 
 ---
 
@@ -91,15 +130,19 @@ BEACON_{SECTION}_{KEY}
 | `BEACON_SQLITE_DB_PATH` | string | `""` | 自定义 SQLite 数据库文件路径（覆盖默认的 `Admin/Admin.sqlite3`） |
 | `BEACON_SQLITE_TIMEOUT_SECONDS` | int | `30` | SQLite 写锁等待超时（秒，1~300） |
 | `BEACON_CLOUD_DB_URL` | string | `""` | 云部署数据库连接 URL |
+| `BEACON_PG_CONN_MAX_AGE_SECONDS` | int | `60` | Django PostgreSQL 持久连接寿命，范围 0–3600 秒；每次复用前启用健康检查 |
+| `BEACON_REQUIRE_DATABASE_TLS` | bool | `false` | 设为真时要求 URL 中 `sslmode=require|verify-ca|verify-full`；外置数据库的 Cloud 启动脚本默认要求 TLS |
 
 !!! tip "数据库 URL 格式"
 
     === "PostgreSQL"
         ```
-        postgres://user:password@host:5432/dbname
+        postgres://user:password@host:5432/dbname?sslmode=verify-full&connect_timeout=10
         ```
 
-    当前只支持 `postgres://` 与 `postgresql://` URL；其他 scheme 会被拒绝。
+    当前只支持 `postgres://` 与 `postgresql://` URL；其他 scheme 会被拒绝。查询参数采用
+    allowlist，可使用 `sslmode`、`sslrootcert`、`sslcert`、`sslkey`、`connect_timeout`、
+    `application_name` 和 `target_session_attrs`；未知或重复参数会关闭式拒绝。
 
 ---
 
@@ -119,6 +162,7 @@ BEACON_{SECTION}_{KEY}
 | `BEACON_DJANGO_HSTS_INCLUDE_SUBDOMAINS` | bool | `false` | HSTS 是否覆盖所有子域名 |
 | `BEACON_DJANGO_HSTS_PRELOAD` | bool | `false` | 是否声明 HSTS preload；提交预加载列表前需单独评估 |
 | `BEACON_DJANGO_CSRF_TRUSTED_ORIGINS` | string | `""` | CSRF 可信源列表（逗号分隔），如 `https://beacon.example.com` |
+| `BEACON_CLOUD_ALLOW_INSECURE_HTTP` | bool | `false` | 仅 Cloud Compose 的 loopback HTTP POC 例外；设为 `true` 才允许关闭 Secure Cookie，生产不得启用 |
 
 !!! danger "生产环境必设项"
     当 `BEACON_DJANGO_DEBUG=0` 时，以下变量**必须**正确设置，否则服务将拒绝启动：

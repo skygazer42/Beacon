@@ -6,6 +6,8 @@ from typing import Dict, Optional
 
 
 logger = logging.getLogger(__name__)
+
+
 class TranscodeManager:
     def __init__(self, config, zlm):
         """处理`init`。"""
@@ -25,6 +27,12 @@ class TranscodeManager:
             return
         self._thread = threading.Thread(target=self._run, name="beacon-transcode-clean", daemon=True)
         self._thread.start()
+
+    def shutdown(self, timeout: float = 3.0):
+        """Stop the cleanup thread without waiting for its polling interval."""
+        self._shutdown.set()
+        if self._thread:
+            self._thread.join(timeout=timeout)
 
     def touch(self, key: str):
         """刷新相关数据。"""
@@ -146,4 +154,4 @@ class TranscodeManager:
             for key in self._collect_keys_to_del(cutoff):
                 self._delete_key_best_effort(key)
 
-            time.sleep(30)
+            self._shutdown.wait(30)

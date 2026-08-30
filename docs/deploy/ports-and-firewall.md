@@ -106,11 +106,14 @@ Beacon 默认端口字段（可按交付环境调整）：
 
 Cloud POC 端口以 `deploy/cloud-saas-v1/compose.yml` 为准，常见映射：
 
-- Admin：宿主机 `9991` -> 容器内 `8000`
-- MinIO：`9000/9001`（POC 对外暴露，生产通常不建议直接暴露）
+- Admin：默认仅 `127.0.0.1:9991` -> 容器内 `8000`
+- MinIO：默认仅 `127.0.0.1:9000/9001`；生产不得直接向公网暴露 Console
 
 说明：
 
+- Compose 可通过 `BEACON_BIND_ADDRESS` 和对应 `BEACON_*_PORT` 调整宿主机绑定。
+- 需要远程访问时优先绑定明确私网地址并经反向代理/防火墙放行，不要把 `0.0.0.0`
+  当作生产默认值。
 - POC 仅用于快速功能测试；生产环境应按安全基线收敛端口暴露策略。
 
 ---
@@ -169,4 +172,3 @@ nc -vz 127.0.0.1 9993
 
 - OpenAPI Token/ApiKey 鉴权是否配置正确（`BEACON_REQUIRE_OPEN_API_TOKEN`、ApiKey scope）
 - OpenAPI IP allowlist/denylist 是否误拦截（`BEACON_OPEN_API_IP_*`）
-

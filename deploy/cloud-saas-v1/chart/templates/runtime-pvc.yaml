@@ -1,0 +1,21 @@
+{{- $persistence := .Values.beaconCloud.runtimeStorage.persistence -}}
+{{- if and $persistence.enabled (not $persistence.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "beacon-cloud-saas-v1.runtimePVCName" . }}
+  labels:
+    {{- include "beacon-cloud-saas-v1.labels" . | nindent 4 }}
+    app.kubernetes.io/component: runtime-storage
+spec:
+  accessModes:
+    {{- range $persistence.accessModes }}
+    - {{ . }}
+    {{- end }}
+  resources:
+    requests:
+      storage: {{ $persistence.size }}
+  {{- if $persistence.storageClassName }}
+  storageClassName: {{ $persistence.storageClassName | quote }}
+  {{- end }}
+{{- end }}

@@ -75,6 +75,69 @@ using namespace toolkit;
 using namespace mediakit;
 
 namespace {
+    bool beacon_has_suffix(const std::string &value, const std::string &suffix) {
+        return value.size() >= suffix.size()
+            && value.compare(value.size() - suffix.size(), suffix.size(), suffix) == 0;
+    }
+
+    bool beacon_is_sensitive_name(std::string name) {
+        try {
+            name = strCoding::UrlDecodeComponent(name);
+        } catch (...) {
+        }
+        strToLower(name);
+        trim(name);
+        return name == "key"
+            || name == "api_key"
+            || name == "apikey"
+            || beacon_has_suffix(name, "secret")
+            || beacon_has_suffix(name, "token")
+            || beacon_has_suffix(name, "password")
+            || beacon_has_suffix(name, "passwd");
+    }
+
+    bool beacon_is_sensitive_header(std::string name) {
+        strToLower(name);
+        trim(name);
+        return name == "authorization"
+            || name == "proxy-authorization"
+            || name == "cookie"
+            || name == "set-cookie"
+            || name == "x-api-key"
+            || name == "x-beacon-token";
+    }
+
+    std::string beacon_redacted_http_target(const Parser &parser) {
+        const auto &params = parser.params();
+        if (params.empty()) {
+            return parser.url();
+        }
+
+        std::string target = parser.url() + "?";
+        size_t offset = 0;
+        while (offset <= params.size()) {
+            auto end = params.find('&', offset);
+            if (end == std::string::npos) {
+                end = params.size();
+            }
+            auto item = params.substr(offset, end - offset);
+            auto equal = item.find('=');
+            if (equal == std::string::npos) {
+                target.append(item);
+            } else {
+                auto key = item.substr(0, equal);
+                target.append(key).append("=");
+                target.append(beacon_is_sensitive_name(key) ? "<redacted>" : item.substr(equal + 1));
+            }
+            if (end == params.size()) {
+                break;
+            }
+            target.push_back('&');
+            offset = end + 1;
+        }
+        return target;
+    }
+
     bool beacon_env_on(const char *name) {
         const char *raw = ::getenv(name);
         if (!raw) {
@@ -326,7 +389,7 @@ namespace {
         }
         span->start_us = beacon_now_us();
         span->http_method = parser.method();
-        span->http_target = parser.fullUrl();
+        span->http_target = beacon_redacted_http_target(parser);
         span->name = "http " + strToLower(trim(std::string(span->http_method))) + " " + parser.url();
         span->sampled = true;
 
@@ -401,7 +464,7 @@ const string kDefaultSnap = API_FIELD"defaultSnap";
 const string kDownloadRoot = API_FIELD"downloadRoot";
 
 static onceToken token([]() {
-    mINI::Instance()[kApiDebug] = "1";
+    mINI::Instance()[kApiDebug] = "0";
     mINI::Instance()[kSecret] = "";
     mINI::Instance()[kSnapRoot] = "./www/snap/";
     mINI::Instance()[kDefaultSnap] = "./www/logo.png";
@@ -592,19 +655,21 @@ static inline void addHttpListener(){
                 }
 
                 LogContextCapture log(getLogger(), toolkit::LDebug, __FILE__, "http api debug", __LINE__);
-                log << "\r\n# request:\r\n" << parser.method() << " " << parser.fullUrl() << "\r\n";
+                log << "\r\n# request:\r\n" << parser.method() << " " << beacon_redacted_http_target(parser) << "\r\n";
                 log << "# header:\r\n";
 
                 for (auto &pr : parser.getHeader()) {
-                    log << pr.first << " : " << pr.second << "\r\n";
+                    log << pr.first << " : "
+                        << (beacon_is_sensitive_header(pr.first) ? "<redacted>" : pr.second)
+                        << "\r\n";
                 }
 
                 auto &content = parser.content();
-                log << "# content:\r\n" << (content.size() > 4 * 1024 ? content.substr(0, 4 * 1024) : content) << "\r\n";
+                log << "# content size:" << content.size() << "\r\n";
 
                 if (size > 0 && size < 4 * 1024) {
                     auto response = body->readData(size);
-                    log << "# response:\r\n" << response->data() << "\r\n";
+                    log << "# response size:" << size << "\r\n";
                     invoker(code, headerOut, response);
                 } else {
                     log << "# response size:" << size << "\r\n";

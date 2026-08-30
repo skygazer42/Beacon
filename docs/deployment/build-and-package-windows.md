@@ -130,6 +130,9 @@ Set-Location ..\..
 Set-Location Admin
 $env:BEACON_DISABLE_BACKGROUND = "1"
 .\venv\Scripts\python manage.py test
+.\venv\Scripts\python manage.py collectstatic --noinput
+.\venv\Scripts\pyinstaller --clean --noconfirm manage.spec
+.\dist\manage\manage.exe help serve_production
 Set-Location ..
 ```
 

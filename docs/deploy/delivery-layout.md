@@ -298,7 +298,7 @@ python Admin/VideoAnalyzer.py
 
 - MediaServer 二进制与 `config.ini`
 - Analyzer 二进制
-- 然后拉起 Admin（Django runserver）
+- 然后拉起 Admin（默认 Waitress WSGI；显式开发模式才使用 Django runserver）
 
 ### 4.2 交付最小验收（不依赖真实算法）
 

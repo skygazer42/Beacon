@@ -10,7 +10,7 @@
 说明：
 
 - 本文档以 Admin（默认 `adminPort=9991`）为主；Analyzer/MediaServer 的端口暴露策略建议按 `docs/deploy/security-hardening.md` 收敛。
-- 生产部署建议使用 WSGI Server（gunicorn/uwsgi 等）承载 Django；仓库默认示例使用 `manage.py runserver`，需按交付方案决定是否替换。
+- Edge 统一启动器默认使用 Waitress 承载 Django；Cloud 镜像使用 Gunicorn。`manage.py runserver` 仅用于显式本地开发，不能作为生产交付方式。
 
 ---
 
@@ -26,6 +26,8 @@
 - `BEACON_DJANGO_SECURE_SSL_REDIRECT=1`（可选：强制 HTTPS）
 - `BEACON_DJANGO_SESSION_COOKIE_SECURE=1`
 - `BEACON_DJANGO_CSRF_COOKIE_SECURE=1`
+- `BEACON_ADMIN_SERVER=waitress`
+- `BEACON_ADMIN_TRUSTED_PROXY=127.0.0.1`（仅当 Nginx 确实从该地址直连 Admin；其他拓扑填写实际代理 IP）
 
 OpenAPI/Ops 建议：
 

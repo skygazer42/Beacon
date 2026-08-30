@@ -31,7 +31,7 @@ Beacon 常见的两种托管策略：
 - 按约定路径寻找并启动：
   - MediaServer（二进制 + `config.ini`）
   - Analyzer（二进制）
-  - Admin（`manage.py runserver --noreload` 或 `manage.exe`）
+  - Admin（默认 `manage.py serve_production` / `manage.exe serve_production`，显式开发模式才使用 `runserver`）
 - 端口占用检查、启动失败报错
 - 写入单实例锁文件（默认 `<root>/log/startup.lock`），避免重复启动
 - 周期性巡检子进程状态（约每 30 秒），发现进程退出会尝试重启

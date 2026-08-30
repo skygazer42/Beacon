@@ -5,6 +5,7 @@
 #   cp .env.example .env  # replace every CHANGE_ME value
 #   docker compose up -d --build
 #   docker compose logs -f beacon-cloud
+#   docker compose logs -f beacon-background-worker
 #   docker compose logs -f edge-simulator
 #
 # Web：
@@ -13,9 +14,43 @@
 # 清理：
 #   docker compose down -v
 
+x-beacon-cloud-environment: &beacon-cloud-environment
+  BEACON_DEPLOYMENT_MODE: cloud
+  BEACON_OPEN_API_TOKEN: "${BEACON_OPEN_API_TOKEN:?}"
+  BEACON_REQUIRE_OPEN_API_TOKEN: "1"
+  BEACON_HEALTH_CHECK_HOST: "${BEACON_DJANGO_HEALTH_CHECK_HOST:-localhost}"
+  BEACON_DJANGO_DEBUG: "0"
+  BEACON_DJANGO_SECRET_KEY: "${BEACON_DJANGO_SECRET_KEY:?}"
+  BEACON_DJANGO_ALLOWED_HOSTS: "${BEACON_DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,beacon-cloud}"
+  BEACON_DJANGO_SESSION_COOKIE_SECURE: "${BEACON_DJANGO_SESSION_COOKIE_SECURE:-0}"
+  BEACON_DJANGO_CSRF_COOKIE_SECURE: "${BEACON_DJANGO_CSRF_COOKIE_SECURE:-0}"
+  BEACON_CLOUD_ALLOW_INSECURE_HTTP: "1"
+  BEACON_DJANGO_TRUST_X_FORWARDED_PROTO: "${BEACON_DJANGO_TRUST_X_FORWARDED_PROTO:-0}"
+  BEACON_DJANGO_CSRF_TRUSTED_ORIGINS: "${BEACON_DJANGO_CSRF_TRUSTED_ORIGINS:-}"
+  BEACON_DJANGO_HSTS_SECONDS: "0"
+  BEACON_CLOUD_DB_URL: "${BEACON_CLOUD_DB_URL:?}"
+  BEACON_REQUIRE_DATABASE_TLS: "0"
+  BEACON_CLOUD_EDGE_TOKEN_PEPPER: "${BEACON_CLOUD_EDGE_TOKEN_PEPPER:?}"
+  BEACON_CLOUD_S3_BUCKET: beacon-cloud
+  BEACON_CLOUD_S3_REGION: us-east-1
+  BEACON_CLOUD_S3_ENDPOINT_URL: http://minio:9000
+  BEACON_ALLOW_INSECURE_OBJECT_STORAGE: "1"
+  BEACON_CLOUD_S3_ACCESS_KEY_ID: "${MINIO_ROOT_USER:?}"
+  BEACON_CLOUD_S3_SECRET_ACCESS_KEY: "${MINIO_ROOT_PASSWORD:?}"
+  BEACON_CLOUD_IMAGE_PREVIEW_PROXY: "1"
+
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
+    user: "70:70"
+    read_only: true
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    tmpfs:
+    - /tmp:mode=0700,uid=70,gid=70
+    - /var/run/postgresql:mode=0770,uid=70,gid=70
     environment:
       # NOTE: Do not hard-code credentials in the repo.
       # Create `deploy/cloud-saas-v1/.env` with:
@@ -25,6 +60,7 @@ services:
       POSTGRES_DB: "${BEACON_CLOUD_DB_NAME:?Set in deploy/cloud-saas-v1/.env}"
       POSTGRES_USER: "${BEACON_CLOUD_DB_USER:?Set in deploy/cloud-saas-v1/.env}"
       POSTGRES_PASSWORD: "${BEACON_CLOUD_DB_PASSWORD:?Set in deploy/cloud-saas-v1/.env}"
+      PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
     - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -34,24 +70,60 @@ services:
       retries: 30
     restart: unless-stopped
 
+  minio-volume-init:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+    user: "0:0"
+    entrypoint: ["/bin/sh", "-ec"]
+    command: ["chown -R 10001:10001 /data && chmod -R u+rwX,go-rwx /data"]
+    volumes:
+    - minio_data:/data
+    read_only: true
+    cap_drop:
+    - ALL
+    cap_add:
+    - CHOWN
+    - DAC_OVERRIDE
+    - DAC_READ_SEARCH
+    - FOWNER
+    security_opt:
+    - no-new-privileges:true
+    restart: "no"
+
   minio:
-    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+    user: "10001:10001"
+    depends_on:
+      minio-volume-init:
+        condition: service_completed_successfully
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: "${MINIO_ROOT_USER:?Set in deploy/cloud-saas-v1/.env}"
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?}
     volumes:
     - minio_data:/data
+    read_only: true
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    tmpfs:
+    - /tmp:mode=0700,uid=10001,gid=10001
     ports:
-    - "9000:9000"
-    - "9001:9001"
+    - "${BEACON_BIND_ADDRESS:-127.0.0.1}:${BEACON_MINIO_API_PORT:-9000}:9000"
+    - "${BEACON_BIND_ADDRESS:-127.0.0.1}:${BEACON_MINIO_CONSOLE_PORT:-9001}:9001"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "http://127.0.0.1:9000/minio/health/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
     restart: unless-stopped
 
   minio-init:
-    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
     depends_on:
       minio:
-        condition: service_started
+        condition: service_healthy
     environment:
       # MinIO 服务地址（docker 内部网络）
       MINIO_ENDPOINT: http://minio:9000
@@ -60,6 +132,7 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?}
       # Beacon Cloud 用到的 bucket
       BEACON_CLOUD_S3_BUCKET: beacon-cloud
+      MC_CONFIG_DIR: /tmp/.mc
     volumes:
     - ./scripts/minio_init.sh:/scripts/minio_init.sh:ro
     # NOTE: On Windows, even with `.gitattributes` enforcing `eol=lf`, a local checkout may still
@@ -68,9 +141,17 @@ services:
     #
     # Make the POC resilient by normalizing CRLF -> LF at runtime.
     entrypoint: ["/bin/sh", "-c", "tr -d '\\r' < /scripts/minio_init.sh | /bin/sh"]
+    user: "10001:10001"
+    read_only: true
+    tmpfs:
+    - /tmp:mode=0700,uid=10001,gid=10001
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
     restart: "no"
 
-  beacon-cloud:
+  beacon-init:
     build:
       context: ../../
       dockerfile: deploy/cloud-saas-v1/Dockerfile
@@ -80,62 +161,97 @@ services:
       minio-init:
         condition: service_completed_successfully
     environment:
-      # ========== 部署模式 ==========
-      BEACON_DEPLOYMENT_MODE: cloud
-
-      # ========== OpenAPI Token（用于保护 /metrics、/open/* 等接口） ==========
-      # 注意：
-      # - 生产必须替换为随机长串（>=32）
-      # - Prometheus 建议用 Authorization: Bearer <token> 抓取 /metrics
-      BEACON_OPEN_API_TOKEN: "${BEACON_OPEN_API_TOKEN:?}"
-
-      # ========== Django（默认关闭 debug，禁止通配 Host） ==========
-      BEACON_DJANGO_DEBUG: "0"
-      BEACON_DJANGO_SECRET_KEY: "${BEACON_DJANGO_SECRET_KEY:?}"
-      BEACON_DJANGO_ALLOWED_HOSTS: "${BEACON_DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,beacon-cloud}"
-      # 本地 HTTP POC 默认关闭 Secure Cookie；放到 HTTPS 反代后必须在 .env 设为 1。
-      BEACON_DJANGO_SESSION_COOKIE_SECURE: "${BEACON_DJANGO_SESSION_COOKIE_SECURE:-0}"
-      BEACON_DJANGO_CSRF_COOKIE_SECURE: "${BEACON_DJANGO_CSRF_COOKIE_SECURE:-0}"
-      BEACON_DJANGO_TRUST_X_FORWARDED_PROTO: "${BEACON_DJANGO_TRUST_X_FORWARDED_PROTO:-0}"
-      BEACON_DJANGO_CSRF_TRUSTED_ORIGINS: "${BEACON_DJANGO_CSRF_TRUSTED_ORIGINS:-}"
-
-      # ========== Cloud DB（Postgres） ==========
-      BEACON_CLOUD_DB_URL: "${BEACON_CLOUD_DB_URL:?}"
-
-      # ========== Cloud Edge Token 鉴权 pepper（必须独立生成并保密） ==========
-      BEACON_CLOUD_EDGE_TOKEN_PEPPER: "${BEACON_CLOUD_EDGE_TOKEN_PEPPER:?}"
-
-      # ========== Cloud S3（MinIO） ==========
-      BEACON_CLOUD_S3_BUCKET: "beacon-cloud"
-      BEACON_CLOUD_S3_REGION: "us-east-1"
-      BEACON_CLOUD_S3_ENDPOINT_URL: "http://minio:9000"
-      BEACON_CLOUD_S3_ACCESS_KEY_ID: "${MINIO_ROOT_USER:?}"
-      BEACON_CLOUD_S3_SECRET_ACCESS_KEY: "${MINIO_ROOT_PASSWORD:?}"
-
-      # ========== Docker POC：图片预览走 Cloud 代理 ==========
-      # 原因：presigned GET 会包含 `minio` 作为 host，浏览器无法解析 docker 内部服务名。
-      BEACON_CLOUD_IMAGE_PREVIEW_PROXY: "1"
-
-      # ========== Bootstrap（自动创建 admin + default tenant/project/cluster + token 文件） ==========
-      BEACON_BOOTSTRAP_ADMIN_USERNAME: "admin"
+      <<: *beacon-cloud-environment
+      BEACON_BACKGROUND_ROLE: init
+      BEACON_BOOTSTRAP_ADMIN_USERNAME: "${BEACON_BOOTSTRAP_ADMIN_USERNAME:-admin}"
       BEACON_BOOTSTRAP_ADMIN_PASSWORD: "${BEACON_BOOTSTRAP_ADMIN_PASSWORD:?}"
       BEACON_BOOTSTRAP_EDGE_CLUSTER_NAME: "edge-default"
       BEACON_BOOTSTRAP_EDGE_TOKEN_FILE: "${BEACON_BOOTSTRAP_EDGE_TOKEN_FILE:?}"
-
     volumes:
-      # 共享：Cloud bootstrap 输出 edge_token，edge-simulator 读取
     - demo:/demo
-      # 覆盖 config.json（避免 Windows 路径在容器内落地）
     - ./config.cloud.json:/app/config.json:ro
+    - cloud_runtime:/app/data
+    user: "10001:10001"
+    read_only: true
+    tmpfs:
+    - /tmp:mode=1777,uid=10001,gid=10001
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    command: ["/app/deploy/cloud-saas-v1/scripts/initialize.sh"]
+    restart: "no"
+
+  beacon-cloud:
+    build:
+      context: ../../
+      dockerfile: deploy/cloud-saas-v1/Dockerfile
+    depends_on:
+      beacon-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *beacon-cloud-environment
+      BEACON_BACKGROUND_ROLE: web
+      BEACON_GUNICORN_WORKERS: "${BEACON_GUNICORN_WORKERS:-2}"
+      BEACON_GUNICORN_THREADS: "${BEACON_GUNICORN_THREADS:-4}"
+      BEACON_MIGRATION_WAIT_ATTEMPTS: "180"
+      BEACON_MIGRATION_WAIT_DELAY_SECONDS: "2"
+    volumes:
+    - ./config.cloud.json:/app/config.json:ro
+    - cloud_runtime:/app/data
+    user: "10001:10001"
+    read_only: true
+    tmpfs:
+    - /tmp:mode=1777,uid=10001,gid=10001
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
     ports:
-    - "9991:8000"
+    - "${BEACON_BIND_ADDRESS:-127.0.0.1}:${BEACON_ADMIN_PORT:-9991}:8000"
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/login', timeout=3).read(1)"]
+      test: ["CMD", "python", "/app/deploy/cloud-saas-v1/scripts/health_probe.py", "ready"]
       interval: 5s
       timeout: 4s
       retries: 20
       start_period: 20s
     command: ["/app/deploy/cloud-saas-v1/scripts/entrypoint.sh"]
+    restart: unless-stopped
+
+  beacon-background-worker:
+    build:
+      context: ../../
+      dockerfile: deploy/cloud-saas-v1/Dockerfile
+    depends_on:
+      beacon-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *beacon-cloud-environment
+      BEACON_BACKGROUND_ROLE: worker
+      BEACON_BACKGROUND_HEARTBEAT_PATH: /tmp/beacon-background-worker.json
+      BEACON_BACKGROUND_HEARTBEAT_SECONDS: "5"
+      BEACON_BACKGROUND_HEARTBEAT_MAX_AGE_SECONDS: "20"
+      BEACON_BACKGROUND_STANDBY_POLL_SECONDS: "5"
+      BEACON_MIGRATION_WAIT_ATTEMPTS: "180"
+      BEACON_MIGRATION_WAIT_DELAY_SECONDS: "2"
+    volumes:
+    - ./config.cloud.json:/app/config.json:ro
+    - cloud_runtime:/app/data
+    user: "10001:10001"
+    read_only: true
+    tmpfs:
+    - /tmp:mode=1777,uid=10001,gid=10001
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "/app/deploy/cloud-saas-v1/scripts/health_probe.py", "worker"]
+      interval: 5s
+      timeout: 4s
+      retries: 20
+      start_period: 20s
+    command: ["/app/deploy/cloud-saas-v1/scripts/background_worker_entrypoint.sh"]
     restart: unless-stopped
 
   edge-simulator:
@@ -151,7 +267,15 @@ services:
       # 从共享卷读取 bootstrap 输出的 edge token
       BEACON_BOOTSTRAP_EDGE_TOKEN_FILE: "${BEACON_BOOTSTRAP_EDGE_TOKEN_FILE:?}"
     volumes:
-    - demo:/demo
+    - demo:/demo:ro
+    user: "10001:10001"
+    read_only: true
+    tmpfs:
+    - /tmp:mode=1777,uid=10001,gid=10001
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
     command: ["python", "deploy/cloud-saas-v1/scripts/edge_simulator.py"]
     restart: "no"
 
@@ -159,3 +283,4 @@ volumes:
   pgdata:
   minio_data:
   demo:
+  cloud_runtime:

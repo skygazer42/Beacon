@@ -1,4 +1,11 @@
 {{- if .Values.edgeSimulator.enabled }}
+{{- $edgeTokenFile := required "beaconCloud.env.bootstrapEdgeTokenFile is required when edgeSimulator.enabled=true" .Values.beaconCloud.env.bootstrapEdgeTokenFile -}}
+{{- if not .Values.demoVolume.enabled -}}
+{{- fail "demoVolume.enabled must be true when edgeSimulator.enabled=true" -}}
+{{- end -}}
+{{- if not (hasPrefix "/demo/" $edgeTokenFile) -}}
+{{- fail "beaconCloud.env.bootstrapEdgeTokenFile must be under /demo when edgeSimulator.enabled=true" -}}
+{{- end -}}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -6,6 +13,9 @@ metadata:
   labels:
     {{- include "beacon-cloud-saas-v1.labels" . | nindent 4 }}
 spec:
+  activeDeadlineSeconds: 600
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 3600
   template:
     metadata:
       labels:
@@ -13,10 +23,25 @@ spec:
         app.kubernetes.io/component: edge-simulator
     spec:
       restartPolicy: {{ .Values.edgeSimulator.restartPolicy }}
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: edge-simulator
-          image: "{{ .Values.edgeSimulator.image.repository }}:{{ .Values.edgeSimulator.image.tag }}"
+          image: {{ include "beacon-cloud-saas-v1.imageRef" (dict "name" "edgeSimulator" "image" .Values.edgeSimulator.image "requireDigest" true) | quote }}
           imagePullPolicy: {{ .Values.edgeSimulator.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
           command:
             - python
             - deploy/cloud-saas-v1/scripts/edge_simulator.py
@@ -24,14 +49,20 @@ spec:
             - name: BEACON_CLOUD_BASE_URL
               value: {{ default (printf "http://%s:%v" (include "beacon-cloud-saas-v1.fullname" .) .Values.beaconCloud.service.port) .Values.edgeSimulator.cloudBaseURL | quote }}
             - name: BEACON_BOOTSTRAP_EDGE_TOKEN_FILE
-              value: {{ .Values.beaconCloud.env.bootstrapEdgeTokenFile | quote }}
+              value: {{ $edgeTokenFile | quote }}
           volumeMounts:
             - name: demo
               mountPath: /demo
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
           resources:
             {{- toYaml .Values.edgeSimulator.resources | nindent 12 }}
       volumes:
         - name: demo
           persistentVolumeClaim:
             claimName: {{ include "beacon-cloud-saas-v1.demoPVCName" . }}
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
 {{- end }}

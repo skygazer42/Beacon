@@ -31,10 +31,15 @@ icon: material/code-json
     | `describe` | string | `""` | | 节点描述信息 |
     | `host` | string | `"127.0.0.1"` | :material-check: | 服务监听地址。`0.0.0.0` 监听所有网卡，`127.0.0.1` 仅本地 |
     | `adminPort` | int | `9991` | :material-check: | Admin 管理后台端口 |
+    | `adminServer` | string | `"waitress"` | | Admin HTTP 服务。生产默认 `waitress`；仅本地开发可显式设为 `django` |
+    | `adminThreads` | int | `4` | | Waitress 工作线程数，范围 1–64 |
+    | `adminTrustedProxy` | string | `""` | | 允许提供代理头的直连反向代理 IP；禁止通配符 |
     | `analyzerPort` | int | `9993` | :material-check: | Analyzer 分析引擎 API 端口 |
     | `mediaHttpPort` | int | `9992` | :material-check: | 流媒体 HTTP/API 端口（ZLMediaKit） |
     | `mediaRtspPort` | int | `9994` | :material-check: | 流媒体 RTSP 端口 |
     | `mediaRtmpPort` | int | `9995` | | 流媒体 RTMP 端口 |
+    | `mediaRtpProxyPort` | int | `10000` | | RTP Proxy TCP/UDP 端口，可用 `BEACON_MEDIA_RTP_PROXY_PORT` 覆盖 |
+    | `mediaApiDebug` | bool | `false` | | 是否记录媒体 API 请求元数据；生产必须关闭，可用 `BEACON_MEDIA_API_DEBUG` 覆盖 |
     | `mediaSecret` | string | `""` | | 流媒体服务鉴权密钥。生产环境必须设置独立随机值，可用 `BEACON_MEDIA_SECRET` 注入 |
 
 !!! example "服务配置示例"
@@ -45,10 +50,15 @@ icon: material/code-json
       "describe": "总部机房主节点",
       "host": "0.0.0.0",
       "adminPort": 9991,
+      "adminServer": "waitress",
+      "adminThreads": 4,
+      "adminTrustedProxy": "127.0.0.1",
       "analyzerPort": 9993,
       "mediaHttpPort": 9992,
       "mediaRtspPort": 9994,
       "mediaRtmpPort": 9995,
+      "mediaRtpProxyPort": 10000,
+      "mediaApiDebug": false,
       "mediaSecret": "CHANGE_ME_MEDIA_SECRET"
     }
     ```
@@ -320,6 +330,8 @@ ZLMediaKit 流媒体服务相关配置。
     | `mediaHttpPort` | int | `9992` | 流媒体 HTTP/API 端口 |
     | `mediaRtspPort` | int | `9994` | 流媒体 RTSP 端口 |
     | `mediaRtmpPort` | int | `9995` | 流媒体 RTMP 端口 |
+    | `mediaRtpProxyPort` | int | `10000` | RTP Proxy TCP/UDP 端口 |
+    | `mediaApiDebug` | bool | `false` | API 请求元数据调试日志开关；生产必须关闭 |
     | `transcodeIdleSeconds` | int | `300` | 转码会话空闲超时（秒，最小 30）。超时后自动停止转码 |
     | `transcodeStartCooldownSeconds` | int | `5` | 转码启动冷却时间（秒，最小 1）。防止频繁启停 |
 
@@ -441,10 +453,15 @@ GB/T 28181 国标视频流接入相关配置。
 
   "host": "0.0.0.0",
   "adminPort": 9991,
+  "adminServer": "waitress",
+  "adminThreads": 4,
+  "adminTrustedProxy": "127.0.0.1",
   "mediaHttpPort": 9992,
   "analyzerPort": 9993,
   "mediaRtspPort": 9994,
   "mediaRtmpPort": 9995,
+  "mediaRtpProxyPort": 10000,
+  "mediaApiDebug": false,
   "mediaSecret": "CHANGE_ME_MEDIA_SECRET",
 
   "uploadDir": "/data/beacon/upload",
@@ -502,10 +519,15 @@ GB/T 28181 国标视频流接入相关配置。
   "name": "Beacon Dev",
   "host": "0.0.0.0",
   "adminPort": 9991,
+  "adminServer": "django",
+  "adminThreads": 4,
+  "adminTrustedProxy": "",
   "analyzerPort": 9993,
   "mediaHttpPort": 9992,
   "mediaRtspPort": 9994,
   "mediaRtmpPort": 9995,
+  "mediaRtpProxyPort": 10000,
+  "mediaApiDebug": false,
   "mediaSecret": "dev-only-please-change",
   "modelDir": "./models",
   "modelConcurrency": 1,

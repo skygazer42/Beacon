@@ -61,10 +61,12 @@ docker compose up -d --build
 docker compose ps
 ```
 
-看日志（建议开两个终端）：
+看日志（建议分终端观察 Web、后台 Worker 和一次性初始化）：
 
 ```bash
 docker compose logs -f beacon-cloud
+docker compose logs -f beacon-background-worker
+docker compose logs beacon-init
 docker compose logs -f edge-simulator
 ```
 
@@ -117,30 +119,51 @@ docker compose -f compose.yml -f compose.monitoring.yml up -d
 基础检查：
 
 ```bash
-helm lint deploy/cloud-saas-v1/chart
-helm template beacon-cloud deploy/cloud-saas-v1/chart --set beaconCloud.replicaCount=2 > /tmp/beacon-cloud-rendered.yaml
+export BEACON_IMAGE_REPOSITORY=registry.example.com/beacon-cloud-saas-v1
+export BEACON_IMAGE_TAG=v1.0.0
+export BEACON_IMAGE_DIGEST="$(docker buildx imagetools inspect \
+  "$BEACON_IMAGE_REPOSITORY:$BEACON_IMAGE_TAG" | awk '/^Digest:/ {print $2; exit}')"
+
+helm lint deploy/cloud-saas-v1/chart \
+  --set-string beaconCloud.image.digest="$BEACON_IMAGE_DIGEST" \
+  --set-string beaconCloud.secrets.existingSecret=beacon-production-secrets
+helm template beacon-cloud deploy/cloud-saas-v1/chart \
+  --set-string beaconCloud.image.repository="$BEACON_IMAGE_REPOSITORY" \
+  --set-string beaconCloud.image.tag="$BEACON_IMAGE_TAG" \
+  --set-string beaconCloud.image.digest="$BEACON_IMAGE_DIGEST" \
+  --set-string beaconCloud.secrets.existingSecret=beacon-production-secrets \
+  > /tmp/beacon-cloud-rendered.yaml
 ```
 
 安装示例：
 
 ```bash
-# 先准备镜像（示例标签）
-docker build -t beacon-cloud-saas-v1:latest -f deploy/cloud-saas-v1/Dockerfile .
+# 先构建并推送不可变的发布镜像
+docker build -t "$BEACON_IMAGE_REPOSITORY:$BEACON_IMAGE_TAG" \
+  -f deploy/cloud-saas-v1/Dockerfile .
+docker push "$BEACON_IMAGE_REPOSITORY:$BEACON_IMAGE_TAG"
+export BEACON_IMAGE_DIGEST="$(docker buildx imagetools inspect \
+  "$BEACON_IMAGE_REPOSITORY:$BEACON_IMAGE_TAG" | awk '/^Digest:/ {print $2; exit}')"
 
 # kind/minikube 场景需先把镜像导入集群
 
 helm upgrade --install beacon-cloud deploy/cloud-saas-v1/chart \
   --namespace beacon-cloud \
   --create-namespace \
-  --set beaconCloud.image.repository=beacon-cloud-saas-v1 \
-  --set beaconCloud.image.tag=latest
+  --set-string beaconCloud.image.repository="$BEACON_IMAGE_REPOSITORY" \
+  --set-string beaconCloud.image.tag="$BEACON_IMAGE_TAG" \
+  --set-string beaconCloud.image.digest="$BEACON_IMAGE_DIGEST" \
+  --set-string beaconCloud.secrets.existingSecret=beacon-production-secrets
 ```
 
 说明：
 
-- Chart 默认部署 `beacon-cloud + postgres + minio + minio-init`，并保留 `edge-simulator` 为可选 Job。
-- `beaconCloud.replicaCount` 支持横向扩容 Cloud Admin Deployment。
-- 生产交付建议把 `beaconCloud.secrets.*`、`postgres.auth.password`、`minio.rootPassword` 改为 Secret 管理流程，不要继续使用 demo 默认值。
+- Chart 默认部署两个 `beacon-cloud` Web、两个 leader-elected 后台 Worker、版本化初始化 Job、PostgreSQL 和 MinIO，并保留 `edge-simulator` 为可选 Job。
+- migration/bootstrap 只由初始化 Job 在独立 PostgreSQL advisory lock 下执行；Web 和 Worker 只等待 schema 就绪。后台单例任务只在持锁 Worker 中运行，standby 在 leader 退出后自动竞争接管。
+- 多 Web 副本必须共享 runtime RWX PVC。生产环境应把 `beaconCloud.runtimeStorage.persistence.existingClaim` 指向平台预创建并验证过的跨节点卷。
+- 生产交付必须设置 `beaconCloud.secrets.existingSecret` 和实际的 `beaconCloud.image.digest`；由外部密钥系统预创建固定键名的 Secret，不要把密码写进 Helm values。
+- Beacon Pod 默认启用只读根文件系统与经过鉴权的 startup/readiness/liveness 探针。
+- 这提供 Cloud 应用层冗余，但内置 PostgreSQL/MinIO 仍为单实例，不能据此承诺整套平台 HA。
 
 ### 2.1 安装依赖
 
@@ -175,13 +198,20 @@ helm upgrade --install beacon-cloud deploy/cloud-saas-v1/chart \
 
 Cloud 推荐使用 PostgreSQL（SQLite 仅用于本机验证）。当前数据库 URL 解析器不支持 MySQL。
 
-在 Cloud 侧启动前请执行 Django migrations（含 cloud_saas_v1 相关新表）。
+手工部署时，在启动 Web/Worker 前执行 Django migrations（含 cloud_saas_v1 相关新表）。
+Compose 使用 `beacon-init`，Helm 使用版本化 `initialize` Job 自动串行完成这一步；不要再把
+`migrate` 放进每个 Web Pod 的入口脚本。
 
 ### 2.4 启动 Cloud
 
 ```bash
-BEACON_DEPLOYMENT_MODE=cloud python3 Admin/manage.py runserver 0.0.0.0:9991
+BEACON_DEPLOYMENT_MODE=cloud \
+BEACON_BACKGROUND_ROLE=web \
+python3 Admin/manage.py serve_production --host 0.0.0.0 --port 9991
 ```
+
+生产形态还必须以 `BEACON_BACKGROUND_ROLE=worker` 独立运行
+`python3 Admin/manage.py run_background_worker`；该命令要求 PostgreSQL，SQLite 不支持选主。
 
 ### 2.5 生成边缘集群 token
 

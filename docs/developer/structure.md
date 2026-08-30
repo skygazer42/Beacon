@@ -91,7 +91,7 @@ SDK 封装的是当前兼容 OpenAPI 路径，不代表服务端存在自动生�
 
 ## 部署与工具
 
-- `deploy/cloud-saas-v1/`：单实例 Cloud POC、PostgreSQL、MinIO 和 Helm 参考。
+- `deploy/cloud-saas-v1/`：Cloud Compose POC、PostgreSQL、MinIO，以及多 Web/选主 Worker/初始化 Job 的 Helm 参考。
 - `deploy/local-fullstack/`：本地全栈辅助配置。
 - `deploy/systemd/`：服务托管样例。
 - `deploy/observability/`：可选追踪配置；不等于默认启用完整监控栈。

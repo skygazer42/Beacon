@@ -42,12 +42,13 @@ Beacon 在运行期常见配置来源：
 
 - 以 `BEACON_ROOT_DIR` 作为产品根目录
 - `config.json` 位于 `${BEACON_ROOT_DIR}/config.json`
+- 如需把配置放在其他位置，使用 `BEACON_CONFIG_PATH` 显式指定；该变量优先级最高
 
-根目录解析顺序（Admin 侧 `Admin/runtime_paths.py`）：
+配置文件解析顺序：
 
-1. 环境变量 `BEACON_ROOT_DIR`
-2. Frozen build（PyInstaller）时使用 `sys.executable` 所在目录
-3. 源码模式时根据 `Admin/runtime_paths.py` 推导仓库根目录
+1. 环境变量 `BEACON_CONFIG_PATH`
+2. `${BEACON_ROOT_DIR}/config.json`
+3. 源码布局推导出的仓库根目录 `config.json`
 
 ### 1.2 路径字段解析规则（重要）
 
@@ -71,10 +72,15 @@ Beacon 在运行期常见配置来源：
 
 - `host`：展示用/兼容字段；如设置为 `0.0.0.0` 表示绑定全部网卡
 - `adminPort`：Admin 端口（默认 `9991`）
+- `adminServer`：Admin HTTP 服务（默认 `waitress`；`django` 仅供开发）
+- `adminThreads`：Waitress 工作线程数（默认 `4`，范围 1–64）
+- `adminTrustedProxy`：可信直连反向代理 IP（默认空，禁止通配符）
 - `analyzerPort`：Analyzer 端口（默认 `9993`）
 - `mediaHttpPort`：MediaServer HTTP 端口（默认 `9992`）
 - `mediaRtspPort`：MediaServer RTSP 端口（默认 `9994`）
 - `mediaRtmpPort`：MediaServer RTMP 端口（默认 `9995`）
+- `mediaRtpProxyPort`：MediaServer RTP Proxy TCP/UDP 端口（默认 `10000`）
+- `mediaApiDebug`：是否记录 MediaServer API 请求元数据（默认 `false`，生产必须关闭）
 
 ### 2.2 Admin 内部互调地址（`internalHost` 行为）
 
@@ -249,11 +255,13 @@ WAF（轻量）：
 
 ---
 
-## 5. MediaServer 管理密钥（`mediaSecret`）
+## 5. MediaServer 管理与安全配置
 
 字段：
 
 - `config.json.mediaSecret`
+- `config.json.mediaRtpProxyPort` / `BEACON_MEDIA_RTP_PROXY_PORT`
+- `config.json.mediaApiDebug` / `BEACON_MEDIA_API_DEBUG`
 
 对齐要求：
 
@@ -261,6 +269,8 @@ WAF（轻量）：
 - 不一致时表现为：UI 可打开，但所有媒体相关动作（拉流代理、媒体列表等）失败
 - 使用 `Admin/VideoAnalyzer.py` 统一启动且未配置密钥时，启动器会生成一个随机值，同时注入 Admin、Analyzer 和 MediaServer 运行配置
 - 分别手工启动组件时，仍应显式设置同一个 `BEACON_MEDIA_SECRET`，或把同一个随机值分别写入两侧配置
+- RTP Proxy 端口同时占用 TCP 和 UDP；统一启动器会在启动前检查两种协议的端口冲突
+- `mediaApiDebug` 仅用于短时、受控排障；它会记录完整请求与响应，生产必须保持 `false`
 
 ---
 
@@ -369,10 +379,15 @@ Cloud 部署（Postgres）：
 {
   "host": "127.0.0.1",
   "adminPort": 9991,
+  "adminServer": "waitress",
+  "adminThreads": 4,
+  "adminTrustedProxy": "127.0.0.1",
   "mediaHttpPort": 9992,
   "analyzerPort": 9993,
   "mediaRtspPort": 9994,
   "mediaRtmpPort": 9995,
+  "mediaRtpProxyPort": 10000,
+  "mediaApiDebug": false,
   "mediaSecret": "CHANGE_ME",
   "openApiToken": "CHANGE_ME",
   "uploadDir": "Admin/static/upload",

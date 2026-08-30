@@ -72,7 +72,7 @@ Beacon 将视频流管理、C++ 推理、布控告警和运维控制台组合在
 | 分析 | Analyzer 提供 ONNX Runtime、OpenVINO 及插件路径；模型和厂商运行时由部署者提供 |
 | 布控 | Admin 绑定视频、算法、ROI、阈值和计划，并控制 Analyzer 任务 |
 | 告警 | 告警入库、媒体证据、审核，以及 Webhook / Beacon Cloud 至少一次投递 |
-| Cloud | Edge 注册、远程资源视图和告警聚合；参考部署为单实例 POC |
+| Cloud | Edge 注册、远程资源视图和告警聚合；Compose 为 POC，Helm 提供 Web/Worker 应用层冗余 |
 | 集成 | 既有 Machine OpenAPI、Ops、Cloud 和数字人运行时协议；不是统一 REST v1 |
 | SDK | Python、JavaScript、Go 客户端封装当前对外路径 |
 

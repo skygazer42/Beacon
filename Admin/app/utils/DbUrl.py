@@ -1,4 +1,69 @@
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
+
+
+_ALLOWED_QUERY_PARAMETERS = frozenset(
+    {
+        "application_name",
+        "connect_timeout",
+        "sslcert",
+        "sslkey",
+        "sslmode",
+        "sslrootcert",
+        "target_session_attrs",
+    }
+)
+_ALLOWED_SSL_MODES = frozenset(
+    {"disable", "allow", "prefer", "require", "verify-ca", "verify-full"}
+)
+_ALLOWED_TARGET_SESSION_ATTRS = frozenset(
+    {"any", "read-write", "read-only", "primary", "standby", "prefer-standby"}
+)
+
+
+def _single_query_value(query: dict, name: str) -> str:
+    values = query.get(name) or []
+    if len(values) != 1:
+        raise ValueError(f"database URL parameter {name} must appear exactly once")
+    value = str(values[0] or "").strip()
+    if not value or any(character in value for character in ("\x00", "\r", "\n")):
+        raise ValueError(f"database URL parameter {name} is invalid")
+    return value
+
+
+def _parse_database_options(parsed) -> dict:
+    query = (
+        parse_qs(parsed.query, keep_blank_values=True, strict_parsing=True)
+        if parsed.query
+        else {}
+    )
+    unknown = sorted(set(query) - _ALLOWED_QUERY_PARAMETERS)
+    if unknown:
+        raise ValueError(f"unsupported database URL parameter: {unknown[0]}")
+
+    options = {"connect_timeout": 10}
+    for name in sorted(query):
+        value = _single_query_value(query, name)
+        if name == "connect_timeout":
+            try:
+                timeout = int(value)
+            except (TypeError, ValueError, OverflowError) as exc:
+                raise ValueError("database connect_timeout must be an integer") from exc
+            if not (1 <= timeout <= 60):
+                raise ValueError("database connect_timeout must be between 1 and 60")
+            options[name] = timeout
+        elif name == "sslmode":
+            normalized = value.lower()
+            if normalized not in _ALLOWED_SSL_MODES:
+                raise ValueError("database sslmode is invalid")
+            options[name] = normalized
+        elif name == "target_session_attrs":
+            normalized = value.lower()
+            if normalized not in _ALLOWED_TARGET_SESSION_ATTRS:
+                raise ValueError("database target_session_attrs is invalid")
+            options[name] = normalized
+        else:
+            options[name] = value
+    return options
 
 
 def parse_database_url(db_url: str) -> dict:
@@ -43,5 +108,5 @@ def parse_database_url(db_url: str) -> dict:
         "PASSWORD": password,
         "HOST": host,
         "PORT": port,
+        "OPTIONS": _parse_database_options(parsed),
     }
-

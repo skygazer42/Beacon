@@ -18,8 +18,8 @@
 //首次创建管理员（按提示设置密码）
 python manage.py createsuperuser
 
-//启动后台管理服务
-python manage.py runserver 0.0.0.0:9991
+//生产启动后台管理服务（开发调试才使用 runserver）
+python manage.py serve_production --host 0.0.0.0 --port 9991 --threads 4
 
 ~~~
 
@@ -38,7 +38,11 @@ python manage.py runserver 0.0.0.0:9991
 python -m pip install -r requirements-build.txt
 
 // 根据 manage.spec 文件 打包后台服务
+python manage.py collectstatic --noinput
 pyinstaller manage.spec
+
+// 必须用产物验证生产命令可加载
+dist\manage\manage.exe help serve_production
 
 //打包启动工具
 pyinstaller -i logo.ico -F  VideoAnalyzer.py

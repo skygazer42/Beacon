@@ -719,11 +719,51 @@ curl -sS -X POST "${ADMIN}/stream/openDel" \
 
 ---
 
-## 12. 建议将本验收流程固化为“可复跑脚本”
+## 12. 可复跑验收脚本与 JSON 证据
 
-在首次跑通 L1 后，建议将关键请求整理成脚本（bash 或 PowerShell），做到：
+仓库提供 `tools/edge_e2e_acceptance.py`。它默认只执行三服务 L0；所有可变测试资源使用
+随机 UUID 编号，失败时也按“Control → Stream proxy → Stream”顺序逐项清理，且永远
+不会调用 `handle=all`。Token、MediaServer secret 和真实 RTSP URL 只从环境变量读取，
+不会出现在命令行参数或 JSON 报告中。
 
-- 1 条命令完成：add stream -> add proxy -> add control -> start control
-- 1 条命令完成：stop control -> del proxy -> del stream
+只验证 L0：
 
-可显著提升回归/联调效率，并减少“人为操作差异”。
+```bash
+python tools/edge_e2e_acceptance.py
+```
+
+使用仓库合成 RTSP 完成可重复的视频链路和模拟告警工作流：
+
+```bash
+BEACON_OPEN_API_TOKEN='<token，loopback 放行时可省略>' \
+BEACON_MEDIA_SECRET='<MediaServer API secret，可省略为 TCP 探测>' \
+python tools/edge_e2e_acceptance.py \
+  --synthetic-l1 \
+  --alarm-workflow
+```
+
+真实摄像头验收不把带密码的 URL 放入进程参数，而是使用环境变量：
+
+```bash
+BEACON_E2E_RTSP_URL='rtsp://<user>:<password>@<camera>/<path>' \
+BEACON_OPEN_API_TOKEN='<token>' \
+BEACON_MEDIA_SECRET='<media-secret>' \
+python tools/edge_e2e_acceptance.py --external-l1
+```
+
+如果正式算法已经导入，可同时启动 Control 并从 Analyzer `/api/controls` 复核运行状态：
+
+```bash
+BEACON_E2E_RTSP_URL='rtsp://<real-source>' \
+BEACON_OPEN_API_TOKEN='<token>' \
+BEACON_MEDIA_SECRET='<media-secret>' \
+python tools/edge_e2e_acceptance.py \
+  --external-l1 \
+  --algorithm-code '<正式算法编号>' \
+  --object-code '<目标类别>' \
+  --alarm-workflow
+```
+
+进程退出码为 `0` 且报告 `status=passed` 才算本次自动验收通过。合成源与模拟告警只能
+证明服务、视频代理、接口、数据库和清理链路，不能代替真实授权模型触发告警的 L2
+证据；正式发布仍必须保存真实源编号、模型哈希/授权和原始验收报告。

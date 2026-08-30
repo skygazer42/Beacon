@@ -202,6 +202,7 @@ nav:
     - 监控告警: operations/monitoring.md
     - 安全加固: operations/security.md
     - 备份恢复: deploy/database-and-backup.md
+    - 发布证据与供应链验证: deploy/release-evidence.md
     - Failover 与故障演练: operations/failover.md
     - 故障排除: operations/troubleshooting.md
     - 性能调优: operations/performance.md

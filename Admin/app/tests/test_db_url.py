@@ -18,6 +18,7 @@ class DatabaseUrlTest(SimpleTestCase):
         self.assertEqual(config["PASSWORD"], "p@ss")
         self.assertEqual(config["HOST"], "db.internal")
         self.assertEqual(config["PORT"], "5433")
+        self.assertEqual(config["OPTIONS"], {"connect_timeout": 10})
 
     def test_accepts_postgres_alias_and_default_port(self):
         config = parse_database_url("postgres://beacon:secret@db.internal/beacon")
@@ -38,6 +39,36 @@ class DatabaseUrlTest(SimpleTestCase):
     def test_rejects_invalid_port(self):
         with self.assertRaisesRegex(ValueError, "invalid port"):
             parse_database_url("postgresql://beacon:secret@db.internal:not-a-port/beacon")
+
+    def test_preserves_valid_tls_and_failover_options(self):
+        config = parse_database_url(
+            "postgresql://beacon:secret@db.internal/beacon"
+            "?sslmode=verify-full&sslrootcert=%2Fetc%2Fbeacon%2Fca.pem"
+            "&connect_timeout=15&target_session_attrs=read-write"
+        )
+
+        self.assertEqual(
+            config["OPTIONS"],
+            {
+                "connect_timeout": 15,
+                "sslmode": "verify-full",
+                "sslrootcert": "/etc/beacon/ca.pem",
+                "target_session_attrs": "read-write",
+            },
+        )
+
+    def test_rejects_unknown_duplicate_or_unsafe_database_options(self):
+        invalid_urls = (
+            "postgresql://beacon:secret@db.internal/beacon?unknown=value",
+            "postgresql://beacon:secret@db.internal/beacon?sslmode=require&sslmode=disable",
+            "postgresql://beacon:secret@db.internal/beacon?sslmode=not-real",
+            "postgresql://beacon:secret@db.internal/beacon?connect_timeout=0",
+            "postgresql://beacon:secret@db.internal/beacon?target_session_attrs=leader",
+        )
+        for database_url in invalid_urls:
+            with self.subTest(database_url=database_url):
+                with self.assertRaises(ValueError):
+                    parse_database_url(database_url)
 
 
 class CrossDatabasePaginationTest(SimpleTestCase):

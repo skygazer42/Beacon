@@ -30,10 +30,6 @@ _UPLOAD_BASE_DIR = getattr(g_config, "uploadDir", "") or os.path.join(
 UPLOAD_MODEL_DIR = os.path.join(_UPLOAD_BASE_DIR, "models")
 UPLOAD_DLL_DIR = os.path.join(_UPLOAD_BASE_DIR, "dlls")
 
-# 确保上传目录存在
-os.makedirs(UPLOAD_MODEL_DIR, exist_ok=True)
-os.makedirs(UPLOAD_DLL_DIR, exist_ok=True)
-
 PATH_STATIC_UPLOAD = "/static/upload/"
 PATH_ALGORITHM_INDEX = "/algorithm/index"
 TEMPLATE_MESSAGE = "app/message.html"
@@ -281,9 +277,23 @@ def save_uploaded_file(file, code, target_dir, *, filename_stem=None, url_subdir
     filename = f"{stem}{file_ext}"
     file_path = os.path.join(target_dir, filename)
 
-    with open(file_path, 'wb+') as destination:
-        for chunk in file.chunks():
-            destination.write(chunk)
+    # Mutable upload directories are created only when an upload is handled.
+    # Importing the URL configuration must remain safe on a read-only image.
+    os.makedirs(target_dir, mode=0o750, exist_ok=True)
+    tmp_path = file_path + ".part"
+    try:
+        with open(tmp_path, "xb") as destination:
+            for chunk in file.chunks():
+                destination.write(chunk)
+            destination.flush()
+            os.fsync(destination.fileno())
+        os.replace(tmp_path, file_path)
+    finally:
+        try:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        except OSError:
+            logger.warning("failed to clean temporary algorithm upload", exc_info=True)
 
     # 返回相对路径（URL）
     url_prefix = str(getattr(g_config, "uploadDir_www", PATH_STATIC_UPLOAD) or PATH_STATIC_UPLOAD).strip()

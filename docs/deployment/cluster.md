@@ -12,24 +12,29 @@ icon: material/server-network
 |---|---|---|
 | 单机 Edge 全栈 | [Edge 全栈部署](../deploy/edge-full-stack.md) | 支持 |
 | Cloud POC | [Docker 部署](docker.md) | 支持 |
-| Kubernetes Cloud 控制面 | [Kubernetes 部署](kubernetes.md) | 支持参考部署 |
+| Kubernetes Cloud 控制面 | [Kubernetes 部署](kubernetes.md) | 支持应用层多副本基线 |
 | 多个 Edge 接入一个 Cloud | [Cloud SaaS v1](../integration/cloud-saas-v1.md) | 支持云边接入流程 |
-| Cloud 多副本、数据库自动切换 | 无现成方案 | 尚未交付 |
+| Cloud Web/后台 Worker 多副本 | Helm Chart | 已提供 Web 冗余与 Worker 自动接管 |
+| PostgreSQL/对象存储自动切换 | 需托管服务或平台方案 | Chart 内置实例不支持 |
 | MediaServer / Analyzer 自动故障转移 | 无现成方案 | 尚未交付 |
 
 ## 当前 Helm Chart 实际包含什么
 
 `deploy/cloud-saas-v1/chart/` 默认渲染：
 
-- 1 个 Beacon Cloud Web 副本；
+- 2 个 Beacon Cloud Web 副本；
+- 2 个后台 Worker 副本，其中 1 个 advisory-lock leader、其余 standby；
+- 1 个按 Release revision 命名的迁移/bootstrap 初始化 Job；
 - 1 个 PostgreSQL StatefulSet；
-- 1 个 MinIO StatefulSet 和初始化 Job；
+- 1 个 MinIO StatefulSet；
+- 1 个 Web/Worker 共享的 runtime RWX PVC；
 - 可选 Edge Simulator Job；
 - Service、可选 Ingress、PVC、Secret 和健康探针。
 
-该 Chart 用于验证 Cloud 控制面和云边接口。默认 PostgreSQL、MinIO 都是
-单实例，`beaconCloud.replicaCount` 也默认为 `1`。仅把副本数调大并不会自动
-获得数据库高可用、共享限流、防重放、会话粘性或媒体任务接管能力。
+该 Chart 用于 Cloud 控制面和云边接口。应用 Web 与单例后台调度已经解耦，并有
+PDB、滚动更新、跨节点偏好和 Worker 自动接管；生产 values 少于两个 Web/Worker
+副本或缺少共享 runtime 持久卷会被拒绝。默认 PostgreSQL、MinIO 仍是单实例，
+因此它不是数据库、对象存储或完整媒体链路的 HA 承诺。
 
 ## 多 Edge 接入流程
 
@@ -56,16 +61,16 @@ python deploy/cloud-saas-v1/tests/test_helm_chart.py
 正式部署还应在目标集群执行 `helm template` / `helm upgrade --install`，并验证
 Ingress TLS、PVC、备份恢复、NetworkPolicy、资源限制和 Pod 重建后的数据完整性。
 
-## 若项目要求真正高可用
+## 若项目要求端到端高可用
 
 在对外承诺 HA 前，至少需要单独设计并验收：
 
 - PostgreSQL 与对象存储的高可用、备份和恢复；
 - 多副本会话、限流和防重放共享状态；
-- Admin 后台任务的唯一执行或分布式锁；
+- PostgreSQL advisory-lock leader 的故障接管、数据库会话中断和任务幂等；
 - Analyzer 任务重调度与模型预热；
 - MediaServer 录像、流代理和播放地址的故障转移；
 - 明确的 RTO、RPO、容量上限和故障演练结果。
 
-当前仓库没有为这些能力提供可验证实现，因此不应把本页或 Helm Chart 当作 HA
-交付承诺。
+当前仓库已经实现 Cloud Web/Worker 的应用层冗余，但没有为其余能力提供完整可验证
+实现，因此不应把本页或 Helm Chart 直接当作端到端 HA 交付承诺。
