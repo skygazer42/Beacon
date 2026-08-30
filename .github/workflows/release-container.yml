@@ -1,14 +1,18 @@
 name: Release container
 
 on:
-  release:
-    types: [published]
+  workflow_call:
+    inputs:
+      tag:
+        description: SemVer tag checked out by the trusted release orchestrator
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-container-${{ github.event.release.tag_name }}
+  group: release-container-${{ inputs.tag }}
   cancel-in-progress: false
 
 jobs:
@@ -16,15 +20,14 @@ jobs:
     name: Build, attest, verify, and publish GHCR image
     runs-on: ubuntu-24.04
     timeout-minutes: 90
-    environment: release
     permissions:
-      contents: write # Read the tag and attach verified metadata to its Release.
+      contents: read # Read and validate the immutable tag checkout.
       packages: write # Push the image and its registry attestations to GHCR.
       id-token: write # Request the short-lived Sigstore signing certificate.
       attestations: write # Store signed attestations in the repository API.
       artifact-metadata: write # Register metadata for the attested image.
     env:
-      RELEASE_TAG: ${{ github.event.release.tag_name }}
+      RELEASE_TAG: ${{ inputs.tag }}
     steps:
       - name: Check out the immutable release tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -45,7 +48,8 @@ jobs:
           latest_release_path="${RUNNER_TEMP}/beacon-latest-release.json"
           gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
             | jq -s 'add // []' > "${release_history_path}"
-          if jq -e 'length == 0' "${release_history_path}" >/dev/null; then
+          if jq -e '[.[] | select(.draft != true)] | length == 0' \
+            "${release_history_path}" >/dev/null; then
             printf 'null\n' > "${latest_release_path}"
           else
             gh api "repos/${GITHUB_REPOSITORY}/releases/latest" > "${latest_release_path}"
@@ -88,6 +92,23 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
+
+      - name: Reject reused mutable image tags
+        shell: bash
+        env:
+          IMAGE_NAME: ${{ steps.release.outputs.image_name }}
+          IMAGE_SHA_TAG: ${{ steps.release.outputs.image_sha_tag }}
+          IMAGE_VERSION_TAG: ${{ steps.release.outputs.image_version_tag }}
+        run: |
+          set -euo pipefail
+          for image_ref in \
+            "${IMAGE_NAME}:${IMAGE_VERSION_TAG}" \
+            "${IMAGE_NAME}:${IMAGE_SHA_TAG}"; do
+            if docker buildx imagetools inspect "${image_ref}" >/dev/null 2>&1; then
+              printf 'refusing to overwrite existing release image tag: %s\n' "${image_ref}" >&2
+              exit 1
+            fi
+          done
 
       - name: Build local image for vulnerability gate
         id: scan-image
@@ -361,13 +382,3 @@ jobs:
           if-no-files-found: error
           retention-days: 90
           overwrite: false
-
-      - name: Attach evidence to GitHub Release without replacement
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          EVIDENCE_DIR: ${{ steps.release.outputs.evidence_dir }}
-        run: |
-          set -euo pipefail
-          gh release upload "${RELEASE_TAG}" "${EVIDENCE_DIR}"/* \
-            --repo "${GITHUB_REPOSITORY}"
