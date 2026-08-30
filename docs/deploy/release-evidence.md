@@ -1,11 +1,12 @@
 # 发布证据与供应链验证
 
-Beacon 将“源码能下载”与“交付物可追溯、可验证”分开管理。仓库中的
-`.github/workflows/release-evidence.yml` 在受信任的 Git 标签上生成一组不可覆盖的
-源码发布证据；`.github/workflows/release-container.yml` 仅在正式 GitHub Release 发布
-时构建并推送 GHCR 镜像，再以不可变 digest 生成和验证镜像证据。`tools/release_evidence.py`
-负责校验版本/标签/commit 一致性，组装源码清单，并在上传前后重新验证文件成员、语义
-和 SHA-256。
+Beacon 将“源码能下载”与“交付物可追溯、可验证”分开管理。唯一的正式入口是
+`.github/workflows/release.yml`：它从受信任的 Git 标签创建空的 GitHub Release 草稿，
+经 `release` environment 审批后调用 `.github/workflows/release-evidence.yml` 生成源码
+证据，并调用 `.github/workflows/release-container.yml` 构建 GHCR 镜像和 digest 证据。
+编排器下载并二次验证两组 artifact，只把精确允许的资产集合上传到草稿，最后才发布为
+不可变 Release。`tools/release_evidence.py` 负责校验版本/标签/commit 一致性，组装源码
+清单，并在上传前后重新验证文件成员、语义和 SHA-256。
 
 !!! warning "证据边界"
     自动流程只证明同一标签对应的**源码归档**和 GHCR `linux/amd64` Cloud 镜像。
@@ -28,11 +29,12 @@ Beacon 将“源码能下载”与“交付物可追溯、可验证”分开管�
 | `release-manifest.json` | 版本、标签、完整 commit、仓库、工作流运行 URL、角色、大小与 SHA-256 |
 | `SHA256SUMS` | 上述所有内容文件及 manifest 的 SHA-256 |
 
-工作流中的第三方 Actions 使用完整 commit SHA 固定，Syft 版本也显式固定。发布事件
-会把同一证据先作为 90 天 Actions artifact 保存，再附加到 GitHub Release；上传不
-使用 `--clobber`，同名资产已存在时会失败，不会静默替换历史证据。
+工作流中的第三方 Actions 使用完整 commit SHA 固定，Syft 版本也显式固定。同一证据
+先作为 90 天 Actions artifact 保存，经编排器重新下载和验证后才附加到 Release 草稿；
+上传不使用 `--clobber`，同名资产已存在时会失败，不会静默替换历史证据。发布后，
+GitHub 的不可变 Release 保护会同时锁定 tag 和资产。
 
-同一发布事件还会把 `deploy/cloud-saas-v1/Dockerfile` 构建为
+同一发布编排还会把 `deploy/cloud-saas-v1/Dockerfile` 构建为
 `ghcr.io/<owner>/<repo>:vX.Y.Z` 和 `:sha-<40 位 commit>`，但验收、部署和回滚必须使用
 工作流输出的 `ghcr.io/<owner>/<repo>@sha256:<digest>`。容器工作流同时生成 BuildKit
 registry SBOM/provenance、独立 SPDX SBOM、GitHub Sigstore provenance/SBOM attestation
@@ -67,12 +69,13 @@ attestation 资产重名。两个工作流都禁止覆盖已有资产；名称�
 2. 标签指向拟发布的完整 commit，受跟踪文件没有本地修改。
 3. 主 CI、Python/npm 审计、Cloud 镜像 Trivy HIGH/CRITICAL 扫描、静态分析、目标平台
    构建和上线清单中的其他硬门禁全部通过。
-4. 仓库规则保护 `main` 和发布标签；`.github/workflows/**` 的变更需要指定维护者审查，
-   发布权限和 GitHub `release` environment 的审批人按组织制度配置。
+4. 仓库规则保护 `main`；`.github/workflows/**` 的变更需要审批，发布权限和 GitHub
+   `release` environment 的审批人按组织制度配置，仓库已启用不可变 Release。
 
 仓库内的 `.github/CODEOWNERS` 已为工作流、发布证据、安全策略和部署资源指定维护者；
-但该文件本身不会强制审批。远端分支规则仍必须启用“Require review from Code Owners”，
-并保护 `CODEOWNERS` 与规则配置不被未经审批的提交绕过。
+但该文件本身不会强制审批。远端分支规则至少必须要求一名非最后推送者审批并通过全部
+必需 CI；只有配置了两名以上可独立审批的 Code Owner 时，才启用“Require review from
+Code Owners”，避免单维护者仓库形成无法合并的治理死锁。
 
 两个发布工作流还会同时读取分页 Release 列表与 `releases/latest`，执行
 `validate-history`：每个已发布 Release 都必须使用受支持的严格 SemVer 标签、保留可
@@ -80,13 +83,27 @@ attestation 资产重名。两个工作流都禁止覆盖已有资产；名称�
 发布版本。列表与 latest 视图不一致时两边取并集验证，因此已删除 tag 的“幽灵 Release”、
 旧版本线回退或非标准版本号都会使发布失败，必须先由仓库所有者完成版本治理。
 
-触发有两种：
+正式发布只有一个入口：
 
-- 发布 GitHub Release 时，源码与容器工作流自动运行。源码只有 `build-evidence` 成功才
-  会附加到 Release；容器只有推送、SBOM、签名和按 digest 复验全部成功才会附加证据。
-- 手工 `workflow_dispatch` 用于发布前预检。必须在 Actions 页面把运行 ref 选择为目标
-  标签，并把 `tag` 输入为同一个值；如果从分支运行，即使分支恰好指向同一 commit，
-  `source_ref` 策略验证仍会失败。手工预检只上传 Actions artifact，不修改 Release。
+1. 更新 `PROJECT_VERSION`、变更日志和部署版本，合并后等待 `main` 的全部必需 CI 通过。
+2. 创建并推送指向该 commit 的严格 SemVer 标签。
+3. 在 Actions 页面从**同一个标签 ref**运行 `Release`，输入相同的 `tag`，并按需选择
+   `prerelease`。从分支运行会在任何草稿或镜像创建前失败。
+4. `release` environment 审批通过后，编排器创建或校验一个无资产的同名草稿，并行
+   生成源码与容器证据。任何已有资产、同名 GHCR 版本标签或 SHA 标签都会使流程失败，
+   不允许覆盖。
+5. 编排器重新验证两个 artifact 的成员、校验和、仓库/tag/commit、Sigstore provenance
+   与 SBOM attestation；仅当草稿恰好包含 18 个预期资产且每个资产都有 GitHub SHA-256
+   digest 时，才把草稿发布为不可变 Release。
+
+`Release evidence` 仍保留手工 `workflow_dispatch`，仅用于源码证据预检。预检也必须从
+目标标签 ref 运行，只上传 Actions artifact，不创建或修改 Release。容器发布不能绕过
+编排器单独触发。
+
+!!! warning "失败恢复"
+    编排器坚持不覆盖 Release 资产或 GHCR 标签。若失败发生在镜像推送前，可在清理空
+    草稿后重跑；若版本镜像已经推送，则不得复用该版本号掩盖失败，应记录失败证据并用
+    新的补丁版本/tag 重新发布。
 
 `validate-ref` 可以在独立、干净的标签工作树中先执行：
 

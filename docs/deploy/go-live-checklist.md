@@ -37,9 +37,10 @@
 
 发布证据必须绑定同一组 Beacon commit、模型哈希、依赖锁文件和目标环境；任一项变化后，应重跑受影响门禁。HSTS `includeSubDomains`/`preload` 等不可安全通用开启的选项可以保留明确的风险接受记录，但 `DEBUG`、安全 Cookie、HTTPS、强鉴权和生产 WSGI 不属于可默认豁免项。
 
-仓库的 `Release evidence` 工作流会为**源码归档**生成 SPDX SBOM、SLSA
-provenance、SBOM attestation、离线验证记录和校验清单；`Release container` 会为
-正式发布的 GHCR `linux/amd64` Cloud 镜像生成并复验同类证据。具体触发和验签命令见
+仓库的 `Release` 编排工作流会先创建草稿，再调用 `Release evidence` 为**源码归档**
+生成 SPDX SBOM、SLSA provenance、SBOM attestation、离线验证记录和校验清单，并调用
+`Release container` 为 GHCR `linux/amd64` Cloud 镜像生成、复验同类证据。只有两组
+证据完整且二次验证通过，草稿才会发布为不可变 Release。具体触发和验签命令见
 [发布证据与供应链验证](release-evidence.md)。这些证据不能覆盖另行组装的 Linux、
 Windows、其他架构容器、模型或 GPU 专用产物；这些交付件必须在各自构建流水线中单独
 生成并验证证据，缺一项仍为 `NO-GO`。

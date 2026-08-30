@@ -1,12 +1,16 @@
 name: Release evidence
 
 on:
-  release:
-    types: [published]
+  workflow_call:
+    inputs:
+      tag:
+        description: SemVer tag checked out by the trusted release orchestrator
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       tag:
-        description: SemVer tag; dispatch this workflow from the same tag ref
+        description: SemVer tag; dispatch from the same tag ref for a source-only preflight
         required: true
         type: string
 
@@ -14,7 +18,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-evidence-${{ github.event.release.tag_name || inputs.tag }}
+  group: release-evidence-${{ inputs.tag }}
   cancel-in-progress: false
 
 jobs:
@@ -27,7 +31,7 @@ jobs:
       attestations: write # Store signed attestations in the repository API.
       artifact-metadata: write # Register metadata for the attested artifact.
     env:
-      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      RELEASE_TAG: ${{ inputs.tag }}
     steps:
       - name: Check out the event ref
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -46,7 +50,8 @@ jobs:
           latest_release_path="${RUNNER_TEMP}/beacon-latest-release.json"
           gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
             | jq -s 'add // []' > "${release_history_path}"
-          if jq -e 'length == 0' "${release_history_path}" >/dev/null; then
+          if jq -e '[.[] | select(.draft != true)] | length == 0' \
+            "${release_history_path}" >/dev/null; then
             printf 'null\n' > "${latest_release_path}"
           else
             gh api "repos/${GITHUB_REPOSITORY}/releases/latest" > "${latest_release_path}"
@@ -176,37 +181,3 @@ jobs:
           if-no-files-found: error
           retention-days: 90
           overwrite: false
-
-  publish-release-assets:
-    name: Attach verified evidence to GitHub Release
-    if: github.event_name == 'release'
-    needs: build-evidence
-    runs-on: ubuntu-24.04
-    environment: release
-    permissions:
-      contents: write # Attach the verified evidence files to the GitHub Release.
-    env:
-      RELEASE_TAG: ${{ github.event.release.tag_name }}
-    steps:
-      - name: Check out release tooling
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Download verified workflow evidence
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: Beacon-${{ env.RELEASE_TAG }}-release-evidence
-          path: ${{ runner.temp }}/release-evidence
-
-      - name: Verify downloaded evidence
-        run: python tools/release_evidence.py verify --directory "${RUNNER_TEMP}/release-evidence"
-
-      - name: Publish without replacing existing assets
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          gh release upload "${RELEASE_TAG}" "${RUNNER_TEMP}/release-evidence"/* \
-            --repo "${GITHUB_REPOSITORY}"

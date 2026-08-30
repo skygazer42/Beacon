@@ -388,7 +388,34 @@ class ReleaseWorkflowAssetNamingTest(unittest.TestCase):
             self.assertIn("tools/release_evidence.py validate-history", workflow)
             self.assertIn("/releases?per_page=100", workflow)
             self.assertIn("/releases/latest", workflow)
+            self.assertIn("select(.draft != true)", workflow)
             self.assertIn("GH_TOKEN: ${{ github.token }}", workflow)
+
+    def test_release_orchestrator_publishes_only_verified_draft_assets(self):
+        workflow = (self.ROOT / ".github" / "workflows" / "release.yml").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("workflow_dispatch:", workflow)
+        self.assertIn("environment: release", workflow)
+        self.assertIn("uses: ./.github/workflows/release-evidence.yml", workflow)
+        self.assertIn("uses: ./.github/workflows/release-container.yml", workflow)
+        self.assertIn("--draft --verify-tag --generate-notes", workflow)
+        self.assertIn('if [[ "${GITHUB_REF}" != "${expected_ref}" ]]', workflow)
+        self.assertIn("gh release upload", workflow)
+        self.assertIn("and .immutable == true", workflow)
+        self.assertIn("and (.assets | length) == 18", workflow)
+        self.assertIn("draft Release does not contain the exact verified asset set", workflow)
+
+    def test_release_building_blocks_cannot_modify_published_releases(self):
+        for workflow_name in ("release-evidence.yml", "release-container.yml"):
+            workflow = (self.ROOT / ".github" / "workflows" / workflow_name).read_text(
+                encoding="utf-8"
+            )
+
+            self.assertIn("workflow_call:", workflow)
+            self.assertNotIn("types: [published]", workflow)
+            self.assertNotIn("gh release upload", workflow)
 
 
 if __name__ == "__main__":
