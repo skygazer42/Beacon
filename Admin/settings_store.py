@@ -4,6 +4,7 @@ import time
 from typing import Any, Dict
 
 import runtime_paths  # type: ignore
+from runtime_permissions import write_private_text_atomic
 
 
 _CACHE: Dict[str, Any] = {
@@ -47,11 +48,8 @@ def _write_json_file_atomic(filepath: str, data: dict) -> None:
     dirpath = os.path.dirname(filepath)
     if dirpath:
         os.makedirs(dirpath, exist_ok=True)
-    tmp = filepath + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        f.write(json.dumps(data, ensure_ascii=False, indent=2))
-        f.write("\n")
-    os.replace(tmp, filepath)
+    payload = json.dumps(data, ensure_ascii=False, indent=2) + "\n"
+    write_private_text_atomic(filepath, payload)
 
 
 def load_settings(*, use_cache: bool = True) -> dict:

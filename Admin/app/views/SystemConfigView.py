@@ -11,6 +11,7 @@ from app.utils.ConfigHistory import apply_system_snapshot, build_system_snapshot
 from app.utils.SystemConfigHelper import get_value, set_value
 from app.views.ViewsBase import f_parsePostParams, f_responseJson, g_config, getUser
 from framework.settings import BASE_DIR
+from runtime_permissions import write_private_text_atomic
 
 
 logger = logging.getLogger(__name__)
@@ -230,11 +231,8 @@ def _read_json_file(filepath: str):
 
 def _write_json_file_atomic(filepath: str, data: dict) -> None:
     """原子写入 JSON 配置文件。"""
-    tmp = filepath + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        f.write(json.dumps(data, ensure_ascii=False, indent=2))
-        f.write("\n")
-    os.replace(tmp, filepath)
+    payload = json.dumps(data, ensure_ascii=False, indent=2) + "\n"
+    write_private_text_atomic(filepath, payload)
 
 
 def _coerce_bool(value) -> bool:

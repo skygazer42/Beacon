@@ -3,6 +3,7 @@ from unittest import mock
 from django.test import SimpleTestCase
 
 from app.apps import (
+    _apply_sqlite_pragmas,
     _schedule_background_services_best_effort,
     _should_skip_background_services,
     _start_background_services_after_registry_ready,
@@ -11,6 +12,44 @@ from app.utils.BackgroundRoles import get_background_role
 
 
 class AppConfigBackgroundServiceTests(SimpleTestCase):
+    def test_sqlite_connection_secures_database_before_and_after_pragmas(self):
+        connection = mock.MagicMock(vendor="sqlite", settings_dict={"NAME": "/tmp/beacon.sqlite3"})
+        cursor = connection.cursor.return_value.__enter__.return_value
+
+        with mock.patch("app.apps.ensure_sqlite_files_private") as secure:
+            _apply_sqlite_pragmas(None, connection)
+
+        self.assertEqual(
+            secure.call_args_list,
+            [mock.call("/tmp/beacon.sqlite3"), mock.call("/tmp/beacon.sqlite3")],
+        )
+        self.assertEqual(cursor.execute.call_count, 4)
+
+    def test_sqlite_permission_failure_is_not_silenced(self):
+        connection = mock.Mock(vendor="sqlite", settings_dict={"NAME": "/tmp/beacon.sqlite3"})
+
+        with mock.patch(
+            "app.apps.ensure_sqlite_files_private",
+            side_effect=RuntimeError("unsafe database mode"),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "unsafe database mode"):
+                _apply_sqlite_pragmas(None, connection)
+
+    def test_sqlite_connection_is_secured_after_pragma_failure(self):
+        connection = mock.MagicMock(
+            vendor="sqlite",
+            settings_dict={"NAME": "/tmp/beacon.sqlite3"},
+        )
+        connection.cursor.return_value.__enter__.side_effect = RuntimeError("pragma failed")
+
+        with mock.patch("app.apps.ensure_sqlite_files_private") as secure:
+            _apply_sqlite_pragmas(None, connection)
+
+        self.assertEqual(
+            secure.call_args_list,
+            [mock.call("/tmp/beacon.sqlite3"), mock.call("/tmp/beacon.sqlite3")],
+        )
+
     def test_read_only_help_command_does_not_start_background_services(self):
         self.assertTrue(
             _should_skip_background_services(["manage.py", "help", "serve_production"])

@@ -36,7 +36,7 @@ COPY --chown=beacon:beacon Admin /app/Admin
 # Keep the image's fallback configuration Cloud-safe as well.  Compose and
 # Helm mount their own config at this path, but a missing mount must not fall
 # back to Edge paths under the read-only application tree.
-COPY --chown=beacon:beacon deploy/cloud-saas-v1/config.cloud.json /app/config.json
+COPY --chown=beacon:beacon --chmod=0444 deploy/cloud-saas-v1/config.cloud.json /app/config.json
 COPY --chown=beacon:beacon PROJECT_VERSION /app/PROJECT_VERSION
 COPY --chown=beacon:beacon deploy/cloud-saas-v1 /app/deploy/cloud-saas-v1
 COPY --chown=beacon:beacon LICENSE THIRD_PARTY_NOTICES.md /licenses/Beacon/
