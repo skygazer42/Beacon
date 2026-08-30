@@ -2,7 +2,6 @@
 # 提供视频流手动录像、截图功能
 
 import os
-import re
 import subprocess
 import threading
 import time
@@ -20,7 +19,6 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-_VALID_STREAM_CODE_RE = re.compile(r"[A-Za-z0-9_.-]+\Z")
 _ALLOWED_STREAM_URL_SCHEMES = {"rtsp", "rtsps", "rtmp", "rtmps", "http", "https"}
 _ALLOWED_RECORD_FORMATS = {"mp4", "flv", "ts"}
 MSG_INVALID_STREAM_CODE = "视频流编号非法"
@@ -36,7 +34,7 @@ def _normalize_stream_code(stream_code: str) -> str:
         return ""
     if len(token) > 128:
         return ""
-    if _VALID_STREAM_CODE_RE.fullmatch(token):
+    if all(char.isascii() and (char.isalnum() or char in "_.-") for char in token):
         return token
     return ""
 
@@ -515,8 +513,8 @@ class StreamSnapshotter:
                 return False
 
             try:
-                base = os.path.abspath(str(self.storage_root or ""))
-                candidate = os.path.abspath(str(save_path or ""))
+                base = os.path.realpath(os.path.abspath(str(self.storage_root or "")))
+                candidate = os.path.realpath(os.path.abspath(str(save_path or "")))
                 if os.path.commonpath([base, candidate]) != base:
                     return False
                 save_path = candidate
@@ -525,6 +523,7 @@ class StreamSnapshotter:
 
             cmd = [
                 'ffmpeg',
+                '-nostdin',
                 '-i', stream_url,
                 '-vframes', '1',  # 只截取一帧
                 '-q:v', '2',      # 质量（1-31，越小质量越高）
@@ -536,7 +535,9 @@ class StreamSnapshotter:
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                timeout=30
+                timeout=30,
+                shell=False,
+                check=False,
             )
 
             return result.returncode == 0 and os.path.exists(save_path)

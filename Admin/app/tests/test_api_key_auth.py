@@ -1,12 +1,14 @@
-import hashlib
 import json
 import os
 import tempfile
 from datetime import timedelta
+from unittest import mock
 
 from django.apps import apps
 from django.test import TestCase
 from django.utils import timezone
+
+from app.utils.ApiKeyHash import hash_api_key_token, legacy_hash_api_key_token
 
 
 class ApiKeyAuthTest(TestCase):
@@ -21,8 +23,49 @@ class ApiKeyAuthTest(TestCase):
         self.addCleanup(os.environ.pop, "BEACON_API_KEY_PEPPER", None)
 
     def _hash(self, token: str) -> str:
-        pepper = str(os.environ.get("BEACON_API_KEY_PEPPER") or "")
-        return hashlib.sha256((pepper + token).encode("utf-8")).hexdigest()
+        return hash_api_key_token(token)
+
+    def test_legacy_digest_is_migrated_after_successful_authentication(self):
+        ApiKey = apps.get_model("app", "ApiKey")
+        token = "k_test_legacy_migration"
+        row = ApiKey.objects.create(
+            name="legacy-key",
+            token_hash=legacy_hash_api_key_token(token),
+            scopes_json=json.dumps(["ops"], ensure_ascii=False),
+            expires_at=timezone.now() + timedelta(days=1),
+        )
+
+        response = self.client.get(
+            "/healthz",
+            REMOTE_ADDR="8.8.8.8",
+            HTTP_X_BEACON_TOKEN=token,
+        )
+
+        self.assertEqual(response.status_code, 200, msg=response.content)
+        row.refresh_from_db()
+        self.assertEqual(row.token_hash, hash_api_key_token(token))
+
+    def test_production_db_api_key_authentication_fails_closed_without_pepper(self):
+        ApiKey = apps.get_model("app", "ApiKey")
+        token = "k_test_no_production_pepper"
+        with mock.patch.dict(
+            os.environ,
+            {"BEACON_DJANGO_DEBUG": "0", "BEACON_API_KEY_PEPPER": ""},
+            clear=False,
+        ):
+            ApiKey.objects.create(
+                name="legacy-without-pepper",
+                token_hash=legacy_hash_api_key_token(token),
+                scopes_json=json.dumps(["ops"], ensure_ascii=False),
+                expires_at=timezone.now() + timedelta(days=1),
+            )
+            response = self.client.get(
+                "/healthz",
+                REMOTE_ADDR="8.8.8.8",
+                HTTP_X_BEACON_TOKEN=token,
+            )
+
+        self.assertEqual(response.status_code, 401, msg=response.content)
 
     def test_db_api_key_allows_ops_healthz(self):
         """

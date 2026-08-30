@@ -19,6 +19,7 @@ Notes:
 """
 
 import hashlib
+import base64
 import json
 import logging
 import os
@@ -29,6 +30,7 @@ import runtime_paths  # type: ignore
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
+from django.core.serializers.json import DjangoJSONEncoder
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
 
@@ -39,6 +41,8 @@ CONTENT_TYPE_JSON = "application/json"
 MSG_METHOD_NOT_ALLOWED = "method not allowed"
 MSG_PACKAGE_NOT_FOUND = "package not found"
 logger = logging.getLogger(__name__)
+MAX_UPGRADE_MANIFEST_BYTES = 1024 * 1024
+MAX_UPGRADE_SIGNATURE_BYTES = 4096
 
 
 class UpgradeExtractLimitError(Exception):
@@ -47,7 +51,11 @@ class UpgradeExtractLimitError(Exception):
 
 def _json_response(payload: Dict[str, Any], *, status: int = 200) -> HttpResponse:
     """返回JSON响应。"""
-    resp = HttpResponse(json.dumps(payload, ensure_ascii=False, default=str), status=status, content_type=CONTENT_TYPE_JSON)
+    resp = HttpResponse(
+        json.dumps(payload, ensure_ascii=False, cls=DjangoJSONEncoder),
+        status=status,
+        content_type=CONTENT_TYPE_JSON,
+    )
     resp["Cache-Control"] = "no-store"
     resp["Pragma"] = "no-cache"
     resp["Expires"] = "0"
@@ -100,16 +108,46 @@ def _state_path() -> str:
     return os.path.join(_upgrade_dir(), "state.json")
 
 
+def _ensure_private_directory(path: str) -> None:
+    """Create an application-owned upgrade directory and reject symlinks."""
+
+    raw_target = str(path or "").strip()
+    if not raw_target:
+        raise ValueError("upgrade directory is required")
+    target = os.path.abspath(raw_target)
+    if os.path.lexists(target) and os.path.islink(target):
+        raise ValueError("upgrade directory must not be a symbolic link")
+    os.makedirs(target, mode=0o700, exist_ok=True)
+    if not os.path.isdir(target):
+        raise ValueError("upgrade directory is invalid")
+    if os.name != "nt":
+        # Private directories require owner execute in addition to read/write.
+        os.chmod(target, 0o700)  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+
+
 def _write_json_atomic(path: str, data: dict) -> None:
     """写入JSON`atomic`。"""
     dirpath = os.path.dirname(path)
     if dirpath:
-        os.makedirs(dirpath, exist_ok=True)
-    tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        f.write(json.dumps(data, ensure_ascii=False, indent=2, default=str))
-        f.write("\n")
-    os.replace(tmp, path)
+        _ensure_private_directory(dirpath)
+    tmp = path + "." + hashlib.sha256(os.urandom(32)).hexdigest()[:16] + ".tmp"
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_CLOEXEC"):
+        flags |= os.O_CLOEXEC
+    try:
+        descriptor = os.open(tmp, flags, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as f:
+            f.write(json.dumps(data, ensure_ascii=False, indent=2, cls=DjangoJSONEncoder))
+            f.write("\n")
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    finally:
+        try:
+            if os.path.lexists(tmp):
+                os.remove(tmp)
+        except Exception:
+            logger.debug("cleanup upgrade state temp file failed", exc_info=True)
 
 
 def _read_json_file(path: str) -> dict:
@@ -186,23 +224,181 @@ def _load_manifest_from_zip(zip_path: str) -> Tuple[bool, str, dict]:
     """加载`manifest``from`压缩包。"""
     try:
         with zipfile.ZipFile(zip_path, "r") as zf:
+            archive_names = zf.namelist()
+            if archive_names.count("manifest.json") != 1 or archive_names.count("manifest.sig") > 1:
+                return False, "package manifest entries are invalid", {}
             try:
-                data = zf.read("manifest.json")
+                data = _read_bounded_zip_entry(
+                    zf,
+                    "manifest.json",
+                    max_bytes=MAX_UPGRADE_MANIFEST_BYTES,
+                )
             except KeyError:
                 return False, "manifest.json is missing", {}
+            except ValueError:
+                return False, "manifest.json is too large", {}
+            signature_ok, signature_message = _verify_upgrade_manifest_signature(zf, data)
+            if not signature_ok:
+                return False, signature_message, {}
+            try:
+                text = data.decode("utf-8", errors="strict")
+                manifest = json.loads(text)
+            except Exception:
+                return False, "manifest.json is not valid json", {}
+            if not isinstance(manifest, dict):
+                return False, "manifest.json must be an object", {}
+            if "manifest.sig" in set(archive_names) or _upgrade_signature_required():
+                payload_ok, payload_message = _verify_upgrade_archive_payload(zf, manifest)
+                if not payload_ok:
+                    return False, payload_message, {}
+            return True, "success", manifest
     except zipfile.BadZipFile:
         return False, "invalid zip file", {}
-    except Exception as e:
-        return False, str(e) or "error", {}
+    except Exception as exc:
+        logger.warning("upgrade manifest read failed error_type=%s", type(exc).__name__)
+        return False, "invalid package", {}
+
+
+def _read_bounded_zip_entry(zf, name: str, *, max_bytes: int) -> bytes:
+    info = zf.getinfo(name)
+    declared_size = _declared_zip_file_size(info)
+    if declared_size < 0 or declared_size > max_bytes:
+        raise ValueError("zip entry exceeds the allowed size")
+    with zf.open(info, "r") as source:
+        data = source.read(max_bytes + 1)
+    if len(data) > max_bytes:
+        raise ValueError("zip entry exceeds the allowed size")
+    return data
+
+
+def _upgrade_signature_required() -> bool:
+    raw = str(os.environ.get("BEACON_UPGRADE_REQUIRE_SIGNATURE", "") or "").strip().lower()
+    if raw:
+        return raw in ("1", "true", "yes", "y", "on")
+    public_key = str(os.environ.get("BEACON_UPGRADE_ED25519_PUBLIC_KEY", "") or "").strip()
+    debug_raw = str(os.environ.get("BEACON_DJANGO_DEBUG", "1") or "").strip().lower()
+    debug_enabled = debug_raw in ("1", "true", "yes", "y", "on")
+    return (not debug_enabled) or bool(public_key)
+
+
+def _upgrade_ed25519_public_key_bytes() -> bytes:
+    encoded = str(os.environ.get("BEACON_UPGRADE_ED25519_PUBLIC_KEY", "") or "").strip()
+    if not encoded:
+        return b""
+    try:
+        decoded = base64.b64decode(encoded.encode("ascii"), validate=True)
+    except (UnicodeEncodeError, ValueError) as exc:
+        raise ValueError("upgrade signing public key is invalid") from exc
+    if len(decoded) != 32:
+        raise ValueError("upgrade signing public key is invalid")
+    return decoded
+
+
+def _verify_upgrade_manifest_signature(zf, manifest_bytes: bytes) -> Tuple[bool, str]:
+    """Verify manifest.sig over the exact manifest.json bytes using Ed25519."""
+
+    required = _upgrade_signature_required()
+    try:
+        signature_text = _read_bounded_zip_entry(
+            zf,
+            "manifest.sig",
+            max_bytes=MAX_UPGRADE_SIGNATURE_BYTES,
+        ).decode("ascii").strip()
+    except KeyError:
+        if required:
+            return False, "package signature is required"
+        return True, "signature not required"
+    except Exception:
+        return False, "package signature is invalid"
 
     try:
-        text = data.decode("utf-8", errors="replace")
-        manifest = json.loads(text)
-        if not isinstance(manifest, dict):
-            return False, "manifest.json must be an object", {}
-        return True, "success", manifest
+        public_key_bytes = _upgrade_ed25519_public_key_bytes()
+    except ValueError:
+        return False, "upgrade signing public key is invalid"
+    if not public_key_bytes:
+        return False, "upgrade signing public key is not configured"
+
+    try:
+        signature = base64.b64decode(signature_text.encode("ascii"), validate=True)
+        if len(signature) != 64:
+            raise ValueError("invalid Ed25519 signature length")
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
+        Ed25519PublicKey.from_public_bytes(public_key_bytes).verify(signature, manifest_bytes)
     except Exception:
-        return False, "manifest.json is not valid json", {}
+        return False, "package signature is invalid"
+    return True, "signature valid"
+
+
+def _verify_upgrade_archive_payload(zf, manifest: dict) -> Tuple[bool, str]:
+    """Verify every payload file against the digest map covered by the signature."""
+
+    from app.utils.Security import validate_upload_rel_path
+
+    raw_files = manifest.get("files")
+    if not isinstance(raw_files, dict):
+        return False, "signed manifest must define a files digest map"
+
+    expected: Dict[str, str] = {}
+    try:
+        for raw_name, raw_digest in raw_files.items():
+            name = validate_upload_rel_path(raw_name)
+            digest = str(raw_digest or "").strip().lower()
+            if name in ("manifest.json", "manifest.sig") or not re.fullmatch(r"[0-9a-f]{64}", digest):
+                return False, "signed manifest files digest map is invalid"
+            if name in expected:
+                return False, "signed manifest files digest map contains duplicates"
+            expected[name] = digest
+    except Exception:
+        return False, "signed manifest files digest map is invalid"
+
+    limits = _get_extract_limits()
+    seen: set[str] = set()
+    total_bytes = 0
+    file_count = 0
+    for info in zf.infolist():
+        raw_name = str(getattr(info, "filename", "") or "")
+        if not raw_name or raw_name.endswith("/"):
+            continue
+        try:
+            name = validate_upload_rel_path(raw_name)
+        except ValueError:
+            return False, "signed package contains an invalid payload path"
+        if name in ("manifest.json", "manifest.sig"):
+            continue
+        if name in seen or name not in expected:
+            return False, "signed package payload does not match the manifest"
+
+        unix_mode = int(getattr(info, "external_attr", 0) or 0) >> 16
+        if (unix_mode & 0o170000) == 0o120000:
+            return False, "signed package symbolic links are not allowed"
+
+        declared_size = _declared_zip_file_size(info)
+        if declared_size < 0 or declared_size > limits["max_file_bytes"]:
+            return False, "signed package payload exceeds the extraction limits"
+        file_count += 1
+        if file_count > limits["max_files"]:
+            return False, "signed package payload exceeds the extraction limits"
+
+        digest = hashlib.sha256()
+        file_bytes = 0
+        with zf.open(info, "r") as source:
+            while True:
+                chunk = source.read(1024 * 1024)
+                if not chunk:
+                    break
+                file_bytes += len(chunk)
+                total_bytes += len(chunk)
+                if file_bytes > limits["max_file_bytes"] or total_bytes > limits["max_total_bytes"]:
+                    return False, "signed package payload exceeds the extraction limits"
+                digest.update(chunk)
+        if digest.hexdigest() != expected[name]:
+            return False, "signed package payload digest verification failed"
+        seen.add(name)
+
+    if seen != set(expected):
+        return False, "signed package payload does not match the manifest"
+    return True, "payload digests valid"
 
 
 def _compat_get(compat: dict, snake_key: str, camel_key: str):
@@ -322,8 +518,9 @@ def _meta_path(package_id: str) -> str:
 
 def _ensure_dirs() -> None:
     """返回`ensure`目录列表。"""
-    os.makedirs(_packages_dir(), exist_ok=True)
-    os.makedirs(_staging_dir(), exist_ok=True)
+    _ensure_private_directory(_upgrade_dir())
+    _ensure_private_directory(_packages_dir())
+    _ensure_private_directory(_staging_dir())
 
 
 def _load_state() -> dict:
@@ -400,12 +597,12 @@ def _cleanup_partial_extract(abs_path: str) -> None:
         if os.path.exists(abs_path):
             os.remove(abs_path)
     except Exception:
-        logger.debug("cleanup partial extract failed path=%s", abs_path, exc_info=True)
+        logger.debug("cleanup partial extract failed path=%r", abs_path, exc_info=True)
 
 
 def _extract_file_entry(zf, info, abs_path: str, *, max_file_bytes: int, max_total_bytes: int, extracted_bytes: int) -> int:
     """提取文件条目。"""
-    os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+    _ensure_private_directory(os.path.dirname(abs_path))
 
     declared_size = _declared_zip_file_size(info)
     name = str(getattr(info, "filename", "") or "")
@@ -417,7 +614,13 @@ def _extract_file_entry(zf, info, abs_path: str, *, max_file_bytes: int, max_tot
     wrote = 0
     total_bytes = int(extracted_bytes)
     try:
-        with zf.open(info, "r") as src, open(abs_path, "wb") as dst:
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+        if hasattr(os, "O_CLOEXEC"):
+            flags |= os.O_CLOEXEC
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        descriptor = os.open(abs_path, flags, 0o600)
+        with zf.open(info, "r") as src, os.fdopen(descriptor, "wb") as dst:
             while True:
                 chunk = src.read(1024 * 1024)
                 if not chunk:
@@ -452,7 +655,7 @@ def _extract_dir_entry(name: str, dest_dir: str, *, validate_upload_rel_path, re
     )
     if not abs_dir:
         return {"files": 0, "bytes": 0, "skipped": 1}
-    os.makedirs(abs_dir, exist_ok=True)
+    _ensure_private_directory(abs_dir)
     return {"files": 0, "bytes": 0, "skipped": 0}
 
 
@@ -591,7 +794,10 @@ def _list_package_ids() -> List[str]:
     items: List[str] = []
     for name in entries:
         pkg_id = str(name or "").strip()
-        if not _is_candidate_package_dir_name(pkg_id):
+        if not _is_candidate_package_dir_name(pkg_id) or _validate_package_id(pkg_id) != pkg_id:
+            continue
+        package_path = _package_dir(pkg_id)
+        if os.path.islink(package_path) or not os.path.isdir(package_path):
             continue
         items.append(pkg_id)
     return items
@@ -600,10 +806,6 @@ def _list_package_ids() -> List[str]:
 def _load_package_meta_and_manifest(pkg_id: str) -> Tuple[dict, dict]:
     """加载打包元数据`and``manifest`。"""
     meta = _read_json_file(_meta_path(pkg_id))
-    manifest = meta.get("manifest")
-    if isinstance(manifest, dict):
-        return meta, manifest
-
     ok, _msg, m = _load_manifest_from_zip(_zip_path(pkg_id))
     if ok and isinstance(m, dict):
         return meta, m
@@ -678,13 +880,27 @@ def _persist_upload_to_tmp_zip(uploaded_file, *, tmp_zip_path: str) -> Tuple[int
     """处理`persist`上传`to``tmp`压缩包。"""
     size = 0
     h = hashlib.sha256()
-    with open(tmp_zip_path, "wb") as out:
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_CLOEXEC"):
+        flags |= os.O_CLOEXEC
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = os.open(tmp_zip_path, flags, 0o600)
+    max_bytes = _extract_env_int(
+        "BEACON_UPGRADE_UPLOAD_MAX_BYTES",
+        2 * 1024 * 1024 * 1024,
+        min_value=1,
+        max_value=50 * 1024 * 1024 * 1024,
+    )
+    with os.fdopen(descriptor, "wb") as out:
         for chunk in uploaded_file.chunks():
             if not chunk:
                 continue
+            size += int(len(chunk))
+            if size > max_bytes:
+                raise UpgradeExtractLimitError("upgrade package exceeds the upload limit")
             out.write(chunk)
             h.update(chunk)
-            size += int(len(chunk))
     return int(size), h.hexdigest()
 
 
@@ -709,14 +925,17 @@ def upload(request):
     # Write zip to a temp location first to avoid leaving corrupt artifacts.
     tmp_id = hashlib.sha256(os.urandom(32)).hexdigest()[:16]
     tmp_dir = os.path.join(_packages_dir(), f"._upload_{tmp_id}")
-    os.makedirs(tmp_dir, exist_ok=True)
+    _ensure_private_directory(tmp_dir)
     tmp_zip_path = os.path.join(tmp_dir, "package.zip")
 
     try:
         try:
             size, sha256 = _persist_upload_to_tmp_zip(f, tmp_zip_path=tmp_zip_path)
-        except Exception as e:
-            return _json_response({"code": 0, "msg": str(e) or "upload failed"}, status=500)
+        except UpgradeExtractLimitError:
+            return _json_response({"code": 0, "msg": "upgrade package is too large"}, status=413)
+        except Exception as exc:
+            logger.error("upgrade upload persistence failed error_type=%s", type(exc).__name__)
+            return _json_response({"code": 0, "msg": "upload failed"}, status=500)
 
         ok, msg, manifest = _load_manifest_from_zip(tmp_zip_path)
         if not ok:
@@ -736,13 +955,14 @@ def upload(request):
             package_id = f"{package_id}_{tmp_id[:6]}"
 
         pkg_dir = _package_dir(package_id)
-        os.makedirs(pkg_dir, exist_ok=True)
+        _ensure_private_directory(pkg_dir)
         final_zip_path = _zip_path(package_id)
 
         try:
             os.replace(tmp_zip_path, final_zip_path)
-        except Exception as e:
-            return _json_response({"code": 0, "msg": str(e) or "persist failed"}, status=500)
+        except Exception as exc:
+            logger.error("upgrade package move failed error_type=%s", type(exc).__name__)
+            return _json_response({"code": 0, "msg": "persist failed"}, status=500)
     finally:
         try:
             shutil.rmtree(tmp_dir)
@@ -778,16 +998,12 @@ def validate(request):
     if not package_id:
         return _json_response({"code": 0, "msg": "invalid package_id"}, status=400)
 
-    meta = _read_json_file(_meta_path(package_id))
-    manifest = meta.get("manifest") if isinstance(meta, dict) else None
-    if not isinstance(manifest, dict):
-        # fallback: read from zip (if meta missing)
-        zip_path = _zip_path(package_id)
-        if not os.path.exists(zip_path):
-            return _json_response({"code": 0, "msg": MSG_PACKAGE_NOT_FOUND}, status=404)
-        ok, msg, manifest = _load_manifest_from_zip(zip_path)
-        if not ok:
-            return _json_response({"code": 0, "msg": msg or MSG_PACKAGE_NOT_FOUND}, status=404)
+    zip_path = _zip_path(package_id)
+    if not os.path.isfile(zip_path) or os.path.islink(zip_path):
+        return _json_response({"code": 0, "msg": MSG_PACKAGE_NOT_FOUND}, status=404)
+    ok, msg, manifest = _load_manifest_from_zip(zip_path)
+    if not ok:
+        return _json_response({"code": 0, "msg": msg or "invalid package"}, status=400)
 
     ok, errors = _validate_manifest_compat_for_current(manifest)
 
@@ -832,22 +1048,20 @@ def _payload_truthy(payload: Dict[str, Any], key: str) -> bool:
 
 def _load_manifest_for_package_id(package_id: str) -> Tuple[bool, str, dict]:
     """加载`manifest``for`打包ID。"""
-    meta = _read_json_file(_meta_path(package_id))
-    manifest = meta.get("manifest") if isinstance(meta, dict) else None
-    if isinstance(manifest, dict):
-        return True, "success", manifest
     return _load_manifest_from_zip(_zip_path(package_id))
 
 
 def _prepare_staging_dir(stage_dir: str) -> None:
     # Clean staging dir before extraction.
     """返回`prepare``staging`目录。"""
-    try:
+    if os.path.lexists(stage_dir):
+        if os.path.islink(stage_dir):
+            raise ValueError("upgrade staging directory must not be a symbolic link")
         if os.path.isdir(stage_dir):
             shutil.rmtree(stage_dir)
-    except Exception:
-        logger.debug("cleanup staging dir failed path=%s", stage_dir, exc_info=True)
-    os.makedirs(stage_dir, exist_ok=True)
+        else:
+            os.remove(stage_dir)
+    _ensure_private_directory(stage_dir)
 
 
 def _update_upgrade_state_after_apply(*, package_id: str, manifest: dict) -> str:
@@ -918,8 +1132,9 @@ def apply(request):
 
     try:
         extract_info = _extract_zip_safely(zip_path, stage_dir)
-    except Exception as e:
-        return _json_response({"code": 0, "msg": str(e) or "extract failed"}, status=500)
+    except Exception as exc:
+        logger.error("upgrade extraction failed error_type=%s", type(exc).__name__)
+        return _json_response({"code": 0, "msg": "extract failed"}, status=500)
 
     prev = _update_upgrade_state_after_apply(package_id=package_id, manifest=manifest)
 

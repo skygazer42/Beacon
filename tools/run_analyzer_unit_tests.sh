@@ -133,6 +133,7 @@ echo "[analyzer] fixture: dummy_plugin_v3"
   -I "$CORE" \
   "$TESTS/dummy_plugin_v3.cpp" \
   -o "$PLUGIN_SO"
+chmod 0755 "$PLUGIN_SO"
 
 COMPAT_PLUGIN_SRC="Analyzer/Compat/compat_plugin.cpp"
 COMPAT_PLUGIN_SO="$TEST_TMP_DIR/libbeacon_compat_test.so"
@@ -163,6 +164,18 @@ BEACON_TEST_COMPAT_PLUGIN_PATH="$COMPAT_PLUGIN_SO" \
 BEACON_TEST_DUMMY_PLUGIN_V3_PATH="$PLUGIN_SO" \
 BEACON_TEST_COMPAT_RUNTIME_MODE=delegated \
   "$COMPAT_RUNTIME_BINARY"
+echo "[analyzer] test: compat_plugin_runtime (relative path rejected)"
+BEACON_TEST_COMPAT_PLUGIN_PATH="$COMPAT_PLUGIN_SO" \
+BEACON_TEST_DUMMY_PLUGIN_V3_PATH="beacon_dummy_plugin_v3.so" \
+BEACON_TEST_COMPAT_RUNTIME_MODE=rejected \
+  "$COMPAT_RUNTIME_BINARY"
+echo "[analyzer] test: compat_plugin_runtime (writable plugin rejected)"
+chmod 0777 "$PLUGIN_SO"
+BEACON_TEST_COMPAT_PLUGIN_PATH="$COMPAT_PLUGIN_SO" \
+BEACON_TEST_DUMMY_PLUGIN_V3_PATH="$PLUGIN_SO" \
+BEACON_TEST_COMPAT_RUNTIME_MODE=rejected \
+  "$COMPAT_RUNTIME_BINARY"
+chmod 0755 "$PLUGIN_SO"
 
 if ! command -v pkg-config >/dev/null 2>&1 || ! pkg-config --exists opencv4; then
   echo "[analyzer] error: OpenCV 4 development files are required for the core Analyzer test set (pkg-config opencv4 not found)" >&2

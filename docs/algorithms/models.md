@@ -333,16 +333,16 @@ models/
 
 ## 模型加密
 
-Beacon 支持对模型文件进行 AES-256 加密，防止模型被盗用：
+Beacon 当前支持 BENCv2 兼容封装。该格式使用可逆 XOR 混淆，主要用于兼容 Analyzer 的模型交付流程，不是 AES-256，也不能单独防止模型被读取或篡改。
+
+!!! danger "生产安全边界"
+    不要把 BENCv2 当作密码学机密性或完整性控制。生产环境应使用加密磁盘/对象存储、严格的主机与目录权限、TLS 和密钥轮换；高价值模型应在外部 KMS/HSM 或供应商认证加密方案中保护。
 
 ### 加密流程
 
 ```bash
-# 使用 Beacon 提供的工具加密模型
-beacon-model-encrypt \
-    --input model.onnx \
-    --output model.onnx.enc \
-    --key-file /etc/beacon/model.key
+# 使用仓库工具生成 BENCv2 兼容封装
+python3 tools/model_encrypt.py --key "$(cat /run/secrets/beacon_model_key)" model.onnx
 ```
 
 ### 配置解密
@@ -357,7 +357,7 @@ beacon-model-encrypt \
 }
 ```
 
-Analyzer 会识别配置的加密后缀或文件头，但当前实现会把解密后的明文模型写入 `modelDecryptDir/<algorithm>/` 再交给推理运行时。该目录必须位于受控文件系统，限制权限、纳入清理策略，并按明文模型资产保护；不要把该功能描述成纯内存解密。
+Analyzer 会识别配置的封装后缀或文件头，但当前实现会把还原后的明文模型写入 `modelDecryptDir/<algorithm>/` 再交给推理运行时。该目录必须位于受控文件系统，限制权限、纳入清理策略，并按明文模型资产保护；不要把该功能描述成纯内存解密。
 
 ---
 
@@ -406,6 +406,11 @@ export BEACON_COMPAT_BACKEND_PATH=/opt/beacon/compat/libbeacon_rknn_backend.so
 ```
 
 这里的 `BEACON_COMPAT_BACKEND_PATH` 必须指向实现了 `BeaconGetAlgorithmPluginV3` 接口的 Beacon 兼容后端插件，不能直接指向 `librknn_api.so`、`libascendcl.so` 这类厂商基础运行库。
+
+生产路径必须是无符号链接组件的规范绝对路径，文件应由 `root` 或 Analyzer 服务账号
+拥有，且不得允许 group/other 写入；否则兼容层会拒绝加载并保持在 stub 模式。建议把
+插件部署到服务账号不可写的 `/opt/beacon/compat/`，通过发布包校验和或签名确认来源，
+不要从上传目录、共享临时目录或客户可写挂载加载动态库。
 
 运行 Analyzer 核心测试，确认 compat shim 的 `stub` / `delegated` 行为：
 

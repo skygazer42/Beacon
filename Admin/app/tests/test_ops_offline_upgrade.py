@@ -1,4 +1,5 @@
 import io
+import base64
 import json
 import os
 import tempfile
@@ -7,19 +8,145 @@ from unittest import mock
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from app.views import OpsUpgradeView
 from framework.settings import PROJECT_VERSION
 
 
 class OpsOfflineUpgradeTest(TestCase):
-    def _make_zip(self, manifest: dict, extra_files: dict = None) -> bytes:
+    def _make_zip(self, manifest: dict, extra_files: dict = None, signing_key=None) -> bytes:
         buf = io.BytesIO()
+        manifest_bytes = (json.dumps(manifest, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
         with zipfile.ZipFile(buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
-            zf.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
+            zf.writestr("manifest.json", manifest_bytes)
+            if signing_key is not None:
+                zf.writestr("manifest.sig", base64.b64encode(signing_key.sign(manifest_bytes)).decode("ascii") + "\n")
             for name, content in (extra_files or {}).items():
                 zf.writestr(name, content)
         return buf.getvalue()
+
+    def test_manifest_signature_is_required_and_verified_when_configured(self):
+        private_key = Ed25519PrivateKey.generate()
+        public_key = private_key.public_key().public_bytes(
+            encoding=serialization.Encoding.Raw,
+            format=serialization.PublicFormat.Raw,
+        )
+        manifest = {
+            "package_id": "pkg-signed",
+            "target_version": PROJECT_VERSION,
+            "compatible": {"min_version": PROJECT_VERSION, "max_version": PROJECT_VERSION},
+            "files": {},
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir, mock.patch.dict(
+            os.environ,
+            {
+                "BEACON_UPGRADE_REQUIRE_SIGNATURE": "1",
+                "BEACON_UPGRADE_ED25519_PUBLIC_KEY": base64.b64encode(public_key).decode("ascii"),
+            },
+            clear=False,
+        ):
+            unsigned_path = os.path.join(temp_dir, "unsigned.zip")
+            with open(unsigned_path, "wb") as handle:
+                handle.write(self._make_zip(manifest))
+            self.assertEqual(
+                OpsUpgradeView._load_manifest_from_zip(unsigned_path)[:2],
+                (False, "package signature is required"),
+            )
+
+            signed_path = os.path.join(temp_dir, "signed.zip")
+            with open(signed_path, "wb") as handle:
+                handle.write(self._make_zip(manifest, signing_key=private_key))
+            ok, message, loaded_manifest = OpsUpgradeView._load_manifest_from_zip(signed_path)
+            self.assertTrue(ok, msg=message)
+            self.assertEqual(loaded_manifest, manifest)
+
+            bad_manifest = dict(manifest)
+            bad_manifest["files"] = {"Admin/app.bin": "0" * 64}
+            bad_path = os.path.join(temp_dir, "bad-payload.zip")
+            with open(bad_path, "wb") as handle:
+                handle.write(
+                    self._make_zip(
+                        bad_manifest,
+                        extra_files={"Admin/app.bin": b"tampered"},
+                        signing_key=private_key,
+                    )
+                )
+            self.assertEqual(
+                OpsUpgradeView._load_manifest_from_zip(bad_path)[:2],
+                (False, "signed package payload digest verification failed"),
+            )
+
+    def test_manifest_and_upload_size_limits_are_enforced(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            oversized_manifest_path = os.path.join(temp_dir, "oversized-manifest.zip")
+            with zipfile.ZipFile(oversized_manifest_path, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
+                archive.writestr(
+                    "manifest.json",
+                    b"{" + b" " * OpsUpgradeView.MAX_UPGRADE_MANIFEST_BYTES + b"}",
+                )
+            self.assertEqual(
+                OpsUpgradeView._load_manifest_from_zip(oversized_manifest_path)[:2],
+                (False, "manifest.json is too large"),
+            )
+
+        with tempfile.TemporaryDirectory() as root_dir, mock.patch.dict(
+            os.environ,
+            {
+                "BEACON_ROOT_DIR": root_dir,
+                "BEACON_OPEN_API_TOKEN": "t1",
+                "BEACON_UPGRADE_REQUIRE_SIGNATURE": "0",
+                "BEACON_UPGRADE_UPLOAD_MAX_BYTES": "32",
+            },
+            clear=False,
+        ):
+            response = self.client.post(
+                "/open/ops/upgrade/upload",
+                data={"file": SimpleUploadedFile("large.zip", b"x" * 33, content_type="application/zip")},
+                REMOTE_ADDR="8.8.8.8",
+                HTTP_X_BEACON_TOKEN="t1",
+            )
+            self.assertEqual(response.status_code, 413, msg=response.content)
+            self.assertEqual(json.loads(response.content.decode("utf-8"))["msg"], "upgrade package is too large")
+
+    def test_validate_reverifies_package_instead_of_trusting_cached_manifest(self):
+        with tempfile.TemporaryDirectory() as root_dir, mock.patch.dict(
+            os.environ,
+            {
+                "BEACON_ROOT_DIR": root_dir,
+                "BEACON_OPEN_API_TOKEN": "t1",
+                "BEACON_UPGRADE_REQUIRE_SIGNATURE": "0",
+            },
+            clear=False,
+        ):
+            package = self._make_zip(
+                {
+                    "package_id": "pkg-reverify",
+                    "target_version": PROJECT_VERSION,
+                    "compatible": {"min_version": PROJECT_VERSION, "max_version": PROJECT_VERSION},
+                }
+            )
+            upload_response = self.client.post(
+                "/open/ops/upgrade/upload",
+                data={"file": SimpleUploadedFile("upgrade.zip", package, content_type="application/zip")},
+                REMOTE_ADDR="8.8.8.8",
+                HTTP_X_BEACON_TOKEN="t1",
+            )
+            self.assertEqual(upload_response.status_code, 200, msg=upload_response.content)
+            package_id = json.loads(upload_response.content.decode("utf-8"))["data"]["package_id"]
+            with open(OpsUpgradeView._zip_path(package_id), "wb") as handle:
+                handle.write(b"tampered")
+
+            validate_response = self.client.get(
+                f"/open/ops/upgrade/validate?package_id={package_id}",
+                REMOTE_ADDR="8.8.8.8",
+                HTTP_X_BEACON_TOKEN="t1",
+            )
+
+            self.assertEqual(validate_response.status_code, 400, msg=validate_response.content)
+            self.assertEqual(json.loads(validate_response.content.decode("utf-8"))["msg"], "invalid zip file")
 
     def test_safe_extract_enforces_limits_and_rejects_traversal(self):
         with mock.patch.dict(
@@ -150,6 +277,16 @@ class OpsOfflineUpgradeTest(TestCase):
                 self.assertEqual(a2.status_code, 200, msg=a2.content[:2000])
                 a2_body = json.loads(a2.content.decode("utf-8"))
                 self.assertEqual(a2_body.get("code"), 1000, msg=a2_body)
+
+                if os.name != "nt":
+                    package_dir = os.path.join(tmp, "upgrade", "packages", pkg_b)
+                    stage_dir = os.path.join(tmp, "upgrade", "staging", pkg_b)
+                    self.assertEqual(os.stat(package_dir).st_mode & 0o777, 0o700)
+                    self.assertEqual(os.stat(os.path.join(package_dir, "package.zip")).st_mode & 0o777, 0o600)
+                    self.assertEqual(os.stat(os.path.join(package_dir, "meta.json")).st_mode & 0o777, 0o600)
+                    self.assertEqual(os.stat(stage_dir).st_mode & 0o777, 0o700)
+                    self.assertEqual(os.stat(os.path.join(stage_dir, "Admin", "README.txt")).st_mode & 0o777, 0o600)
+                    self.assertEqual(os.stat(os.path.join(tmp, "upgrade", "state.json")).st_mode & 0o777, 0o600)
 
                 # rollback should go back to pkg_a
                 rb = self.client.post(

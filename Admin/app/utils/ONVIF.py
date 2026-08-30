@@ -8,6 +8,8 @@ import re
 import time
 import base64
 import hashlib
+import os
+import secrets
 import requests
 import logging
 from datetime import datetime, timezone
@@ -18,9 +20,32 @@ from xml.etree.ElementTree import Element  # nosemgrep: python.lang.security.use
 from typing import List, Dict, Optional, Tuple
 
 from defusedxml import ElementTree as ET
+from app.utils.OutboundUrl import validate_outbound_http_url
 
 
 logger = logging.getLogger(__name__)
+MAX_ONVIF_SNAPSHOT_BYTES = 20 * 1024 * 1024
+
+
+def _is_supported_snapshot_header(header: bytes) -> bool:
+    value = bytes(header or b"")
+    return (
+        value.startswith(b"\xff\xd8\xff")
+        or value.startswith(b"\x89PNG\r\n\x1a\n")
+        or value.startswith((b"GIF87a", b"GIF89a", b"BM"))
+        or (len(value) >= 12 and value[:4] == b"RIFF" and value[8:12] == b"WEBP")
+    )
+
+
+def _xml_text(value) -> str:
+    return (
+        str(value or "")
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&apos;")
+    )
 
 
 def _parse_untrusted_xml(payload: bytes | str) -> Element:
@@ -184,8 +209,8 @@ class ONVIFDiscovery:
 
             return device
 
-        except Exception as e:
-            logger.debug("Error parsing ProbeMatch: %s", e)
+        except Exception as exc:
+            logger.debug("Error parsing ProbeMatch: error_type=%s", type(exc).__name__)
             return None
 
     @classmethod
@@ -218,18 +243,18 @@ class ONVIFDiscovery:
                     if device and device.ip_address not in seen_ips:
                         seen_ips.add(device.ip_address)
                         devices.append(device)
-                        logger.info("Found ONVIF device: %s at %s", device.name, device.ip_address)
+                        logger.info("Found ONVIF device: %r at %r", device.name, device.ip_address)
 
                 except socket.timeout:
                     break
-                except Exception as e:
-                    logger.debug("Error receiving ONVIF response: %s", e)
+                except Exception as exc:
+                    logger.debug("Error receiving ONVIF response: error_type=%s", type(exc).__name__)
                     continue
 
             sock.close()
 
-        except Exception as e:
-            logger.warning("Error during ONVIF discovery: %s", e)
+        except Exception as exc:
+            logger.warning("Error during ONVIF discovery: error_type=%s", type(exc).__name__)
 
         return devices
 
@@ -239,13 +264,18 @@ class ONVIFClient:
 
     def __init__(self, ip_address: str, port: int = 80, username: str = "", password: str = ""):
         """处理`init`。"""
-        self.ip_address = ip_address
-        self.port = port
+        self.ip_address = str(ip_address or "").strip()
+        self.port = int(port)
+        if self.port < 1 or self.port > 65535:
+            raise ValueError("ONVIF port is invalid")
         self.username = username
         self.password = password
 
         # 服务端点
-        self.device_service_url = f"http://{ip_address}:{port}/onvif/device_service"
+        url_host = f"[{self.ip_address}]" if ":" in self.ip_address else self.ip_address
+        self.device_service_url = self._validated_device_url(
+            f"http://{url_host}:{self.port}/onvif/device_service"
+        )
         self.media_service_url = None
         self.imaging_service_url = None
 
@@ -259,6 +289,9 @@ class ONVIFClient:
             'wsse': 'http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd',
             'wsu': 'http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd'
         }
+
+    def _validated_device_url(self, url: str) -> str:
+        return validate_outbound_http_url(url, expected_host=self.ip_address)
 
     def create_soap_header(self) -> str:
         """创建 SOAP 安全头（WS-Security）"""
@@ -284,7 +317,7 @@ class ONVIFClient:
         <s:Header>
             <wsse:Security s:mustUnderstand="1">
                 <wsse:UsernameToken>
-                    <wsse:Username>{self.username}</wsse:Username>
+                    <wsse:Username>{_xml_text(self.username)}</wsse:Username>
                     <wsse:Password Type="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordDigest">{password_digest_base64}</wsse:Password>
                     <wsse:Nonce EncodingType="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-soap-message-security-1.0#Base64Binary">{nonce_base64}</wsse:Nonce>
                     <wsu:Created>{created}</wsu:Created>
@@ -297,6 +330,7 @@ class ONVIFClient:
     def send_soap_request(self, url: str, body: str) -> Optional[Element]:
         """发送 SOAP 请求"""
         try:
+            url = self._validated_device_url(url)
             header = self.create_soap_header()
 
             soap_envelope = f'''<?xml version="1.0" encoding="UTF-8"?>
@@ -317,7 +351,8 @@ class ONVIFClient:
                 url,
                 data=soap_envelope.encode('utf-8'),
                 headers={'Content-Type': 'application/soap+xml; charset=utf-8'},
-                timeout=10
+                timeout=10,
+                allow_redirects=False,
             )
 
             if response.status_code == 200:
@@ -326,8 +361,8 @@ class ONVIFClient:
                 logger.warning("ONVIF SOAP request failed: status_code=%s", response.status_code)
                 return None
 
-        except Exception as e:
-            logger.warning("Error sending ONVIF SOAP request: %s", e)
+        except Exception as exc:
+            logger.warning("Error sending ONVIF SOAP request: error_type=%s", type(exc).__name__)
             return None
 
     def get_device_information(self) -> Optional[Dict]:
@@ -353,8 +388,8 @@ class ONVIFClient:
 
             return device_info
 
-        except Exception as e:
-            logger.warning("Error parsing ONVIF device information: %s", e)
+        except Exception as exc:
+            logger.warning("Error parsing ONVIF device information: error_type=%s", type(exc).__name__)
             return None
 
     def get_capabilities(self) -> bool:
@@ -371,19 +406,19 @@ class ONVIFClient:
             if media_elem is not None:
                 xaddr = media_elem.find('tt:XAddr', self.namespaces)
                 if xaddr is not None:
-                    self.media_service_url = xaddr.text
+                    self.media_service_url = self._validated_device_url(str(xaddr.text or ""))
 
             # 提取 Imaging 服务地址
             imaging_elem = response.find('.//tt:Imaging', self.namespaces)
             if imaging_elem is not None:
                 xaddr = imaging_elem.find('tt:XAddr', self.namespaces)
                 if xaddr is not None:
-                    self.imaging_service_url = xaddr.text
+                    self.imaging_service_url = self._validated_device_url(str(xaddr.text or ""))
 
             return True
 
-        except Exception as e:
-            logger.warning("Error parsing ONVIF capabilities: %s", e)
+        except Exception as exc:
+            logger.warning("Error parsing ONVIF capabilities: error_type=%s", type(exc).__name__)
             return False
 
     @staticmethod
@@ -445,8 +480,8 @@ class ONVIFClient:
                 profiles.append(self._parse_profile_element(profile_elem))
             return profiles
 
-        except Exception as e:
-            logger.warning("Error parsing ONVIF profiles: %s", e)
+        except Exception as exc:
+            logger.warning("Error parsing ONVIF profiles: error_type=%s", type(exc).__name__)
             return []
 
     def get_stream_uri(self, profile_token: str, protocol: str = "RTSP") -> Optional[str]:
@@ -458,10 +493,10 @@ class ONVIFClient:
             <trt:StreamSetup>
                 <tt:Stream>RTP-Unicast</tt:Stream>
                 <tt:Transport>
-                    <tt:Protocol>{protocol}</tt:Protocol>
+                    <tt:Protocol>{_xml_text(protocol)}</tt:Protocol>
                 </tt:Transport>
             </trt:StreamSetup>
-            <trt:ProfileToken>{profile_token}</trt:ProfileToken>
+            <trt:ProfileToken>{_xml_text(profile_token)}</trt:ProfileToken>
         </trt:GetStreamUri>'''
 
         response = self.send_soap_request(self.media_service_url, body)
@@ -475,8 +510,8 @@ class ONVIFClient:
 
             return None
 
-        except Exception as e:
-            logger.warning("Error getting ONVIF stream URI: %s", e)
+        except Exception as exc:
+            logger.warning("Error getting ONVIF stream URI: error_type=%s", type(exc).__name__)
             return None
 
     def parse_backchannel_uri(self, response: Optional[Element]) -> Optional[str]:
@@ -529,7 +564,7 @@ class ONVIFClient:
         if token:
             request_bodies.append(
                 f"""<trt:GetCompatibleAudioOutputs>
-            <trt:ProfileToken>{token}</trt:ProfileToken>
+            <trt:ProfileToken>{_xml_text(token)}</trt:ProfileToken>
         </trt:GetCompatibleAudioOutputs>"""
             )
 
@@ -547,7 +582,7 @@ class ONVIFClient:
             return None
 
         body = f'''<trt:GetSnapshotUri>
-            <trt:ProfileToken>{profile_token}</trt:ProfileToken>
+            <trt:ProfileToken>{_xml_text(profile_token)}</trt:ProfileToken>
         </trt:GetSnapshotUri>'''
 
         response = self.send_soap_request(self.media_service_url, body)
@@ -561,35 +596,96 @@ class ONVIFClient:
 
             return None
 
-        except Exception as e:
-            logger.warning("Error getting ONVIF snapshot URI: %s", e)
+        except Exception as exc:
+            logger.warning("Error getting ONVIF snapshot URI: error_type=%s", type(exc).__name__)
             return None
 
-    def capture_snapshot(self, profile_token: str, save_path: str) -> bool:
+    def capture_snapshot(self, profile_token: str, save_path: str, *, allowed_root: str) -> bool:
         """截图并保存"""
         snapshot_uri = self.get_snapshot_uri(profile_token)
         if not snapshot_uri:
             return False
 
+        response = None
+        tmp_path = ""
         try:
+            snapshot_uri = self._validated_device_url(snapshot_uri)
             # 使用认证信息下载截图
             response = requests.get(
                 snapshot_uri,
                 auth=(self.username, self.password) if self.username else None,
-                timeout=10
+                timeout=10,
+                allow_redirects=False,
+                stream=True,
             )
 
-            if response.status_code == 200:
-                with open(save_path, 'wb') as f:
-                    f.write(response.content)
-                return True
-            else:
+            if response.status_code != 200:
                 logger.warning("Failed to capture ONVIF snapshot: status_code=%s", response.status_code)
                 return False
 
-        except Exception as e:
-            logger.warning("Error capturing ONVIF snapshot: %s", e)
+            content_length = str((getattr(response, "headers", None) or {}).get("Content-Length") or "").strip()
+            if content_length:
+                if not content_length.isascii() or not content_length.isdigit():
+                    raise ValueError("ONVIF snapshot content length is invalid")
+                if int(content_length) > MAX_ONVIF_SNAPSHOT_BYTES:
+                    raise ValueError("ONVIF snapshot exceeds the maximum size")
+
+            from app.utils.Security import resolve_direct_child
+
+            root = os.path.realpath(os.path.abspath(str(allowed_root or "")))
+            raw_target = os.path.abspath(str(save_path or ""))
+            if not os.path.isdir(root) or os.path.realpath(os.path.dirname(raw_target)) != root:
+                raise ValueError("ONVIF snapshot path escapes the allowed root")
+            if os.path.islink(raw_target):
+                raise ValueError("ONVIF snapshot target must not be a symbolic link")
+            target = resolve_direct_child(root, os.path.basename(raw_target))
+            if os.path.realpath(raw_target) != target:
+                raise ValueError("ONVIF snapshot path is invalid")
+
+            tmp_path = resolve_direct_child(
+                root,
+                f".{os.path.basename(target)}.{secrets.token_hex(8)}.part",
+            )
+            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+            if hasattr(os, "O_CLOEXEC"):
+                flags |= os.O_CLOEXEC
+            if hasattr(os, "O_NOFOLLOW"):
+                flags |= os.O_NOFOLLOW
+            descriptor = os.open(tmp_path, flags, 0o640)
+            written = 0
+            header = bytearray()
+            with os.fdopen(descriptor, "wb") as output:
+                for chunk in response.iter_content(chunk_size=64 * 1024):
+                    if not chunk:
+                        continue
+                    written += len(chunk)
+                    if written > MAX_ONVIF_SNAPSHOT_BYTES:
+                        raise ValueError("ONVIF snapshot exceeds the maximum size")
+                    if len(header) < 16:
+                        header.extend(chunk[: 16 - len(header)])
+                    output.write(chunk)
+                output.flush()
+                os.fsync(output.fileno())
+            if written == 0 or not _is_supported_snapshot_header(header):
+                raise ValueError("ONVIF snapshot is not a supported raster image")
+            os.replace(tmp_path, target)
+            tmp_path = ""
+            return True
+        except Exception as exc:
+            logger.warning("Error capturing ONVIF snapshot: error_type=%s", type(exc).__name__)
             return False
+        finally:
+            if response is not None:
+                try:
+                    response.close()
+                except Exception:
+                    logger.debug("closing ONVIF snapshot response failed", exc_info=True)
+            if tmp_path:
+                try:
+                    if os.path.lexists(tmp_path):
+                        os.remove(tmp_path)
+                except Exception:
+                    logger.debug("cleaning ONVIF snapshot temporary file failed", exc_info=True)
 
     def _get_element_text(self, parent: Element, tag: str) -> str:
         """获取元素文本"""
@@ -642,7 +738,7 @@ def get_device_backchannel_uri(
 
 def capture_device_snapshot(ip_address: str, save_path: str, port: int = 80,
                            username: str = "", password: str = "",
-                           profile_index: int = 0) -> bool:
+                           profile_index: int = 0, *, allowed_root: str) -> bool:
     """截取设备快照
 
     Args:
@@ -662,4 +758,4 @@ def capture_device_snapshot(ip_address: str, save_path: str, port: int = 80,
     if not profiles or profile_index >= len(profiles):
         return False
 
-    return client.capture_snapshot(profiles[profile_index].token, save_path)
+    return client.capture_snapshot(profiles[profile_index].token, save_path, allowed_root=allowed_root)

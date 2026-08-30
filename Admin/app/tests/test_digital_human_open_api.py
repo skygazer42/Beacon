@@ -16,7 +16,7 @@ from app.models import (
     DigitalHumanJwtAccount,
 )
 from app.services import digital_human as dh_service
-from app.utils.DigitalHumanCrypto import sm4_encrypt_ecb_pkcs7
+from app.utils.DigitalHumanCrypto import sm4_decrypt_ecb_pkcs7, sm4_encrypt_ecb_pkcs7
 
 
 def _machine_code(secret, os_name, machine_mac, tenant_name):
@@ -69,6 +69,15 @@ class DigitalHumanOpenApiTests(TestCase):
                 with self.assertRaises(dh_service.DigitalHumanError) as raised:
                     resolver()
                 self.assertEqual(raised.exception.status_code, 503)
+
+    def test_legacy_sm4_bearer_is_strictly_bounded_and_block_aligned(self):
+        secret = os.environ["BEACON_DIGITAL_HUMAN_UPLOAD_AUTH_SM4_SECRET_KEY"]
+        with self.assertRaises(ValueError):
+            sm4_decrypt_ecb_pkcs7("ab" * 15, secret)
+        with self.assertRaises(ValueError):
+            sm4_decrypt_ecb_pkcs7("ab" * 272, secret)
+        with self.assertRaises(ValueError):
+            sm4_encrypt_ecb_pkcs7("x" * 241, secret)
 
     def _encrypted_machine_code_bearer(self, machine_code, timestamp):
         plain = f"{machine_code}*{timestamp}"

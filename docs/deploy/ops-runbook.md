@@ -354,7 +354,16 @@ curl -sS "${ADMIN}/open/ops/upgrade/list?only_compatible=1" \
 - `multipart/form-data`
 - 文件字段名：`file`（或兼容 `package`）
 - zip 内必须包含 `manifest.json`
+- 生产包必须包含 `manifest.sig`：对 `manifest.json` 原始字节生成的 Ed25519 签名，再以标准 Base64 文本保存
 - `manifest.json` 必须包含 `compatible` 元数据（避免误用不兼容包）
+- 签名清单必须包含 `files` 对象：键是每个载荷文件的规范相对路径，值是该文件内容的小写 SHA-256；包内不得存在未列出的载荷、重复路径或符号链接
+- `manifest.json` 最大 1 MiB、`manifest.sig` 最大 4 KiB；压缩包上传默认最大 2 GiB，可用 `BEACON_UPGRADE_UPLOAD_MAX_BYTES` 下调
+
+生产先设置 `BEACON_UPGRADE_REQUIRE_SIGNATURE=1` 和
+`BEACON_UPGRADE_ED25519_PUBLIC_KEY=<32字节Ed25519公钥的标准Base64>`。生产模式默认要求
+签名；公钥缺失、签名缺失或验签失败都会拒绝上传、校验和应用。开发模式仅在明确未配置
+公钥且未强制签名时兼容旧的无签名测试包。签名必须由隔离的发布系统私钥生成，私钥不得
+部署到 Beacon 节点。
 
 示例：
 

@@ -19,6 +19,7 @@ from app.utils.SystemConfigHelper import get_bool
 from app.utils.Utils import validate_email, gen_random_code_s
 from app.utils.PermissionCoerce import coerce_permission_bool
 from app.utils.PasswordPolicy import validate_password
+from app.utils.SafeLog import safe_log_text
 from app.utils.UserPermissionRules import PERMISSION_KEYS
 from app.utils import Totp, TotpRecovery, LdapAuth, OidcAuth
 
@@ -267,7 +268,7 @@ def _cleanup_stale_login_lockout_rows(*, lockout_key: str, source_ip: str, now_t
             .delete()
         )
     except Exception:
-        logger.debug("login lockout cleanup failed key=%s ip=%s", lockout_key, source_ip, exc_info=True)
+        logger.debug("login lockout cleanup failed key=%r ip=%r", lockout_key, source_ip, exc_info=True)
 
 
 def _strip_wrapping_quotes(raw_value) -> str:
@@ -531,7 +532,7 @@ def _write_login_security_audit_event(
             detail_json=json.dumps(detail, ensure_ascii=False),
         )
     except Exception:
-        logger.debug("login audit failure event write failed username=%s", username, exc_info=True)
+        logger.debug("login audit failure event write failed username=%r", username, exc_info=True)
 
 
 def web_get_verify_code(request):
@@ -546,7 +547,7 @@ def web_get_verify_code(request):
         request.session[f"{_VERIFY_CODE_SESSION_KEY_PREFIX}{action}"] = str(code).strip().lower()
         request.session.modified = True
     except Exception:
-        logger.debug("captcha session write failed action=%s", action, exc_info=True)
+        logger.debug("captcha session write failed action=%r", action, exc_info=True)
 
     svg = _build_captcha_svg(code)
     resp = HttpResponse(svg, content_type="image/svg+xml")
@@ -846,7 +847,8 @@ def _web_oidc_token_exchange_failed_response(token_data):
     reason = ""
     if isinstance(token_data, dict):
         reason = str(token_data.get("reason") or "")
-    return HttpResponse(f"oidc token exchange failed: {reason}", status=400, content_type=CONTENT_TYPE_TEXT_PLAIN)
+    logger.warning("OIDC token exchange failed reason=%r", safe_log_text(reason))
+    return HttpResponse("oidc token exchange failed", status=400, content_type=CONTENT_TYPE_TEXT_PLAIN)
 
 
 def _web_oidc_exchange_code(request, code: str, provider_id: str):
@@ -863,7 +865,8 @@ def _web_oidc_invalid_id_token_response(verified):
     reason = ""
     if isinstance(verified, dict):
         reason = str(verified.get("reason") or "")
-    return HttpResponse(f"oidc invalid id_token: {reason}", status=400, content_type=CONTENT_TYPE_TEXT_PLAIN)
+    logger.warning("OIDC id_token validation failed reason=%r", safe_log_text(reason))
+    return HttpResponse("oidc invalid id_token", status=400, content_type=CONTENT_TYPE_TEXT_PLAIN)
 
 
 def _web_oidc_claims_from_id_token(id_token: str, *, expected_nonce: str, provider_id: str):
@@ -2052,7 +2055,7 @@ def _web_login_update_lockout_best_effort(lockout_state: dict, *, request, user,
             lockout_identifier=lockout_state["identifier"],
         )
     except Exception:
-        logger.debug("login lockout failure recording failed identifier=%s", lockout_state.get("identifier"), exc_info=True)
+        logger.debug("login lockout failure recording failed identifier=%r", lockout_state.get("identifier"), exc_info=True)
 
 
 def _web_login_finalize_attempt(request, *, user, auth_ok: bool, totp_code: str, not_found_msg: str):

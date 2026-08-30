@@ -1,4 +1,3 @@
-import hashlib
 import json
 import os
 from datetime import timedelta
@@ -10,6 +9,7 @@ from django.test import RequestFactory, TestCase
 from django.utils import timezone
 
 from app.middleware import SimpleMiddleware
+from app.utils.ApiKeyHash import hash_api_key_token
 
 
 class OpenApiGatewayTest(TestCase):
@@ -22,8 +22,7 @@ class OpenApiGatewayTest(TestCase):
         self.addCleanup(os.environ.pop, "BEACON_API_KEY_PEPPER", None)
 
     def _hash(self, token: str) -> str:
-        pepper = str(os.environ.get("BEACON_API_KEY_PEPPER") or "")
-        return hashlib.sha256((pepper + token).encode("utf-8")).hexdigest()
+        return hash_api_key_token(token)
 
     def test_global_openapi_rate_limit_returns_429(self):
         with mock.patch.dict(

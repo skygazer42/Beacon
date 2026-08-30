@@ -30,7 +30,8 @@ from django.utils import timezone
 from typing import Optional
 from urllib.parse import urlsplit, urlunsplit
 
-from app.utils.SafeLog import safe_json_dumps
+from app.utils.SafeLog import safe_json_dumps, safe_log_text
+from app.utils.OutboundUrl import validate_outbound_http_url
 from app.utils.SystemConfigHelper import get_int, get_value
 from app.utils.LicenseManager import extract_license_runtime_policy_from_json
 from framework.settings import PROJECT_ADMIN_START_TIMESTAMP, PROJECT_BUILT, PROJECT_FLAG, PROJECT_UA, PROJECT_VERSION
@@ -554,14 +555,21 @@ def _image_detect_api_payload(algo, *, base_code: str, image_b64: str, conf_thre
 def _image_detect_api_response(api_url: str, payload: dict):
     """返回图片检测API响应。"""
     try:
+        api_url = validate_outbound_http_url(
+            api_url,
+            allowed_hosts_env="BEACON_ALGORITHM_API_ALLOWED_HOSTS",
+            allowed_cidrs_env="BEACON_ALGORITHM_API_ALLOWED_CIDRS",
+        )
         res = requests.post(
             api_url,
             headers={"Content-Type": "application/json; charset=utf-8"},
             data=json.dumps(payload, ensure_ascii=False),
             timeout=(2, 10),
+            allow_redirects=False,
         )
     except Exception as exc:
-        raise _ImageDetectApiError(str(exc))
+        logger.warning("image inference upstream request failed error_type=%s", type(exc).__name__)
+        raise _ImageDetectApiError("upstream inference request failed")
     if not res.status_code:
         raise _ImageDetectApiError("request failed")
     try:
@@ -948,16 +956,17 @@ def _emit_alarm_created_event_best_effort(*, alarm, legacy_event: str, event_sou
         if dispatcher:
             dispatcher.enqueue(payload)
     except AlarmOutboxEnqueueError:
-        event_id = str(payload.get("event_id", "") or "")
+        event_id = safe_log_text(payload.get("event_id", ""), max_len=128)
+        control_code = safe_log_text(alarm.control_code, max_len=128)
         logger.exception(
-            "Alarm outbox enqueue failed event_id=%s alarm_id=%s control_code=%s",
+            "Alarm outbox enqueue failed event_id=%r alarm_id=%s control_code=%r",
             event_id,
             alarm.id,
-            alarm.control_code,
+            control_code,
             extra={
                 "alarm_event_id": event_id,
                 "alarm_id": alarm.id,
-                "control_code": alarm.control_code,
+                "control_code": control_code,
             },
         )
         raise
@@ -1918,13 +1927,9 @@ def _sanitize_stream_code_for_path(value: str) -> str:
         - For listing files, we only need to avoid path traversal and bad chars.
     """
     raw = str(value or "").strip()
-    if not raw:
+    if not raw or len(raw) > 128:
         return ""
-    safe_pattern = re.compile(r"[^\w\u4e00-\u9fff\-]", re.UNICODE)
-    cleaned = safe_pattern.sub("_", raw)
-    # collapse slashes just in case
-    cleaned = cleaned.replace("/", "_").replace("\\", "_")
-    return cleaned
+    return "".join(char if (char.isalnum() or char in "_-") else "_" for char in raw)
 
 
 def _recording_storage_root_dir(config) -> str:
@@ -1938,7 +1943,13 @@ def _recording_storage_root_dir(config) -> str:
 def _iter_recording_stream_dirs(root: str, stream_code: str):
     """遍历录制流目录列表。"""
     if stream_code:
-        yield stream_code, os.path.join(root, stream_code)
+        from app.utils.Security import resolve_direct_child
+
+        try:
+            stream_dir = resolve_direct_child(root, stream_code)
+        except ValueError:
+            return
+        yield stream_code, stream_dir
         return
 
     try:
@@ -5521,14 +5532,21 @@ def _audio_detect_request_payload(*, base_code: str, audio_b64: str, params: dic
 def _audio_detect_api_response(api_url: str, payload: dict):
     """返回音频检测API响应。"""
     try:
+        api_url = validate_outbound_http_url(
+            api_url,
+            allowed_hosts_env="BEACON_ALGORITHM_API_ALLOWED_HOSTS",
+            allowed_cidrs_env="BEACON_ALGORITHM_API_ALLOWED_CIDRS",
+        )
         res = requests.post(
             api_url,
             headers={"Content-Type": "application/json; charset=utf-8"},
             data=json.dumps(payload, ensure_ascii=False),
             timeout=(2, 20),
+            allow_redirects=False,
         )
     except Exception as exc:
-        raise _AudioDetectApiError(str(exc))
+        logger.warning("audio inference upstream request failed error_type=%s", type(exc).__name__)
+        raise _AudioDetectApiError("upstream inference request failed")
 
     if not res.status_code:
         raise _AudioDetectApiError("request failed")

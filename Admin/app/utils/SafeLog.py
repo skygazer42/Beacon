@@ -28,13 +28,38 @@ def _is_sensitive_key(key: str) -> bool:
 
 
 def truncate_text(text: str, max_len: int = 256) -> str:
-    """处理`truncate`文本。"""
+    """Return a bounded, single-line representation suitable for logs."""
     if max_len < 8:
         max_len = 8
-    s = str(text)
-    if len(s) <= max_len:
-        return s
-    return s[:max_len] + f"...(len={len(s)})"
+    raw = str(text)
+    parts = []
+    rendered_len = 0
+    for char in raw:
+        escaped = _escaped_log_character(char)
+        if rendered_len + len(escaped) > max_len:
+            return "".join(parts) + f"...(raw_len={len(raw)})"
+        parts.append(escaped)
+        rendered_len += len(escaped)
+    return "".join(parts)
+
+
+def _escaped_log_character(value: str) -> str:
+    codepoint = ord(value)
+    if value == "\n":
+        return "\\n"
+    if value == "\r":
+        return "\\r"
+    if value == "\t":
+        return "\\t"
+    if codepoint < 32 or codepoint == 127:
+        return f"\\x{codepoint:02x}"
+    return value
+
+
+def safe_log_text(value: Any, *, max_len: int = 256) -> str:
+    """Normalize untrusted text before it is interpolated into a log entry."""
+
+    return truncate_text("" if value is None else str(value), max_len=max_len)
 
 
 def _preview_mapping(value: Mapping, *, max_len: int, max_items: int) -> Any:

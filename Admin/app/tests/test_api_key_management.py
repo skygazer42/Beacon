@@ -1,5 +1,6 @@
 import json
 import os
+from unittest import mock
 
 from django.contrib.auth.models import User
 from django.test import Client
@@ -21,6 +22,26 @@ class ApiKeyManagementTest(TestCase):
         session = self.client.session
         session["user"] = {"id": user.id, "username": user.username}
         session.save()
+
+    def test_production_key_issuance_requires_a_strong_pepper(self):
+        admin = User.objects.create_user(username="admin-pepper", password="pass12345")
+        admin.is_staff = True
+        admin.save()
+        self._login_as(admin)
+
+        with mock.patch.dict(
+            os.environ,
+            {"BEACON_DJANGO_DEBUG": "0", "BEACON_API_KEY_PEPPER": "short"},
+            clear=False,
+        ):
+            response = self.client.post(
+                "/api/app-shell/ops/action/apikeys/create",
+                data={"name": "must-fail", "scopes": json.dumps(["ops"])},
+            )
+
+        body = json.loads(response.content.decode("utf-8"))
+        self.assertEqual(body.get("code"), 0, msg=body)
+        self.assertEqual(body.get("msg"), "API key pepper is not configured for production")
 
     def test_create_list_revoke_api_key(self):
         admin = User.objects.create_user(username="admin", password="pass12345")

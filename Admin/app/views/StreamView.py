@@ -1833,7 +1833,7 @@ def api_open_add_stream_pusher_proxy(request):
         return f_responseJson(res)
 
     params = f_parsePostParams(request)
-    logger.debug("StreamView.openAddStreamPusherProxy() params=%s", safe_json_dumps(params, max_len=1024))
+    logger.debug("StreamView.openAddStreamPusherProxy() params=%r", safe_json_dumps(params, max_len=1024))
     stream_app = str(params.get("stream_app") or "").strip()
     stream_name = str(params.get("stream_name") or "").strip()
     dst_stream_app = str(params.get("dst_stream_app") or "").strip()

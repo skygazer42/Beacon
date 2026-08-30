@@ -1,8 +1,11 @@
 import logging
 import os
+import re
 
 from django.http import HttpResponse, StreamingHttpResponse
 from django.shortcuts import render
+from django.utils.http import content_disposition_header
+from django.utils.text import get_valid_filename
 
 from app.models import CloudEdgeCluster
 from app.utils.CloudEdgeClient import CloudEdgeClient, CloudEdgeClientError
@@ -22,6 +25,8 @@ from app.views.ViewsBase import f_parseGetParams
 
 logger = logging.getLogger(__name__)
 TEMPLATE_REMOTE_RECORDINGS = "app/cloud/remote_recordings.html"
+_SAFE_REMOTE_MEDIA_TYPE = re.compile(r"^(?:video|audio)/[a-z0-9.+-]+$")
+_SAFE_REMOTE_IMAGE_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"})
 
 
 def _cloud_remote_recordings_int(value, default: int = 0) -> int:
@@ -104,8 +109,8 @@ def _remote_recording_rows_with_play_urls(request, cluster_id: int, payload: dic
             rel = _normalize_remote_recording_rel_path(rel_path)
             row["rel_path"] = rel
             row["play_url"] = build_cloud_recording_proxy_url(request, cluster_id, rel)
-        except Exception as e:
-            row["play_error"] = str(e)
+        except Exception:
+            row["play_error"] = "录像路径无效"
         rows.append(row)
     return rows
 
@@ -149,15 +154,30 @@ def _remote_recording_cluster_or_resp(auth, cluster_id: int):
     return cluster, None
 
 
+def _safe_remote_recording_content_type(remote_response) -> str:
+    raw = str((getattr(remote_response, "headers", None) or {}).get("Content-Type") or "")
+    media_type = raw.split(";", 1)[0].strip().lower()
+    if _SAFE_REMOTE_MEDIA_TYPE.fullmatch(media_type) or media_type in _SAFE_REMOTE_IMAGE_TYPES:
+        return media_type
+    return "application/octet-stream"
+
+
 def _remote_recording_response(remote_response, rel: str):
     """Build a streaming response from an edge recording response."""
-    content_type = str((remote_response.headers or {}).get("Content-Type") or "application/octet-stream")
+    content_type = _safe_remote_recording_content_type(remote_response)
     response = StreamingHttpResponse(_iter_remote_stream(remote_response), content_type=content_type)
     content_length = str((remote_response.headers or {}).get("Content-Length") or "").strip()
-    if content_length:
-        response["Content-Length"] = content_length
-    content_disposition = str((remote_response.headers or {}).get("Content-Disposition") or "").strip()
-    response["Content-Disposition"] = content_disposition or 'inline; filename="%s"' % os.path.basename(rel)
+    if content_length.isascii() and content_length.isdigit() and len(content_length) <= 19:
+        parsed_length = int(content_length)
+        if 0 <= parsed_length <= 2**63 - 1:
+            response["Content-Length"] = str(parsed_length)
+    filename = get_valid_filename(os.path.basename(str(rel or ""))) or "recording.bin"
+    response["Content-Disposition"] = content_disposition_header(
+        content_type == "application/octet-stream",
+        filename,
+    )
+    response["X-Content-Type-Options"] = "nosniff"
+    response["Content-Security-Policy"] = "default-src 'none'; sandbox"
     return response
 
 
@@ -206,8 +226,8 @@ def _load_remote_recordings_context(request, context: dict, cluster, stream_code
         rows = _remote_recording_rows_with_play_urls(request, cluster.id, payload)
         context["rows"] = rows
         context["total"] = int((payload or {}).get("total") or len(rows))
-    except CloudEdgeClientError as e:
-        context["top_msg"] = str(e)
+    except CloudEdgeClientError:
+        context["top_msg"] = "远端录像服务暂不可用"
 
 
 def index(request):

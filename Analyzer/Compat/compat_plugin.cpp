@@ -4,13 +4,17 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <mutex>
 #include <string>
+#include <system_error>
 
 #ifdef _WIN32
 #include <windows.h>
 #else
 #include <dlfcn.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #endif
 
 namespace {
@@ -36,6 +40,80 @@ struct CompatBackendStateHolder {
 
 CompatBackendState& compat_backend_state() {
     return CompatBackendStateHolder::state;
+}
+
+bool validate_backend_library_path(
+    const std::string& requested_path,
+    std::string& validated_path,
+    std::string& error
+) {
+    namespace fs = std::filesystem;
+
+    if (requested_path.empty() || requested_path.size() > 4096) {
+        error = "backend library path is empty or too long";
+        return false;
+    }
+    for (const unsigned char ch : requested_path) {
+        if (ch < 32 || ch == 127) {
+            error = "backend library path contains control characters";
+            return false;
+        }
+    }
+
+    const fs::path requested(requested_path);
+    if (!requested.is_absolute()) {
+        error = "backend library path must be absolute";
+        return false;
+    }
+
+    std::error_code ec;
+    const fs::file_status link_status = fs::symlink_status(requested, ec);
+    if (ec || link_status.type() == fs::file_type::not_found) {
+        error = "backend library path does not exist";
+        return false;
+    }
+    if (fs::is_symlink(link_status)) {
+        error = "backend library path must not be a symbolic link";
+        return false;
+    }
+
+    const fs::path canonical = fs::canonical(requested, ec);
+    if (ec || canonical != requested.lexically_normal()) {
+        error = "backend library path must be canonical and contain no symbolic-link components";
+        return false;
+    }
+    if (!fs::is_regular_file(canonical, ec) || ec) {
+        error = "backend library path must reference a regular file";
+        return false;
+    }
+
+#ifdef _WIN32
+    const DWORD attributes = GetFileAttributesA(canonical.string().c_str());
+    if (attributes == INVALID_FILE_ATTRIBUTES ||
+        (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0 ||
+        (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0) {
+        error = "backend library path must reference a non-reparse regular file";
+        return false;
+    }
+#else
+    struct stat file_stat {};
+    if (lstat(canonical.c_str(), &file_stat) != 0 || !S_ISREG(file_stat.st_mode)) {
+        error = "backend library path must reference a regular file";
+        return false;
+    }
+    if ((file_stat.st_mode & (S_IWGRP | S_IWOTH)) != 0) {
+        error = "backend library must not be writable by group or other users";
+        return false;
+    }
+    const uid_t effective_uid = geteuid();
+    if (file_stat.st_uid != 0 && file_stat.st_uid != effective_uid) {
+        error = "backend library must be owned by root or the Analyzer service account";
+        return false;
+    }
+#endif
+
+    validated_path = canonical.string();
+    return true;
 }
 
 #ifdef _WIN32
@@ -145,8 +223,16 @@ void initialize_backend_locked(CompatBackendState& state) {
         return;
     }
 
-    state.backend_library_path = requested_path;
-    state.handle = open_library(requested_path.c_str());
+    std::string validated_path;
+    std::string validation_error;
+    if (!validate_backend_library_path(requested_path, validated_path, validation_error)) {
+        state.backend_library_path.clear();
+        state.last_error = "refused backend library: " + validation_error;
+        return;
+    }
+
+    state.backend_library_path = validated_path;
+    state.handle = open_library(validated_path.c_str());
     if (!state.handle) {
         state.last_error = "failed to load backend library: " + get_last_loader_error();
         return;

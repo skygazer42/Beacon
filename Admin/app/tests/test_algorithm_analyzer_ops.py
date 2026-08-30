@@ -131,6 +131,42 @@ class AlgorithmAnalyzerOpsTest(TestCase):
         self.assertTrue(paths[1].lower().endswith(".bin.enc"), msg=model_path)
         self.assertEqual([payload[:8] for payload in saved], [b"BENCv2\x00\x00", b"BENCv2\x00\x00"])
 
+    def test_encrypt_suffix_rejects_path_and_control_characters(self):
+        from app.views import Algorithm as algorithm_view
+
+        self.assertEqual(algorithm_view._normalize_encrypt_suffix("../escape"), ".enc")
+        self.assertEqual(algorithm_view._normalize_encrypt_suffix("enc\r\n"), ".enc")
+        self.assertEqual(algorithm_view._normalize_encrypt_suffix("custom_1"), ".custom_1")
+
+    def test_save_uploaded_file_rejects_unapproved_target_directory(self):
+        from app.views import Algorithm as algorithm_view
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with self.assertRaisesRegex(ValueError, "upload target is invalid"):
+                algorithm_view.save_uploaded_file(
+                    SimpleUploadedFile("demo.onnx", b"model"),
+                    "safe_code",
+                    temp_dir,
+                    url_subdir="models",
+                )
+
+    def test_save_uploaded_file_enforces_streamed_size_limit(self):
+        from app.views import Algorithm as algorithm_view
+
+        with tempfile.TemporaryDirectory() as temp_dir, mock.patch.object(
+            algorithm_view,
+            "UPLOAD_MODEL_DIR",
+            temp_dir,
+        ), mock.patch.object(algorithm_view, "MAX_ALGORITHM_UPLOAD_BYTES", 3):
+            with self.assertRaisesRegex(ValueError, "maximum size"):
+                algorithm_view.save_uploaded_file(
+                    SimpleUploadedFile("demo.onnx", b"four"),
+                    "safe_code",
+                    temp_dir,
+                    url_subdir="models",
+                )
+            self.assertEqual(os.listdir(temp_dir), [])
+
     def test_open_analyzer_load_basic_api_returns_error_and_skips_load(self):
         AlgorithmModel.objects.create(
             sort=0,

@@ -115,6 +115,27 @@ def _ldap_render_user_filter(user_filter_template: str, user_input: str) -> str:
     return _format_template(user_filter_template, safe_username)
 
 
+def _ldap_escape_dn_username(user_input: str) -> str:
+    """Escape a username embedded as an RFC 4514 DN attribute value."""
+
+    value = str(user_input or "")
+    if not value or len(value) > 256 or any(ch in value for ch in ("\x00", "\r", "\n")):
+        raise ValueError("LDAP username is invalid")
+
+    escaped = []
+    last_index = len(value) - 1
+    for index, char in enumerate(value):
+        if char in {",", "+", '"', "\\", "<", ">", ";", "="}:
+            escaped.append("\\" + char)
+        elif char == "#" and index == 0:
+            escaped.append("\\#")
+        elif char == " " and (index == 0 or index == last_index):
+            escaped.append("\\ ")
+        else:
+            escaped.append(char)
+    return "".join(escaped)
+
+
 def _ldap_auth_direct_bind(
     ldap3,
     server,
@@ -126,7 +147,11 @@ def _ldap_auth_direct_bind(
     email_attr: str,
 ) -> Tuple[bool, Dict[str, Any]]:
     """处理LDAP认证直接绑定。"""
-    user_dn = _format_template(dn_template, user_input)
+    try:
+        safe_dn_username = _ldap_escape_dn_username(user_input)
+    except ValueError:
+        return _fail("invalid_username")
+    user_dn = _format_template(dn_template, safe_dn_username)
 
     try:
         conn = _ldap_bind(ldap3, server, user=user_dn, password=password, starttls=starttls)

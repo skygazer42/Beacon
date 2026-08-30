@@ -1,6 +1,5 @@
 ﻿import ast
 import json
-import hashlib
 import hmac
 import logging
 import math
@@ -10,6 +9,12 @@ import re
 import time
 import uuid
 from urllib.parse import urlparse
+
+from app.utils.ApiKeyHash import (
+    hash_api_key_token,
+    legacy_hash_api_key_token,
+    require_api_key_pepper_for_production,
+)
 from django.http import HttpResponseRedirect, HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.utils.deprecation import MiddlewareMixin
@@ -710,9 +715,7 @@ def _get_presented_open_api_token(request) -> str:
 
 def _hash_api_key_token(token: str) -> str:
     """返回哈希API键令牌。"""
-    pepper = str(os.environ.get("BEACON_API_KEY_PEPPER", "") or "")
-    raw = (pepper + str(token or "")).encode("utf-8")
-    return hashlib.sha256(raw).hexdigest()
+    return hash_api_key_token(token)
 
 
 def _api_key_scope_enabled(value) -> bool:
@@ -875,13 +878,32 @@ def _get_db_api_key_row(request):
     from app.models import ApiKey
 
     try:
+        require_api_key_pepper_for_production()
         now = timezone.now()
         token_hash = _hash_api_key_token(token)
-        return (
-            ApiKey.objects.filter(token_hash=token_hash, enabled=True, revoked_at__isnull=True)
-            .filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now))
-            .first()
+        active_rows = ApiKey.objects.filter(enabled=True, revoked_at__isnull=True).filter(
+            Q(expires_at__isnull=True) | Q(expires_at__gt=now)
         )
+        row = active_rows.filter(token_hash=token_hash).first()
+        if row is not None:
+            return row
+
+        legacy_hash = legacy_hash_api_key_token(token)
+        if legacy_hash == token_hash:
+            return None
+        row = active_rows.filter(token_hash=legacy_hash).first()
+        if row is None:
+            return None
+
+        # Migrate the legacy concatenated SHA-256 digest after a successful
+        # lookup. Authentication remains available if a concurrent migration
+        # wins the unique-key race.
+        try:
+            row.token_hash = token_hash
+            row.save(update_fields=["token_hash"])
+        except Exception:
+            pass
+        return row
     except Exception:
         return None
 

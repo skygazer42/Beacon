@@ -1,7 +1,7 @@
 # ========== API Key 管理（工业交付：多 Key + 轮换/吊销/过期/作用域）==========
 
-import hashlib
 import json
+import logging
 import os
 import secrets
 from datetime import timedelta
@@ -11,8 +11,10 @@ from django.shortcuts import redirect, render
 from django.utils import timezone
 
 from app.views.ViewsBase import f_parsePostParams, f_responseJson, getUser
+from app.utils.ApiKeyHash import hash_api_key_token, require_api_key_pepper_for_production
 
 MSG_METHOD_NOT_SUPPORTED = "请求方法不支持"
+logger = logging.getLogger(__name__)
 
 
 def _get_db_user(request):
@@ -44,9 +46,7 @@ def _deny(request, *, json_mode: bool):
 
 def _hash_token(token: str) -> str:
     """返回哈希令牌。"""
-    pepper = str(os.environ.get("BEACON_API_KEY_PEPPER", "") or "")
-    raw = (pepper + str(token or "")).encode("utf-8")
-    return hashlib.sha256(raw).hexdigest()
+    return hash_api_key_token(token)
 
 
 def _token_prefix(token: str, *, n: int = 8) -> str:
@@ -215,8 +215,10 @@ def _create_api_key_row(
             created_by=str(user.get("username") or user.get("name") or "").strip(),
         )
         return row, None
-    except Exception as e:
-        return None, str(e)
+    except Exception as exc:
+        # Only the exception class name is recorded; neither token nor digest is logged.
+        logger.error("credential record creation failed error_type=%s", type(exc).__name__)  # nosemgrep: python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure
+        return None, "API key creation failed"
 
 
 
@@ -278,6 +280,11 @@ def api_create(request):
 
     expires_at = _parse_expires_at(params.get("expires_days"))
     rate_limit_per_minute, burst_limit = _parse_rate_limits(params)
+
+    try:
+        require_api_key_pepper_for_production()
+    except ValueError:
+        return f_responseJson({"code": 0, "msg": "API key pepper is not configured for production"})
 
     token_plain = secrets.token_urlsafe(32)
     row, err = _create_api_key_row(
@@ -342,8 +349,10 @@ def api_revoke(request):
         row.enabled = False
         row.revoked_at = timezone.now()
         row.save()
-    except Exception as e:
-        return f_responseJson({"code": 0, "msg": str(e)})
+    except Exception as exc:
+        # Only the exception class name is recorded; neither token nor digest is logged.
+        logger.error("credential record revocation failed error_type=%s", type(exc).__name__)  # nosemgrep: python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure
+        return f_responseJson({"code": 0, "msg": "API key revocation failed"})
 
     return f_responseJson({"code": 1000, "msg": "success"})
 
@@ -380,6 +389,11 @@ def api_rotate(request):
     if not row:
         return f_responseJson({"code": 0, "msg": "not found"})
 
+    try:
+        require_api_key_pepper_for_production()
+    except ValueError:
+        return f_responseJson({"code": 0, "msg": "API key pepper is not configured for production"})
+
     token_plain = secrets.token_urlsafe(32)
     try:
         row.token_prefix = _token_prefix(token_plain)
@@ -387,8 +401,10 @@ def api_rotate(request):
         row.enabled = True
         row.revoked_at = None
         row.save()
-    except Exception as e:
-        return f_responseJson({"code": 0, "msg": str(e)})
+    except Exception as exc:
+        # Only the exception class name is recorded; neither token nor digest is logged.
+        logger.error("credential record rotation failed error_type=%s", type(exc).__name__)  # nosemgrep: python.lang.security.audit.logging.logger-credential-leak.python-logger-credential-disclosure
+        return f_responseJson({"code": 0, "msg": "API key rotation failed"})
 
     return f_responseJson(
         {

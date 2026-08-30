@@ -249,7 +249,10 @@ find /opt/beacon/data/upload -type f -mtime +30 -delete
 
 ## 模型加密（v2）
 
-用于交付“加密模型 + 试用时长 + 自定义编号”。Analyzer 侧会在加载时自动解密到 `modelDecryptDir`。
+用于交付 BENCv2 兼容封装（XOR 混淆 + 试用时长 + 自定义编号）。Analyzer 侧会在加载时自动还原到 `modelDecryptDir`。
+
+!!! warning "不是密码学加密边界"
+    BENCv2 是为兼容现有 Analyzer 格式保留的可逆混淆，不能提供等同 AES-GCM 的机密性或完整性。企业部署必须同时依赖加密磁盘/对象存储、最小文件权限、受控主机和传输层 TLS；高价值模型应使用外部 KMS/HSM 或供应商提供的认证加密封装。
 
 ### 配置项（`config.json` / 环境变量）
 
@@ -265,7 +268,7 @@ find /opt/beacon/data/upload -type f -mtime +30 -delete
 ### 预加密工具
 
 ```bash
-# 普通模型加密（输出：<src>.enc，例如 demo.engine.enc）
+# 普通模型兼容封装（输出：<src>.enc，例如 demo.engine.enc）
 python3 tools/model_encrypt.py --key <modelEncryptKey> demo.engine
 
 # OpenVINO IR（xml + bin）一起加密

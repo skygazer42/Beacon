@@ -4,6 +4,7 @@ from django.http import HttpResponse
 from django.db.models import Q
 from django.contrib.auth.models import User
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from app.utils.Common import buildPageLabels
 from datetime import datetime, timedelta
 import io
@@ -15,7 +16,7 @@ import zipfile
 from typing import Any
 from urllib.parse import urlencode
 
-from app.utils.SafeLog import safe_json_dumps
+from app.utils.SafeLog import safe_json_dumps, safe_log_text
 from app.utils.UserPermissionRules import PERMISSION_KEYS, PERMISSION_META, parse_permissions_json, permission_key_candidates
 
 from app.models import Alarm, AlarmFilterPreset, AlarmSound, AlgorithmModel, Control, Stream, UserPermission
@@ -1188,7 +1189,13 @@ def _safe_alarm_redirect_target(value, *, fallback: str) -> str:
     target = str(value or "").strip()
     if not target:
         return fallback
-    if target.startswith("//") or not target.startswith("/"):
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in target) or "\\" in target:
+        return fallback
+    if not target.startswith("/") or not url_has_allowed_host_and_scheme(
+        target,
+        allowed_hosts=set(),
+        require_https=False,
+    ):
         return fallback
     return target
 
@@ -2409,7 +2416,7 @@ def _alarm_openadd_validate_media_path(raw, *, field_name: str) -> str:
     path = validate_upload_rel_path(path, required_prefix=UPLOAD_PREFIX_ALARM)
     abs_path = resolve_under_base(g_config.uploadDir, path)
     if not os.path.isfile(abs_path):
-        logger.warning("AlarmView.openAdd() dropping missing %s=%s", field_name, path)
+        logger.warning("AlarmView.openAdd() dropping missing %r=%r", field_name, path)
         return ""
     return path
 
@@ -2460,7 +2467,7 @@ def _alarm_openadd_parse_request(params) -> dict:
     """处理告警`openadd``parse`请求。"""
     if not isinstance(params, dict):
         raise ValueError("invalid request body")
-    logger.debug("AlarmView.openAdd() params=%s", safe_json_dumps(params, max_len=1024))
+    logger.debug("AlarmView.openAdd() params=%r", safe_json_dumps(params, max_len=1024))
 
     control_code = params.get("control_code")
     if not control_code:
@@ -2623,10 +2630,13 @@ def _alarm_openadd_dispatch_created_event(alarm, *, alarm_data: dict, now_date):
         if dispatcher:
             dispatcher.enqueue(payload)
     except AlarmOutboxEnqueueError:
-        event_id = str(payload.get("event_id", "") or "")
-        control_code = str(alarm_data.get("control_code", "") or getattr(alarm, "control_code", "") or "")
+        event_id = safe_log_text(payload.get("event_id", ""), max_len=128)
+        control_code = safe_log_text(
+            alarm_data.get("control_code", "") or getattr(alarm, "control_code", ""),
+            max_len=128,
+        )
         logger.exception(
-            "Alarm outbox enqueue failed event_id=%s alarm_id=%s control_code=%s",
+            "Alarm outbox enqueue failed event_id=%r alarm_id=%s control_code=%r",
             event_id,
             alarm.id,
             control_code,

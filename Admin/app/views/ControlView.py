@@ -1485,7 +1485,7 @@ def _control_quickset_save_log(control_code: str, *, operator: str, changed: dic
             detail=json.dumps(changed, ensure_ascii=False),
         )
     except Exception:
-        logger.debug("save control quick-set log failed control_code=%s", control_code, exc_info=True)
+        logger.debug("save control quick-set log failed control_code=%r", control_code, exc_info=True)
 
 
 def api_open_quick_set(request):

@@ -135,7 +135,7 @@ Analyzer 引擎的模型加载、推理并发与缓存配置。
     | `modelConcurrency` | int | `1` | 基础算法模型并发实例数（>=1）。多实例可提升推理吞吐量，但占用更多内存/显存 |
     | `modelCacheSeconds` | int | `300` | 模型空闲缓存时长（秒）。`0` = 引用计数归零时立即卸载非内置模型。最大值 30 天 :material-swap-horizontal: `BEACON_MODEL_CACHE_SECONDS` |
     | `modelEncrypt` | bool | `false` | 是否启用模型加密 :material-swap-horizontal: `BEACON_MODEL_ENCRYPT` |
-    | `modelEncryptKey` | string | `""` | 模型解密密钥（XOR 方式） :material-swap-horizontal: `BEACON_MODEL_ENCRYPT_KEY` |
+    | `modelEncryptKey` | string | `""` | BENCv2 XOR 兼容封装密钥（仅混淆，不是密码学安全边界） :material-swap-horizontal: `BEACON_MODEL_ENCRYPT_KEY` |
     | `modelEncryptSuffix` | string | `".enc"` | 加密模型文件后缀名 :material-swap-horizontal: `BEACON_MODEL_ENCRYPT_SUFFIX` |
     | `modelDecryptDir` | string | `""` | 模型解密缓存目录。为空则使用默认临时目录 :material-swap-horizontal: `BEACON_MODEL_DECRYPT_DIR` |
     | `tensorrtEnginePluginPath` | string | `""` | TensorRT Engine 插件动态库路径。仅 `.engine` / `.plan` 模型需要；这里填的是 Beacon 插件动态库路径，不是 TensorRT 安装目录 |

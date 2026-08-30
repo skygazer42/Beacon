@@ -38,7 +38,7 @@ X-Beacon-Token: <token>
 
 ## 数据库 API Key
 
-管理员在“系统管理 → API 安全”（`/ops/apikeys`）中创建、轮换和吊销 API Key。完整 Token 只在创建或轮换时返回一次；数据库保存加 `BEACON_API_KEY_PEPPER` 的 SHA-256 哈希。
+管理员在“系统管理 → API 安全”（`/ops/apikeys`）中创建、轮换和吊销 API Key。完整 Token 只在创建或轮换时返回一次；数据库保存以 `BEACON_API_KEY_PEPPER` 为密钥的 HMAC-SHA-256 摘要。旧版拼接 SHA-256 摘要会在该 Key 下一次成功认证时自动迁移。
 
 | scope | 可访问范围 |
 |---|---|

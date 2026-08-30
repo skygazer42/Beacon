@@ -7,6 +7,7 @@ import time
 import threading
 from typing import Any, Dict
 
+from django.core.serializers.json import DjangoJSONEncoder
 from django.http import HttpResponse
 from django.db import connection
 from django.utils import timezone
@@ -22,7 +23,11 @@ logger = logging.getLogger(__name__)
 
 def _json_response(payload: Dict[str, Any], *, status: int = 200) -> HttpResponse:
     """返回JSON响应。"""
-    resp = HttpResponse(json.dumps(payload, ensure_ascii=False, default=str), status=status, content_type=CONTENT_TYPE_JSON)
+    resp = HttpResponse(
+        json.dumps(payload, ensure_ascii=False, cls=DjangoJSONEncoder),
+        status=status,
+        content_type=CONTENT_TYPE_JSON,
+    )
     # Health/ready endpoints must not be cached by proxies/clients.
     resp["Cache-Control"] = "no-store"
     resp["Pragma"] = "no-cache"
@@ -548,8 +553,9 @@ def _cleanup_alarm_compose_cache(*, dry_run: bool) -> Dict[str, Any]:
             "deleted": int(deleted),
             "kept": int(kept),
         }
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
+    except Exception as exc:
+        logger.error("alarm compose cache cleanup failed error_type=%s", type(exc).__name__)
+        return {"ok": False, "error": "cleanup_failed"}
 
 
 def _cleanup_transcode_cache() -> Dict[str, Any]:
@@ -561,8 +567,9 @@ def _cleanup_transcode_cache() -> Dict[str, Any]:
         if tm and hasattr(tm, "flush_all"):
             return tm.flush_all()
         return {"ok": False, "error": "transcode manager not running"}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
+    except Exception as exc:
+        logger.error("transcode cache cleanup failed error_type=%s", type(exc).__name__)
+        return {"ok": False, "error": "cleanup_failed"}
 
 
 def _existing_dirs(paths):
@@ -671,8 +678,9 @@ def _cleanup_logs(payload: Dict[str, Any], *, dry_run: bool) -> Dict[str, Any]:
             "deleted_bytes": int(counters["deleted_bytes"]),
             "log_dirs": log_dirs,
         }
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
+    except Exception as exc:
+        logger.error("log cleanup failed error_type=%s", type(exc).__name__)
+        return {"ok": False, "error": "cleanup_failed"}
 
 
 def _cleanup_tmp_files(payload: Dict[str, Any], *, dry_run: bool) -> Dict[str, Any]:
@@ -721,8 +729,9 @@ def _cleanup_tmp_files(payload: Dict[str, Any], *, dry_run: bool) -> Dict[str, A
             "kept_files": int(counters["kept_files"]),
             "tmp_dirs": tmp_dirs,
         }
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
+    except Exception as exc:
+        logger.error("temporary file cleanup failed error_type=%s", type(exc).__name__)
+        return {"ok": False, "error": "cleanup_failed"}
 
 
 def _outbox_replay_params(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -801,8 +810,9 @@ def outbox_replay(request):
                 },
             }
         )
-    except Exception as e:
-        return _json_response({"code": 0, "msg": str(e) or "error"}, status=500)
+    except Exception as exc:
+        logger.error("outbox replay failed error_type=%s", type(exc).__name__)
+        return _json_response({"code": 0, "msg": "internal operation failed"}, status=500)
 
 
 def _request_content_type_lower(request) -> str:

@@ -24,7 +24,7 @@ def _get_test_private_key():
     if _TEST_PRIVATE_KEY is None:
         from cryptography.hazmat.primitives.asymmetric import rsa
 
-        _TEST_PRIVATE_KEY = rsa.generate_private_key(public_exponent=65537, key_size=1024)
+        _TEST_PRIVATE_KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     return _TEST_PRIVATE_KEY
 
 
@@ -1283,7 +1283,7 @@ class OidcSsoLoginTest(TestCase):
             cb = self.client.get(f"/login/oidc/callback?code=code-no-exp-default&state={state}")
 
         self.assertEqual(cb.status_code, 400, msg=cb.content)
-        self.assertIn("jwt_exp_missing", cb.content.decode("utf-8", errors="ignore"))
+        self.assertEqual(cb.content.decode("utf-8", errors="ignore"), "oidc invalid id_token")
 
     def test_oidc_callback_accepts_rs256_id_token_without_exp_when_disabled(self):
         os.environ["BEACON_OIDC_JWKS_URI"] = "https://idp.example.com/jwks-no-exp-optional"
@@ -1451,7 +1451,7 @@ class OidcSsoLoginTest(TestCase):
             cb = self.client.get(f"/login/oidc/callback?code=code-nbf&state={state}")
 
         self.assertEqual(cb.status_code, 400, msg=cb.content)
-        self.assertIn("jwt_not_yet_valid", cb.content.decode("utf-8", errors="ignore"))
+        self.assertEqual(cb.content.decode("utf-8", errors="ignore"), "oidc invalid id_token")
 
     def test_oidc_callback_rejects_rs256_id_token_when_nbf_after_exp(self):
         os.environ["BEACON_OIDC_JWKS_URI"] = "https://idp.example.com/jwks-nbf-exp"
@@ -1505,7 +1505,7 @@ class OidcSsoLoginTest(TestCase):
             cb = self.client.get(f"/login/oidc/callback?code=code-nbf-exp&state={state}")
 
         self.assertEqual(cb.status_code, 400, msg=cb.content)
-        self.assertIn("jwt_nbf_after_exp", cb.content.decode("utf-8", errors="ignore"))
+        self.assertEqual(cb.content.decode("utf-8", errors="ignore"), "oidc invalid id_token")
 
     def test_oidc_callback_rejects_rs256_id_token_with_future_iat(self):
         os.environ["BEACON_OIDC_JWKS_URI"] = "https://idp.example.com/jwks-iat"
@@ -1559,7 +1559,7 @@ class OidcSsoLoginTest(TestCase):
             cb = self.client.get(f"/login/oidc/callback?code=code-iat&state={state}")
 
         self.assertEqual(cb.status_code, 400, msg=cb.content)
-        self.assertIn("jwt_issued_in_future", cb.content.decode("utf-8", errors="ignore"))
+        self.assertEqual(cb.content.decode("utf-8", errors="ignore"), "oidc invalid id_token")
 
     def test_oidc_callback_rejects_rs256_id_token_when_iat_after_exp(self):
         os.environ["BEACON_OIDC_JWKS_URI"] = "https://idp.example.com/jwks-iat-exp"
@@ -1613,7 +1613,7 @@ class OidcSsoLoginTest(TestCase):
             cb = self.client.get(f"/login/oidc/callback?code=code-iat-exp&state={state}")
 
         self.assertEqual(cb.status_code, 400, msg=cb.content)
-        self.assertIn("jwt_iat_after_exp", cb.content.decode("utf-8", errors="ignore"))
+        self.assertEqual(cb.content.decode("utf-8", errors="ignore"), "oidc invalid id_token")
 
     def test_oidc_callback_rejects_rs256_id_token_when_older_than_max_age(self):
         os.environ["BEACON_OIDC_JWKS_URI"] = "https://idp.example.com/jwks-iat-age"
@@ -1668,7 +1668,7 @@ class OidcSsoLoginTest(TestCase):
             cb = self.client.get(f"/login/oidc/callback?code=code-iat-age&state={state}")
 
         self.assertEqual(cb.status_code, 400, msg=cb.content)
-        self.assertIn("jwt_too_old", cb.content.decode("utf-8", errors="ignore"))
+        self.assertEqual(cb.content.decode("utf-8", errors="ignore"), "oidc invalid id_token")
 
     def test_oidc_callback_rejects_rs256_id_token_without_iat_when_max_age_enabled(self):
         os.environ["BEACON_OIDC_JWKS_URI"] = "https://idp.example.com/jwks-iat-required"
@@ -1721,7 +1721,7 @@ class OidcSsoLoginTest(TestCase):
             cb = self.client.get(f"/login/oidc/callback?code=code-iat-required&state={state}")
 
         self.assertEqual(cb.status_code, 400, msg=cb.content)
-        self.assertIn("jwt_iat_missing_for_max_age", cb.content.decode("utf-8", errors="ignore"))
+        self.assertEqual(cb.content.decode("utf-8", errors="ignore"), "oidc invalid id_token")
 
     def test_oidc_callback_accepts_rs256_id_token_without_iat_when_override_disabled(self):
         os.environ["BEACON_OIDC_JWKS_URI"] = "https://idp.example.com/jwks-iat-optional"

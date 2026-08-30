@@ -64,6 +64,14 @@ BEACON_DJANGO_CSRF_TRUSTED_ORIGINS=https://beacon.example.com
 - `/ws/alarm/poll` 只接受已登录 Session Cookie，并需要 ASGI。
 - 默认响应禁止跨站 iframe。只有明确需要嵌入时才设置 `BEACON_IFRAME_EMBED_ENABLED=1`，并填写精确的 `BEACON_IFRAME_EMBED_ALLOWED_ORIGINS`；空白白名单仍只允许同源。
 - OIDC、LDAP、数字人运行时和 Cloud Edge 各有独立认证边界，不能混用 Token。
+- 数字人旧采集协议的 SM4-ECB 仅用于受长度限制、带时间戳并执行防重放的兼容 Bearer，不可复用于一般数据；该入口必须置于 HTTPS 与网关来源/速率限制之后，并规划迁移到带认证的协议。
+
+## 出站请求与 SSRF 边界
+
+- 云边上报、算法 API、图片/音频分析和 ONVIF HTTP 请求只接受 `http`/`https`，拒绝 URL 内凭据、控制字符和跨主机重定向。
+- 公网目标默认允许；私网、链路本地与 loopback 目标必须通过 `BEACON_OUTBOUND_ALLOWED_*` 或对应的 Cloud/算法专用白名单显式放行。主机名仅精确匹配，不支持通配符，云元数据地址始终拒绝。
+- ONVIF 设备返回的服务与截图地址必须保持为初始设备主机，防止设备响应把请求转向其他主机。
+- DNS、代理和网络路由属于部署边界。生产应在安全组、容器网络策略或防火墙中对 Admin egress 默认拒绝，仅放行确需访问的算法、云端、设备与对象存储地址。
 
 ## 文件与数据
 

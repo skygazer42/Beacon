@@ -116,6 +116,22 @@ void expect_delegated_mode(const std::string& compat_path, const std::string& du
     assert(get_destroy() == 1);
 }
 
+void expect_rejected_mode(const std::string& compat_path, const std::string& requested_path) {
+    setenv("BEACON_COMPAT_BACKEND_PATH", requested_path.c_str(), 1);
+
+    DlHandle compat = load_library(compat_path);
+    auto get_info = load_symbol<BeaconGetCompatBackendInfoV1Fn>(compat.handle, "BeaconGetCompatBackendInfoV1");
+    assert(get_info != nullptr);
+
+    const BeaconCompatBackendInfoV1* info = get_info();
+    assert(info != nullptr);
+    assert(info->backend_mode != nullptr);
+    assert(std::strcmp(info->backend_mode, "stub") == 0);
+    assert(info->is_stub != 0);
+    assert(info->last_error != nullptr);
+    assert(std::strstr(info->last_error, "refused backend library") != nullptr);
+}
+
 }  // namespace
 
 int main() {
@@ -133,6 +149,10 @@ int main() {
     }
     if (mode == "delegated") {
         expect_delegated_mode(compat_path, dummy_path);
+        return 0;
+    }
+    if (mode == "rejected") {
+        expect_rejected_mode(compat_path, dummy_path);
         return 0;
     }
 

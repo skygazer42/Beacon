@@ -11,6 +11,14 @@ from app.utils import LdapAuth
 
 
 class LdapAuthUnitTest(SimpleTestCase):
+    def test_direct_bind_username_is_escaped_as_dn_value(self):
+        self.assertEqual(
+            LdapAuth._ldap_escape_dn_username(" alice,ou=admins "),
+            r"\ alice\,ou\=admins\ ",
+        )
+        with self.assertRaises(ValueError):
+            LdapAuth._ldap_escape_dn_username("alice\nuid=admin")
+
     def _install_fake_ldap3(self, *, bind_email="user@example.com", found_dn="uid=alice,dc=example"):
         ldap3_mod = types.ModuleType("ldap3")
         ldap3_mod.AUTO_BIND_TLS_BEFORE_BIND = 1

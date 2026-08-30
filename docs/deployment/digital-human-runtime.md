@@ -64,6 +64,13 @@ export BEACON_CLOUD_S3_ACCESS_KEY_ID='beacon-minio'
 export BEACON_CLOUD_S3_SECRET_ACCESS_KEY='<strong-random-secret>'
 ```
 
+`BEACON_DIGITAL_HUMAN_UPLOAD_AUTH_SM4_SECRET_KEY` 必须是与采集端共享的 32 位十六进制
+密钥。既有采集协议要求使用 SM4-ECB，因此 Beacon 仅在这个兼容入口处理固定长度的
+`machineCode*yyyyMMddHHmmss` Bearer 载荷，并限制密文长度、校验时间窗口且拒绝重放。
+该兼容加密不能用于一般业务数据，也不提供传输完整性；生产必须通过 HTTPS 接入，并在
+网关限制来源与速率。新采集端协议应优先使用带认证的现代加密或签名方案，再逐步停用该
+兼容入口。
+
 ---
 
 ## 3. 运行链路

@@ -118,7 +118,7 @@ class RecordingPlanService:
 
         stream_url = self._resolve_stream_url(plan)
         if not stream_url:
-            logger.warning("RecordingPlan start skipped: stream_url empty, plan=%s", plan_code)
+            logger.warning("RecordingPlan start skipped: stream_url empty, plan=%r", plan_code)
             return
 
         key = f"plan_{plan_code}"
@@ -138,9 +138,9 @@ class RecordingPlanService:
         )
         if result.get("success"):
             self._active[plan_code] = key
-            logger.info("RecordingPlan started: plan=%s stream=%s", plan_code, str(getattr(plan, "stream_code", "")))
+            logger.info("RecordingPlan started: plan=%r stream=%r", plan_code, str(getattr(plan, "stream_code", "")))
         else:
-            logger.warning("RecordingPlan start failed: plan=%s msg=%s", plan_code, result.get("message"))
+            logger.warning("RecordingPlan start failed: plan=%r msg=%r", plan_code, result.get("message"))
 
     def _stop_plan(self, plan_code: str) -> Tuple[bool, str]:
         """停止计划。"""
@@ -156,7 +156,7 @@ class RecordingPlanService:
         except Exception as exc:
             message = "停止录像调用异常"
             logger.warning(
-                "RecordingPlan stop failed: %s",
+                "RecordingPlan stop failed: %r",
                 safe_json_dumps(
                     {"plan_code": plan_code, "message": message, "error": str(exc)},
                     max_len=512,
@@ -167,7 +167,7 @@ class RecordingPlanService:
         if not isinstance(result, dict):
             message = "停止录像返回格式错误"
             logger.warning(
-                "RecordingPlan stop failed: %s",
+                "RecordingPlan stop failed: %r",
                 safe_json_dumps(
                     {"plan_code": plan_code, "message": message, "result": result},
                     max_len=512,
@@ -180,7 +180,7 @@ class RecordingPlanService:
         if type(success) is not bool or not isinstance(result_message, str):
             message = "停止录像返回字段错误"
             logger.warning(
-                "RecordingPlan stop failed: %s",
+                "RecordingPlan stop failed: %r",
                 safe_json_dumps(
                     {"plan_code": plan_code, "message": message, "result": result},
                     max_len=512,
@@ -191,7 +191,7 @@ class RecordingPlanService:
         stopped = success or result_message == _RECORDER_ALREADY_STOPPED_MESSAGE
         if not stopped:
             logger.warning(
-                "RecordingPlan stop failed: %s",
+                "RecordingPlan stop failed: %r",
                 safe_json_dumps(
                     {"plan_code": plan_code, "message": result_message},
                     max_len=512,
@@ -201,7 +201,7 @@ class RecordingPlanService:
 
         self._active.pop(plan_code, None)
         logger.info(
-            "RecordingPlan stopped: %s",
+            "RecordingPlan stopped: %r",
             safe_json_dumps({"plan_code": plan_code}, max_len=256),
         )
         return True, result_message

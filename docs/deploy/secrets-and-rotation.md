@@ -41,7 +41,7 @@ MediaServer：
 - LDAP：`BEACON_LDAP_BIND_PASSWORD`
 - TURN：`BEACON_WEBRTC_TURN_PASSWORD`
 - License：`BEACON_LICENSE_KEY` / 相关 dongle 配置
-- 模型加密：`BEACON_MODEL_ENCRYPT_KEY`
+- 模型 BENCv2 兼容混淆：`BEACON_MODEL_ENCRYPT_KEY`（不能替代加密存储/KMS）
 
 说明：
 
@@ -108,7 +108,7 @@ ApiKey 轮换建议采用“新建 -> 验证 -> 替换 -> 吊销”的标准流�
 
 Pepper 的作用：
 
-- ApiKey token 在 DB 中存储为 hash（SHA-256），hash 计算会混入 `BEACON_API_KEY_PEPPER`。
+- ApiKey token 在 DB 中存储为 HMAC-SHA-256 摘要，`BEACON_API_KEY_PEPPER` 是 HMAC 密钥；旧版拼接 SHA-256 摘要会在成功认证时自动迁移。
 
 关键约束：
 

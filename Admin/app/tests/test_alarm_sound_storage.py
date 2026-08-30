@@ -133,10 +133,11 @@ class ReadOnlyImageImportTest(TestCase):
     def test_algorithm_upload_creates_runtime_directory_lazily(self):
         with tempfile.TemporaryDirectory() as parent_dir:
             target_dir = os.path.join(parent_dir, "models")
-            url = Algorithm.save_uploaded_file(
-                SimpleUploadedFile("model.onnx", b"model"),
-                "demo_model",
-                target_dir,
-                url_subdir="models",
-            )
+            with mock.patch.object(Algorithm, "UPLOAD_MODEL_DIR", target_dir):
+                url = Algorithm.save_uploaded_file(
+                    SimpleUploadedFile("model.onnx", b"model"),
+                    "demo_model",
+                    target_dir,
+                    url_subdir="models",
+                )
             self.assertEqual(Path(target_dir, os.path.basename(url)).read_bytes(), b"model")

@@ -86,7 +86,7 @@ flowchart LR
 
 默认数据库为 SQLite；设置 `BEACON_CLOUD_DB_URL=postgresql://...` 后使用 PostgreSQL。MySQL 当前不受支持。
 
-API Key 只保存加 pepper 的 SHA-256 哈希和可见前缀。部分业务集成字段（例如 TOTP seed、ONVIF 密码、Cloud Edge Token、数字人代理 Token/密码及外部 AI Key）目前仍由数据库直接保存；生产部署应限制数据库和备份访问，并在需要更高保护等级时增加 KMS/字段级加密。
+API Key 只保存以 pepper 为密钥的 HMAC-SHA-256 摘要和可见前缀；旧版拼接 SHA-256 记录会在成功认证时原地迁移。部分业务集成字段（例如 TOTP seed、ONVIF 密码、Cloud Edge Token、数字人代理 Token/密码及外部 AI Key）目前仍由数据库直接保存；生产部署应限制数据库和备份访问，并在需要更高保护等级时增加 KMS/字段级加密。
 
 ## 目录结构
 

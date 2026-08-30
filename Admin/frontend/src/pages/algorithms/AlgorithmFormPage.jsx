@@ -8,10 +8,6 @@ import {
   SaveOutlined,
 } from '@ant-design/icons';
 import PageHeader from '../../components/PageHeader';
-import {
-  getBootstrapPath,
-  getBootstrapQueryString,
-} from '../../bootstrap';
 import { API } from '../../api/endpoints';
 import { apiPost } from '../../api/client';
 import { readAlgorithmFormTemplate } from './algorithmFormTemplate';
@@ -798,8 +794,6 @@ AlgorithmInferCard.propTypes = {
 
 export default function AlgorithmFormPage() {
   const { message } = App.useApp();
-  const path = getBootstrapPath();
-  const queryString = getBootstrapQueryString();
   const template = readAlgorithmFormTemplate();
   const [values, setValues] = useState(() => applyAlgorithmRules(template?.values || {
     code: '',
@@ -856,7 +850,6 @@ export default function AlgorithmFormPage() {
   const showObjectStr = !isBasicAlgorithm || values.algorithmSubtype !== 'tracking';
   const showPairedFile = showModelConfig && (modelExt === '.xml' || modelExt === '.weights');
   const resolvedApiUrl = isBasicAlgorithm ? values.apiUrl : values.apiUrlBehavior;
-  const formAction = queryString ? `${path}?${queryString}` : path;
 
   function patchValues(patch) {
     setValues(prev => applyAlgorithmRules({ ...prev, ...patch }));
@@ -912,7 +905,7 @@ export default function AlgorithmFormPage() {
     <div>
       <AlgorithmFormHeader handle={handle} popupMode={popupMode} />
 
-      <form method="post" action={formAction} encType="multipart/form-data" onSubmit={handleFormSubmit}>
+      <form method="post" encType="multipart/form-data" onSubmit={handleFormSubmit}>
         <AlgorithmHiddenInputs
           handle={handle}
           popupMode={popupMode}

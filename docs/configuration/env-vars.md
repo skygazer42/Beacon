@@ -348,6 +348,29 @@ Cloud 的 `worker` 角色必须使用 PostgreSQL；advisory lock 依赖一个持
 | `BEACON_CLOUD_UPLOAD_TIMEOUT_SECONDS` | int | `10` | 告警数据上传超时（秒，1~60） |
 | `BEACON_CLOUD_INGEST_TIMEOUT_SECONDS` | int | `5` | 数据摄入超时（秒，1~60） |
 
+### 出站 HTTP 目标白名单 {#outbound-http-allowlist}
+
+Beacon 会在云边上报、算法 API、图片/音频分析与 ONVIF 请求前解析并校验目标地址。公网
+HTTP(S) 目标默认允许；私网、链路本地和 loopback 目标必须通过精确主机名/IP 或 CIDR
+显式放行。主机名不支持通配符，多个值使用逗号分隔；云元数据地址始终拒绝。专用白名单
+与全局白名单合并。
+
+| 变量名 | 类型 | 默认值 | 说明 |
+|--------|------|--------|------|
+| `BEACON_OUTBOUND_ALLOWED_HOSTS` | CSV | `""` | 所有受保护出站请求共享的精确主机名/IP 白名单 |
+| `BEACON_OUTBOUND_ALLOWED_CIDRS` | CSV | `""` | 所有受保护出站请求共享的严格 CIDR 白名单 |
+| `BEACON_CLOUD_EDGE_ALLOWED_HOSTS` | CSV | `""` | `BEACON_CLOUD_BASE_URL` 的额外精确主机名/IP 白名单 |
+| `BEACON_CLOUD_EDGE_ALLOWED_CIDRS` | CSV | `""` | Cloud Edge 上报目标的额外 CIDR 白名单 |
+| `BEACON_ALGORITHM_API_ALLOWED_HOSTS` | CSV | `""` | 算法、图片与音频 API 的额外精确主机名/IP 白名单 |
+| `BEACON_ALGORITHM_API_ALLOWED_CIDRS` | CSV | `""` | 算法、图片与音频 API 的额外 CIDR 白名单 |
+| `BEACON_UPGRADE_REQUIRE_SIGNATURE` | bool | 生产 `true` | 是否强制离线升级包携带有效的 Ed25519 `manifest.sig` |
+| `BEACON_UPGRADE_ED25519_PUBLIC_KEY` | Base64 | `""` | 升级签名 Ed25519 原始 32 字节公钥的标准 Base64；节点只部署公钥 |
+| `BEACON_UPGRADE_UPLOAD_MAX_BYTES` | int | `2147483648` | 离线升级压缩包上传上限（字节，1~50 GiB） |
+
+例如，算法服务运行在本机 `127.0.0.1:9100` 时设置
+`BEACON_ALGORITHM_API_ALLOWED_HOSTS=127.0.0.1`。生产环境仍应使用网络策略或防火墙做
+默认拒绝的出站控制；应用白名单不能替代基础设施层的 egress 策略。
+
 ---
 
 ## 数字人监管运行时 {#digital-human-runtime}
@@ -416,9 +439,9 @@ Cloud 的 `worker` 角色必须使用 PostgreSQL；advisory lock 依赖一个持
 
 | 变量名 | 对应 config.json | 说明 |
 |--------|-----------------|------|
-| `BEACON_MODEL_ENCRYPT` | `modelEncrypt` | 是否启用模型加密 |
-| `BEACON_MODEL_ENCRYPT_KEY` | `modelEncryptKey` | 解密密钥 |
-| `BEACON_MODEL_ENCRYPT_SUFFIX` | `modelEncryptSuffix` | 加密文件后缀 |
+| `BEACON_MODEL_ENCRYPT` | `modelEncrypt` | 是否启用 BENCv2 兼容封装 |
+| `BEACON_MODEL_ENCRYPT_KEY` | `modelEncryptKey` | BENCv2 XOR 混淆密钥；不能替代加密存储/KMS |
+| `BEACON_MODEL_ENCRYPT_SUFFIX` | `modelEncryptSuffix` | 兼容封装文件后缀 |
 | `BEACON_MODEL_DECRYPT_DIR` | `modelDecryptDir` | 解密缓存目录 |
 | `BEACON_MODEL_CACHE_SECONDS` | `modelCacheSeconds` | 模型空闲缓存时长 |
 

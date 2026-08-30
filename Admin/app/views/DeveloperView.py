@@ -8,6 +8,7 @@ from datetime import datetime
 from django.shortcuts import render
 
 from app.models import Alarm, Stream
+from app.utils.SafeLog import safe_log_text
 from app.views.ViewsBase import f_responseJson, g_config
 from framework.settings import PROJECT_VERSION
 
@@ -265,13 +266,14 @@ def _emit_alarm_created_event(
             enqueue_alarm_event_outbox(g_config, payload, alarm_id=alarm.id, control_code=control.code)
             return
     except AlarmOutboxEnqueueError:
-        event_id = str(payload.get("event_id", "") or "")
+        event_id = safe_log_text(payload.get("event_id", ""), max_len=128)
+        control_code = safe_log_text(control.code, max_len=128)
         logger.exception(
-            "Alarm outbox enqueue failed event_id=%s alarm_id=%s control_code=%s",
+            "Alarm outbox enqueue failed event_id=%r alarm_id=%s control_code=%r",
             event_id,
             alarm.id,
-            control.code,
-            extra={"alarm_event_id": event_id, "alarm_id": alarm.id, "control_code": control.code},
+            control_code,
+            extra={"alarm_event_id": event_id, "alarm_id": alarm.id, "control_code": control_code},
         )
         raise
     except Exception:
@@ -402,7 +404,7 @@ def api_algorithm_callback(request):
             return _algo_callback_error(f"Control '{control_code}' not found")
 
         logger.debug(
-            "[算法回调] control=%s frame=%s detections=%s alarm=%s",
+            "[算法回调] control=%r frame=%r detections=%s alarm=%r",
             control_code,
             frame_index,
             len(detections),

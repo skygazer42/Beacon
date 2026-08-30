@@ -598,7 +598,15 @@ def api_onvif_capture_snapshot(request):
             save_path = os.path.join(snapshot_dir, filename)
 
             # 截图
-            if capture_device_snapshot(ip_address, save_path, port, username, password, profile_index):
+            if capture_device_snapshot(
+                ip_address,
+                save_path,
+                port,
+                username,
+                password,
+                profile_index,
+                allowed_root=snapshot_dir,
+            ):
                 relative_path = os.path.join('snapshots', 'onvif', filename).replace('\\', '/')
                 data['image_path'] = relative_path
                 data['image_url'] = _snapshot_image_url(relative_path)

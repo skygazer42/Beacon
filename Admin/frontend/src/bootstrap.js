@@ -81,16 +81,35 @@ export function getBootstrapDeploymentMode() {
   return readBootstrap().deploymentMode === 'cloud' ? 'cloud' : 'edge';
 }
 
+export function normalizeBrowserUrl(value, fallback = '', { image = false } = {}) {
+  const raw = String(value || '').trim();
+  if (!raw || /[\u0000-\u001f\u007f\\]/u.test(raw)) return fallback;
+  if (raw.startsWith('//')) return fallback;
+  if (raw.startsWith('/') && !raw.startsWith('//')) return raw;
+
+  try {
+    const base = globalThis.location?.origin || 'http://localhost';
+    const parsed = new URL(raw, base);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return fallback;
+    if (image && (parsed.username || parsed.password)) return fallback;
+    parsed.username = '';
+    parsed.password = '';
+    return parsed.href;
+  } catch {
+    return fallback;
+  }
+}
+
 export function getSiteBranding() {
   const data = readBootstrap();
   return {
     name: data.siteName || 'Beacon',
     title: data.siteTitle || 'Beacon 新一代 AI 视频分析系统',
-    logo: data.siteLogo || '/static/images/logo.png',
+    logo: normalizeBrowserUrl(data.siteLogo, '/static/images/logo.png', { image: true }),
     version: data.projectVersion || 'dev',
     themeColor: data.themeColor || '',
-    docsUrl: data.docsUrl || '',
-    downloadUrl: data.downloadUrl || '',
+    docsUrl: normalizeBrowserUrl(data.docsUrl),
+    downloadUrl: normalizeBrowserUrl(data.downloadUrl),
   };
 }
 

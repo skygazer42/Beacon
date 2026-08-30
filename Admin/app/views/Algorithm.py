@@ -7,6 +7,8 @@ import time
 import base64
 import json
 import logging
+import re
+import secrets
 import struct
 import requests
 from io import BytesIO
@@ -22,6 +24,7 @@ from app.utils.AlgorithmRegistry import (
 )
 from app.utils.Utils import buildPageLabels
 from app.utils.UploadPath import resolve_upload_url_to_abs_path, split_paired_path
+from app.utils.OutboundUrl import validate_outbound_http_url
 
 # 模型和动态库上传目录
 _UPLOAD_BASE_DIR = getattr(g_config, "uploadDir", "") or os.path.join(
@@ -37,6 +40,7 @@ MSG_METHOD_NOT_SUPPORTED = "request method not supported"
 MSG_ALGORITHM_NOT_FOUND = "算法不存在"
 MSG_CODE_REQUIRED = "code is required"
 MODEL_EXT_ONNX = ".onnx"
+MAX_ALGORITHM_UPLOAD_BYTES = 5 * 1024 * 1024 * 1024
 logger = logging.getLogger(__name__)
 ALGORITHM_MARKETPLACE_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
@@ -103,7 +107,7 @@ def _normalize_encrypt_suffix(suffix: str) -> str:
         return ".enc"
     if not value.startswith("."):
         value = "." + value
-    if len(value) > 16:
+    if not re.fullmatch(r"\.[A-Za-z0-9_-]{1,15}", value):
         return ".enc"
     return value
 
@@ -176,12 +180,14 @@ def _xor_encrypt_stream(src_abs: str, dst_abs: str, *, key: str, trial_seconds: 
         int(len(cid_bytes)),
     )
 
-    tmp_abs = dst_abs + ".tmp"
+    tmp_abs = dst_abs + f".{secrets.token_hex(8)}.tmp"
     idx = 0
     klen = len(key_bytes)
     chunk_size = 4 * 1024 * 1024
     try:
-        with open(src_abs, "rb") as src, open(tmp_abs, "wb") as dst:
+        with open(src_abs, "rb") as src, open(tmp_abs, "xb") as dst:
+            if os.name != "nt":
+                os.fchmod(dst.fileno(), 0o640)
             dst.write(_ENC_V2_MAGIC)
             dst.write(header_fixed)
             if cid_bytes:
@@ -203,7 +209,7 @@ def _xor_encrypt_stream(src_abs: str, dst_abs: str, *, key: str, trial_seconds: 
             if os.path.exists(tmp_abs):
                 os.remove(tmp_abs)
         except Exception:
-            logger.debug("cleanup temporary encrypted model file failed path=%s", tmp_abs, exc_info=True)
+            logger.debug("cleanup temporary encrypted model file failed path=%r", tmp_abs, exc_info=True)
 
 
 def _maybe_auto_encrypt_file(abs_path: str, *, url_path: str, key: str, suffix: str, custom_id: str):
@@ -215,6 +221,15 @@ def _maybe_auto_encrypt_file(abs_path: str, *, url_path: str, key: str, suffix: 
     norm_suffix = _normalize_encrypt_suffix(suffix)
     if not abs_path:
         return abs_path, url_path
+
+    from app.utils.Security import resolve_direct_child
+
+    if os.path.islink(abs_path):
+        raise ValueError("algorithm model path is invalid")
+    safe_abs_path = resolve_direct_child(UPLOAD_MODEL_DIR, os.path.basename(abs_path))
+    if os.path.realpath(abs_path) != safe_abs_path:
+        raise ValueError("algorithm model path is invalid")
+    abs_path = safe_abs_path
 
     already = False
     try:
@@ -234,7 +249,7 @@ def _maybe_auto_encrypt_file(abs_path: str, *, url_path: str, key: str, suffix: 
     try:
         os.remove(abs_path)
     except Exception:
-        logger.debug("remove original model file after encryption failed path=%s", abs_path, exc_info=True)
+        logger.debug("remove original model file after encryption failed path=%r", abs_path, exc_info=True)
 
     return dst_abs, dst_url
 
@@ -263,9 +278,18 @@ def save_uploaded_file(file, code, target_dir, *, filename_stem=None, url_subdir
     """
     保存上传的文件
     """
-    from app.utils.Security import validate_control_code
+    from app.utils.Security import resolve_direct_child, validate_control_code
 
     safe_code = validate_control_code(code)
+    target_real = os.path.realpath(os.path.abspath(str(target_dir or "")))
+    model_real = os.path.realpath(os.path.abspath(UPLOAD_MODEL_DIR))
+    dll_real = os.path.realpath(os.path.abspath(UPLOAD_DLL_DIR))
+    if target_real not in (model_real, dll_real) or os.path.islink(target_dir):
+        raise ValueError("algorithm upload target is invalid")
+    expected_subdir = "models" if target_real == model_real else "dlls"
+    if url_subdir and str(url_subdir).strip().strip("/\\") != expected_subdir:
+        raise ValueError("algorithm upload URL target is invalid")
+
     encrypt_suffix = getattr(g_config, "modelEncryptSuffix", ".enc") or ".enc"
     eff_ext, is_enc = _effective_model_ext(file.name, encrypt_suffix)
     file_ext = eff_ext
@@ -273,17 +297,30 @@ def save_uploaded_file(file, code, target_dir, *, filename_stem=None, url_subdir
         file_ext = eff_ext + _normalize_encrypt_suffix(encrypt_suffix)
     stem = str(filename_stem or "").strip()
     if not stem:
-        stem = f"{safe_code}_{int(time.time())}"
+        stem = f"{safe_code}_{time.time_ns()}"
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,160}", stem):
+        raise ValueError("algorithm upload filename is invalid")
     filename = f"{stem}{file_ext}"
-    file_path = os.path.join(target_dir, filename)
 
     # Mutable upload directories are created only when an upload is handled.
     # Importing the URL configuration must remain safe on a read-only image.
-    os.makedirs(target_dir, mode=0o750, exist_ok=True)
-    tmp_path = file_path + ".part"
+    os.makedirs(target_real, mode=0o750, exist_ok=True)
+    if os.path.islink(target_real):
+        raise ValueError("algorithm upload target is invalid")
+    if os.name != "nt":
+        # Directory traversal requires execute; owner rwx + service-group rx is intentional.
+        os.chmod(target_real, 0o750)  # nosemgrep: python.lang.security.audit.insecure-file-permissions.insecure-file-permissions
+    file_path = resolve_direct_child(target_real, filename)
+    tmp_path = resolve_direct_child(target_real, f".{filename}.{secrets.token_hex(8)}.part")
     try:
         with open(tmp_path, "xb") as destination:
+            if os.name != "nt":
+                os.fchmod(destination.fileno(), 0o640)
+            written = 0
             for chunk in file.chunks():
+                written += len(chunk)
+                if written > MAX_ALGORITHM_UPLOAD_BYTES:
+                    raise ValueError("algorithm upload exceeds the maximum size")
                 destination.write(chunk)
             destination.flush()
             os.fsync(destination.fileno())
@@ -299,10 +336,7 @@ def save_uploaded_file(file, code, target_dir, *, filename_stem=None, url_subdir
     url_prefix = str(getattr(g_config, "uploadDir_www", PATH_STATIC_UPLOAD) or PATH_STATIC_UPLOAD).strip()
     if not url_prefix.endswith("/"):
         url_prefix = url_prefix + "/"
-    if url_subdir:
-        sub = str(url_subdir).strip().strip("/\\")
-        return f"{url_prefix}{sub}/{filename}"
-    return f"{url_prefix}models/{filename}" if target_dir == UPLOAD_MODEL_DIR else f"{url_prefix}dlls/{filename}"
+    return f"{url_prefix}{expected_subdir}/{filename}"
 # ========================================
 
 def _algorithm_index_positive_int(raw_value, default: int) -> int:
@@ -542,6 +576,17 @@ def _algorithm_float_value(raw_value, default: float) -> float:
         return float(default)
 
 
+def _algorithm_api_url(raw_value) -> str:
+    value = str(raw_value or "").strip()
+    if not value:
+        return ""
+    return validate_outbound_http_url(
+        value,
+        allowed_hosts_env="BEACON_ALGORITHM_API_ALLOWED_HOSTS",
+        allowed_cidrs_env="BEACON_ALGORITHM_API_ALLOWED_CIDRS",
+    )
+
+
 def _algorithm_parse_form_data(params):
     """返回算法`parse`表单数据。"""
     algorithm_type = int(params.get("algorithm_type", 0))
@@ -558,7 +603,7 @@ def _algorithm_parse_form_data(params):
         "algorithm_type": algorithm_type,
         "algorithm_subtype": algorithm_subtype,
         "basic_source": params.get("basic_source", "model").strip(),
-        "api_url": params.get("api_url", "").strip(),
+        "api_url": _algorithm_api_url(params.get("api_url", "")),
         "support_direct_api": support_direct_api,
         "behavior_api_version": behavior_api_version,
         "builtin_behavior": params.get("builtin_behavior", "").strip(),
@@ -643,7 +688,9 @@ def _algorithm_encrypt_uploaded_model_urls(*, code: str, model_url: str, paired_
     if not (enc_enabled and enc_key):
         return model_url, paired_url
 
-    main_abs = os.path.join(UPLOAD_MODEL_DIR, os.path.basename(model_url))
+    from app.utils.Security import resolve_direct_child
+
+    main_abs = resolve_direct_child(UPLOAD_MODEL_DIR, os.path.basename(model_url))
     _, model_url = _maybe_auto_encrypt_file(
         main_abs,
         url_path=model_url,
@@ -654,7 +701,7 @@ def _algorithm_encrypt_uploaded_model_urls(*, code: str, model_url: str, paired_
     if not paired_url:
         return model_url, paired_url
 
-    paired_abs = os.path.join(UPLOAD_MODEL_DIR, os.path.basename(paired_url))
+    paired_abs = resolve_direct_child(UPLOAD_MODEL_DIR, os.path.basename(paired_url))
     _, paired_url = _maybe_auto_encrypt_file(
         paired_abs,
         url_path=paired_url,
@@ -678,7 +725,7 @@ def _algorithm_store_model_artifacts(request, *, code: str, algorithm_subtype: s
 
     _algorithm_validate_paired_model_file(file_ext, paired_file)
 
-    filename_stem = f"{code}_{int(time.time())}"
+    filename_stem = f"{code}_{time.time_ns()}"
     model_url = save_uploaded_file(
         model_file,
         code,
@@ -1394,7 +1441,7 @@ def _algorithm_test_infer_image_error(image_bytes: bytes) -> str:
 
 def _algorithm_test_infer_api_response(*, code: str, image_b64: str, algo):
     """返回算法`test`推理API响应。"""
-    api_url = str(getattr(algo, "api_url", "") or "").strip()
+    api_url = _algorithm_api_url(getattr(algo, "api_url", ""))
     if not api_url:
         return f_responseJson({"code": 0, "msg": "api_url is required"})
 
@@ -1405,9 +1452,11 @@ def _algorithm_test_infer_api_response(*, code: str, image_b64: str, algo):
             headers={"Content-Type": "application/json; charset=utf-8"},
             data=json.dumps(payload, ensure_ascii=False),
             timeout=(2, 10),
+            allow_redirects=False,
         )
     except Exception as exc:
-        return f_responseJson({"code": 0, "msg": str(exc)})
+        logger.warning("algorithm API inference request failed error_type=%s", type(exc).__name__)
+        return f_responseJson({"code": 0, "msg": "upstream inference request failed"})
 
     if not response.status_code:
         return f_responseJson({"code": 0, "msg": "request failed"})

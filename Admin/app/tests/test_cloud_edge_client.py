@@ -1,3 +1,4 @@
+import os
 from unittest import mock
 
 from django.test import SimpleTestCase
@@ -14,6 +15,22 @@ class _DummyResponse:
 
 
 class CloudEdgeClientTest(SimpleTestCase):
+    def setUp(self):
+        super().setUp()
+        allowed_hosts = mock.patch.dict(
+            os.environ,
+            {"BEACON_CLOUD_EDGE_ALLOWED_HOSTS": "edge.local"},
+            clear=False,
+        )
+        resolver = mock.patch(
+            "app.utils.OutboundUrl.socket.getaddrinfo",
+            return_value=[(2, 1, 6, "", ("10.20.30.40", 80))],
+        )
+        allowed_hosts.start()
+        resolver.start()
+        self.addCleanup(allowed_hosts.stop)
+        self.addCleanup(resolver.stop)
+
     def test_list_streams_normalizes_base_url_and_injects_token_header(self):
         from app.utils.CloudEdgeClient import CloudEdgeClient
 
@@ -75,7 +92,7 @@ class CloudEdgeClientTest(SimpleTestCase):
             with self.assertRaises(CloudEdgeClientError) as ctx:
                 client.list_streams()
 
-        self.assertIn("timed out", str(ctx.exception))
+        self.assertEqual(str(ctx.exception), "edge service is unavailable")
 
     def test_edge_error_code_raises_clear_error(self):
         from app.utils.CloudEdgeClient import CloudEdgeClient, CloudEdgeClientError
@@ -88,7 +105,7 @@ class CloudEdgeClientTest(SimpleTestCase):
             with self.assertRaises(CloudEdgeClientError) as ctx:
                 client.list_streams()
 
-        self.assertIn("edge denied", str(ctx.exception))
+        self.assertEqual(str(ctx.exception), "edge request failed")
 
     def test_invalid_edge_code_raises_client_error(self):
         from app.utils.CloudEdgeClient import CloudEdgeClient, CloudEdgeClientError

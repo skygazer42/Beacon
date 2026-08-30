@@ -397,4 +397,4 @@ class AlarmWorkflowApiTest(TestCase):
         for value in dynamic_log_args:
             self.assertNotIn("\r", value)
             self.assertNotIn("\n", value)
-        self.assertIn("\\r\\n", dynamic_log_args[-1])
+        self.assertIn(r"\\r\\n", dynamic_log_args[-1])

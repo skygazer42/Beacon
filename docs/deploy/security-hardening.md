@@ -96,7 +96,7 @@ Token 读取顺序（Admin/Analyzer）：
 
 与 Pepper 的关系（重要）：
 
-- `BEACON_API_KEY_PEPPER` 用于对 ApiKey token 进行二次混入后再 hash 存储（SHA-256）。
+- `BEACON_API_KEY_PEPPER` 用作 HMAC-SHA-256 密钥，数据库只保存 ApiKey token 的不可逆摘要；旧版拼接 SHA-256 记录会在成功认证时自动迁移。
 - Pepper 必须在同一环境内保持一致；若在运行期变更，已有 ApiKey 将无法再被验证（等价于全部失效）。
 
 建议：
@@ -193,6 +193,20 @@ Admin 入口（仅作用于登录页与验证码接口）：
 
 - 反向代理部署时，应优先在网关/安全组层面做 IP 收敛；本策略作为“应用层兜底”使用。
 - 反代场景真实源 IP 识别需由代理层保证（例如通过安全组固定代理出口），避免伪造 header 造成绕过。
+
+### 4.1 出站 HTTP 白名单
+
+云边、算法与媒体分析请求会先执行 DNS/IP 校验。公网 HTTP(S) 目标默认允许；私网、
+链路本地和 loopback 目标必须配置精确主机名/IP 或 CIDR：
+
+- 全局：`BEACON_OUTBOUND_ALLOWED_HOSTS` / `BEACON_OUTBOUND_ALLOWED_CIDRS`
+- Cloud Edge：`BEACON_CLOUD_EDGE_ALLOWED_HOSTS` / `BEACON_CLOUD_EDGE_ALLOWED_CIDRS`
+- 算法、图片和音频 API：`BEACON_ALGORITHM_API_ALLOWED_HOSTS` / `BEACON_ALGORITHM_API_ALLOWED_CIDRS`
+
+白名单以逗号分隔，主机名不支持通配符，CIDR 必须是规范网络地址。不要放行云元数据
+地址或 `0.0.0.0/0` 等宽泛网段。ONVIF 设备响应中的服务与截图 URL 还必须与最初配置
+的设备主机一致。应用校验之外，生产网络仍应对 Admin 出站默认拒绝，避免 DNS、代理或
+路由层变化绕过应用边界。
 
 ---
 

@@ -6,6 +6,7 @@ from typing import Any, Dict
 
 from django.db import transaction
 from django.db import IntegrityError
+from django.core.serializers.json import DjangoJSONEncoder
 from django.http import HttpResponse
 from django.utils import timezone
 
@@ -16,7 +17,11 @@ from app.utils.DeploymentMode import is_cloud_mode
 logger = logging.getLogger(__name__)
 def _json_response(payload: Dict[str, Any], *, status: int = 200) -> HttpResponse:
     """返回JSON响应。"""
-    return HttpResponse(json.dumps(payload, ensure_ascii=False, default=str), status=status, content_type="application/json")
+    return HttpResponse(
+        json.dumps(payload, ensure_ascii=False, cls=DjangoJSONEncoder),
+        status=status,
+        content_type="application/json",
+    )
 
 
 def _clean_str(value: Any) -> str:
@@ -214,7 +219,7 @@ def _cloud_ingest_store_event(*, cluster, event: Dict[str, Any], body: Dict[str,
                 node_code=event.get("node_code", ""),
                 control_code=event.get("control_code", ""),
                 desc=event.get("desc", ""),
-                payload_json=json.dumps(body, ensure_ascii=False, default=str),
+                payload_json=json.dumps(body, ensure_ascii=False, cls=DjangoJSONEncoder),
                 image_bucket=event.get("image_bucket", ""),
                 image_key=event.get("image_key", ""),
                 image_content_type=event.get("image_content_type", ""),
@@ -223,8 +228,9 @@ def _cloud_ingest_store_event(*, cluster, event: Dict[str, Any], body: Dict[str,
     except IntegrityError:
         # idempotent success: (edge_cluster, event_id) already exists
         return None
-    except Exception as e:
-        return _json_response({"code": 0, "msg": f"db error: {e}"}, status=500)
+    except Exception as exc:
+        logger.error("cloud alarm ingest database operation failed error_type=%s", type(exc).__name__)
+        return _json_response({"code": 0, "msg": "database operation failed"}, status=500)
     return None
 
 

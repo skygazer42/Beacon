@@ -15,6 +15,7 @@ from app.utils.Config import Config
 from app.utils.Gb28181Providers import get_gb28181_provider, parse_gb28181_url
 from app.utils.SafeLog import truncate_text
 from app.models import Stream
+from django.core.serializers.json import DjangoJSONEncoder
 from django.http import HttpResponse, RawPostDataException
 
 
@@ -201,8 +202,9 @@ def start_forward_for_stream(stream: Stream):
             stream.save()
             return True, "开启转发成功"
         return False, "开启转发失败"
-    except Exception as e:
-        return False, str(e)
+    except Exception as exc:
+        logger.warning("stream forwarding start failed error_type=%s", type(exc).__name__)
+        return False, "开启转发失败"
 
 
 def stop_forward_for_stream(stream: Stream):
@@ -251,8 +253,9 @@ def stop_forward_for_stream(stream: Stream):
         if delete_status == STREAM_PROXY_DELETE_REMOVED:
             return True, "停止转发成功"
         return True, "已停止转发"
-    except Exception as e:
-        return False, str(e)
+    except Exception as exc:
+        logger.warning("stream forwarding stop failed error_type=%s", type(exc).__name__)
+        return False, "停止转发失败"
 
 
 def all_stream_start_forward():
@@ -287,8 +290,9 @@ def all_stream_start_forward():
 
         msg = "转发成功%d条,转发失败%d条" % (success_count, error_count)
         return bool(success_count > 0), msg
-    except Exception as e:
-        return False, "开启转发失败：" + str(e)
+    except Exception as exc:
+        logger.warning("batch stream forwarding failed error_type=%s", type(exc).__name__)
+        return False, "开启转发失败"
 AllStreamStartForward = all_stream_start_forward  # pragma: no cover - compatibility alias
 
 def f_parse_get_params(request):
@@ -323,14 +327,7 @@ f_parsePostParams = f_parse_post_params  # pragma: no cover - compatibility alia
 
 def f_response_json(res):
     """处理`f`响应JSON。"""
-    def json_dumps_default(obj):
-        """处理JSON`dumps`默认。"""
-        if hasattr(obj, 'isoformat'):
-            return obj.isoformat()
-        else:
-            raise TypeError
-
-    return HttpResponse(json.dumps(res, default=json_dumps_default), content_type="application/json")
+    return HttpResponse(json.dumps(res, cls=DjangoJSONEncoder), content_type="application/json")
 f_responseJson = f_response_json  # pragma: no cover - compatibility alias
 
 def f_remove_alarm_and_storage(alarm_id):
@@ -353,9 +350,9 @@ def f_calcu_file_base64_str(filepath):
         base64_str = base64_str.decode("utf-8")  # str类型
     except Exception as e:
         logger.warning(
-            "f_calcuFileBase64Str error filepath=%s err=%s",
+            "f_calcuFileBase64Str error filepath=%r error_type=%s",
             truncate_text(str(filepath), max_len=256),
-            e,
+            type(e).__name__,
         )
     return base64_str
 f_calcuFileBase64Str = f_calcu_file_base64_str  # pragma: no cover - compatibility alias

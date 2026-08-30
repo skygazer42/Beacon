@@ -2,6 +2,9 @@ import logging
 import requests
 from urllib.parse import quote
 
+from app.utils.OutboundUrl import canonicalize_outbound_http_url, validate_outbound_http_url
+from app.utils.Security import validate_upload_rel_path
+
 
 
 logger = logging.getLogger(__name__)
@@ -21,7 +24,10 @@ class CloudEdgeClient:
         if not raw_token:
             raise ValueError("open_api_token is required")
 
-        self.base_url = raw_base_url.rstrip("/")
+        # Constructor validation is deliberately DNS-free so object creation
+        # has no network side effect. _url() performs the full DNS/IP policy
+        # check immediately before each real request.
+        self.base_url = canonicalize_outbound_http_url(raw_base_url).rstrip("/")
         self.open_api_token = raw_token
         self.timeout_seconds = float(timeout_seconds or 5)
         if self.timeout_seconds <= 0:
@@ -33,7 +39,15 @@ class CloudEdgeClient:
 
     def _url(self, path: str):
         """返回请求 URL。"""
-        return self.base_url + "/" + str(path or "").lstrip("/")
+        base_url = validate_outbound_http_url(
+            self.base_url,
+            allowed_hosts_env="BEACON_CLOUD_EDGE_ALLOWED_HOSTS",
+            allowed_cidrs_env="BEACON_CLOUD_EDGE_ALLOWED_CIDRS",
+        ).rstrip("/")
+        relative = str(path or "").lstrip("/")
+        if not relative or "://" in relative or any(ch in relative for ch in ("\\", "\x00", "\r", "\n")):
+            raise CloudEdgeClientError("edge request path is invalid")
+        return base_url + "/" + relative
 
     def _parse_response(self, response):
         """解析响应。"""
@@ -43,18 +57,8 @@ class CloudEdgeClient:
             body = None
 
         if response.status_code != 200:
-            text = ""
-            try:
-                text = str(getattr(response, "text", "") or "").strip()
-            except Exception:
-                text = ""
-            if body and isinstance(body, dict):
-                raise CloudEdgeClientError(
-                    str(body.get("msg") or f"edge http {response.status_code}"),
-                    status_code=response.status_code,
-                )
             raise CloudEdgeClientError(
-                f"edge http {response.status_code}: {text}".strip(),
+                f"edge request failed (HTTP {int(response.status_code or 0)})",
                 status_code=response.status_code,
             )
 
@@ -66,7 +70,7 @@ class CloudEdgeClient:
         except (TypeError, ValueError) as e:
             raise CloudEdgeClientError("edge response code is invalid") from e
         if code != 1000:
-            raise CloudEdgeClientError(str(body.get("msg") or "edge request failed"))
+            raise CloudEdgeClientError("edge request failed")
 
         return body
 
@@ -78,9 +82,10 @@ class CloudEdgeClient:
                 headers=self._headers(),
                 params=params,
                 timeout=self.timeout_seconds,
+                allow_redirects=False,
             )
-        except requests.RequestException as e:
-            raise CloudEdgeClientError(str(e))
+        except requests.RequestException as exc:
+            raise CloudEdgeClientError("edge service is unavailable") from exc
         return self._parse_response(response)
 
     def post_json(self, path: str, payload: dict):
@@ -91,9 +96,10 @@ class CloudEdgeClient:
                 headers=self._headers(),
                 json=payload,
                 timeout=self.timeout_seconds,
+                allow_redirects=False,
             )
-        except requests.RequestException as e:
-            raise CloudEdgeClientError(str(e))
+        except requests.RequestException as exc:
+            raise CloudEdgeClientError("edge service is unavailable") from exc
         return self._parse_response(response)
 
     def list_streams(self):
@@ -145,30 +151,30 @@ class CloudEdgeClient:
 
     def stream_file(self, rel_path: str):
         """流式获取边缘文件内容。"""
-        safe_rel_path = quote(str(rel_path or "").strip(), safe="/")
+        try:
+            normalized_rel_path = validate_upload_rel_path(rel_path)
+        except ValueError as exc:
+            raise CloudEdgeClientError("edge file path is invalid") from exc
+        safe_rel_path = quote(normalized_rel_path, safe="/")
         try:
             response = requests.get(
                 self._url(f"/open/fileService/{safe_rel_path}"),
                 headers=self._headers(),
                 timeout=self.timeout_seconds,
                 stream=True,
+                allow_redirects=False,
             )
-        except requests.RequestException as e:
-            raise CloudEdgeClientError(str(e))
+        except requests.RequestException as exc:
+            raise CloudEdgeClientError("edge service is unavailable") from exc
 
         if response.status_code == 200:
             return response
 
-        text = ""
-        try:
-            text = str(getattr(response, "text", "") or "").strip()
-        except Exception:
-            text = ""
         try:
             response.close()
         except Exception:
             logger.debug("suppressed exception in app/utils/CloudEdgeClient.py:163", exc_info=True)
         raise CloudEdgeClientError(
-            f"edge http {response.status_code}: {text}".strip(),
+            f"edge request failed (HTTP {int(response.status_code or 0)})",
             status_code=response.status_code,
         )

@@ -21,9 +21,11 @@ def _validate_upload_rel_path_basic(raw: str) -> str:
     """校验上传相对路径路径`basic`。"""
     if not raw:
         raise ValueError("path is required")
+    if len(raw) > 4096:
+        raise ValueError("path is too long")
 
-    if "\x00" in raw:
-        raise ValueError("path contains null byte")
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in raw):
+        raise ValueError("path contains control character")
 
     raw = raw.replace("\\", "/")
     if raw.startswith("/"):
@@ -42,6 +44,8 @@ def _validate_upload_rel_path_basic(raw: str) -> str:
         raise ValueError("path is invalid")
     if any(p == ".." for p in parts):
         raise ValueError("path traversal is not allowed")
+    if any(len(part) > 255 for part in parts):
+        raise ValueError("path component is too long")
 
     return "/".join(parts)
 
@@ -66,15 +70,39 @@ def validate_upload_rel_path(value, required_prefix=None):
 
 def resolve_under_base(base_dir, rel_path):
     """解析并返回低于基础。"""
-    base = os.path.abspath(str(base_dir or ""))
-    if not base:
+    raw_base = str(base_dir or "").strip()
+    if not raw_base:
         raise ValueError("base_dir is required")
+    base = os.path.abspath(raw_base)
 
     normalized_rel = validate_upload_rel_path(rel_path)
     target = os.path.abspath(os.path.join(base, normalized_rel))
 
-    base_with_sep = base if base.endswith(os.sep) else base + os.sep
-    if not target.startswith(base_with_sep):
+    if os.path.commonpath((base, target)) != base or target == base:
         raise ValueError("path escapes base_dir")
 
+    return target
+
+
+def resolve_direct_child(base_dir, child_name):
+    """Resolve one untrusted filename component directly below ``base_dir``."""
+
+    child = str(child_name or "").strip()
+    if not child or child in (".", ".."):
+        raise ValueError("child name is invalid")
+    if (
+        len(child) > 255
+        or any(ord(ch) < 32 or ord(ch) == 127 for ch in child)
+        or any(ch in child for ch in ("/", "\\"))
+        or os.path.splitdrive(child)[0]
+    ):
+        raise ValueError("child name is invalid")
+
+    raw_base = str(base_dir or "").strip()
+    if not raw_base:
+        raise ValueError("base_dir is required")
+    base = os.path.realpath(os.path.abspath(raw_base))
+    target = os.path.realpath(os.path.join(base, child))
+    if os.path.commonpath([base, target]) != base or target == base:
+        raise ValueError("child escapes base_dir")
     return target

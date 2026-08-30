@@ -1,14 +1,19 @@
 import logging
 import mimetypes
 import os
+import stat
 from urllib.parse import quote
 
 from django.http import FileResponse, HttpResponse
+from django.utils.http import content_disposition_header
+from django.utils.text import get_valid_filename
 
 from app.views.ViewsBase import g_config
 
 
 logger = logging.getLogger(__name__)
+_INLINE_MEDIA_PREFIXES = ("audio/", "video/")
+_INLINE_IMAGE_TYPES = frozenset({"image/gif", "image/jpeg", "image/png", "image/webp"})
 
 
 def _file_service_root_dir() -> str:
@@ -40,30 +45,60 @@ def _resolve_abs_path(rel_path: str, *, required_prefix: str | None = None):
     root = _file_service_root_dir()
     if not root:
         raise FileNotFoundError("file service is disabled")
-    return rel, resolve_under_base(root, rel)
+    target = resolve_under_base(root, rel)
+    real_root = os.path.realpath(os.path.abspath(root))
+    real_target = os.path.realpath(target)
+    if os.path.commonpath((real_root, real_target)) != real_root:
+        raise ValueError("file path escapes the configured root")
+    return rel, real_target
+
+
+def _open_regular_file_no_follow(abs_path: str):
+    if os.path.islink(abs_path):
+        raise OSError("symbolic links are not served")
+    flags = os.O_RDONLY
+    if hasattr(os, "O_CLOEXEC"):
+        flags |= os.O_CLOEXEC
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = os.open(abs_path, flags)
+    try:
+        file_stat = os.fstat(descriptor)
+        if not stat.S_ISREG(file_stat.st_mode):
+            raise ValueError("requested path is not a regular file")
+        return os.fdopen(descriptor, "rb"), int(file_stat.st_size)
+    except Exception:
+        os.close(descriptor)
+        raise
 
 
 def _build_local_file_response(abs_path: str):
     """构建本地文件流响应。"""
-    if not os.path.isfile(abs_path):
+    try:
+        f, file_size = _open_regular_file_no_follow(abs_path)
+    except (OSError, ValueError):
         return HttpResponse(status=404)
 
     try:
         content_type, _encoding = mimetypes.guess_type(abs_path)
-        if not content_type:
+        content_type = str(content_type or "").lower()
+        inline = content_type.startswith(_INLINE_MEDIA_PREFIXES) or content_type in _INLINE_IMAGE_TYPES
+        if not inline:
             content_type = "application/octet-stream"
 
-        f = open(abs_path, "rb")
         resp = FileResponse(f, content_type=content_type)
-        try:
-            resp["Content-Length"] = str(os.path.getsize(abs_path))
-        except Exception:
-            logger.debug("set recording file content length failed path=%s", abs_path, exc_info=True)
-        resp["Content-Disposition"] = 'inline; filename="%s"' % os.path.basename(abs_path)
+        resp["Content-Length"] = str(file_size)
+        filename = get_valid_filename(os.path.basename(abs_path)) or "download.bin"
+        resp["Content-Disposition"] = content_disposition_header(not inline, filename)
         resp["X-Content-Type-Options"] = "nosniff"
+        resp["Content-Security-Policy"] = "default-src 'none'; sandbox"
         return resp
     except Exception as e:
-        logger.exception("file service file error: err=%s", e)
+        try:
+            f.close()
+        except Exception:
+            pass
+        logger.exception("file service file error: error_type=%s", type(e).__name__)
         return HttpResponse(status=500)
 
 
@@ -115,8 +150,8 @@ def open_serve(request, rel_path: str):
 
     try:
         _rel, abs_path = _resolve_abs_path(rel_path)
-    except Exception as e:
-        logger.warning("open_serve invalid path: err=%s", e)
+    except Exception as exc:
+        logger.warning("open_serve invalid path: error_type=%s", type(exc).__name__)
         return HttpResponse(status=400)
 
     response = _build_local_file_response(abs_path)
@@ -135,8 +170,8 @@ def recording_session_serve(request, rel_path: str):
 
     try:
         _rel, abs_path = _resolve_abs_path(rel_path, required_prefix="recordings/")
-    except Exception as e:
-        logger.warning("recording_session_serve invalid path: err=%s", e)
+    except Exception as exc:
+        logger.warning("recording_session_serve invalid path: error_type=%s", type(exc).__name__)
         return HttpResponse(status=400)
 
     return _build_local_file_response(abs_path)
