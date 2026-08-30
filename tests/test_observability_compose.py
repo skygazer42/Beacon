@@ -41,7 +41,14 @@ class ObservabilityComposeSecurityTests(unittest.TestCase):
     def test_tracing_images_receive_dependabot_updates(self):
         dependabot = DEPENDABOT_PATH.read_text(encoding="utf-8")
 
-        self.assertIn("directory: /deploy/observability/tracing", dependabot)
+        self.assertRegex(
+            dependabot,
+            re.compile(
+                r"^\s*- package-ecosystem: docker-compose\s*$"
+                r"\n\s*directory: /deploy/observability/tracing\s*$",
+                re.MULTILINE,
+            ),
+        )
         self.assertIn("tracing-images:", dependabot)
 
 
