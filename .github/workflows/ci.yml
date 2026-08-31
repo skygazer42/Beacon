@@ -50,6 +50,7 @@ jobs:
           BEACON_DJANGO_DEBUG: "0"
           BEACON_DJANGO_ALLOWED_HOSTS: beacon.example.com
           BEACON_DJANGO_CSRF_TRUSTED_ORIGINS: https://beacon.example.com
+          BEACON_DJANGO_TRUST_X_FORWARDED_PROTO: "1"
           BEACON_DJANGO_SECURE_SSL_REDIRECT: "1"
           BEACON_DJANGO_HSTS_SECONDS: "31536000"
           BEACON_DJANGO_HSTS_INCLUDE_SUBDOMAINS: "1"
@@ -82,6 +83,7 @@ jobs:
           BEACON_SQLITE_DB_PATH: ${{ runner.temp }}/beacon-packaging-smoke.sqlite3
           BEACON_DJANGO_DEBUG: "0"
           BEACON_DJANGO_ALLOWED_HOSTS: 127.0.0.1,localhost
+          BEACON_DJANGO_ALLOW_INSECURE_HTTP: "1"
           BEACON_DJANGO_SESSION_COOKIE_SECURE: "0"
           BEACON_DJANGO_CSRF_COOKIE_SECURE: "0"
         run: |
