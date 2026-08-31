@@ -39,7 +39,7 @@ spec:
       command:
         - /bin/sh
         - -ec
-        - wget -T 5 --header "Authorization: Bearer $BEACON_OPEN_API_TOKEN" -qO- http://{{ include "beacon-cloud-saas-v1.fullname" . }}:{{ .Values.beaconCloud.service.port }}/readyz >/dev/null
+        - wget -T 5 --header "Authorization: Bearer $BEACON_OPEN_API_TOKEN" --header "X-Forwarded-Proto: https" -qO- http://{{ include "beacon-cloud-saas-v1.fullname" . }}:{{ .Values.beaconCloud.service.port }}/readyz >/dev/null
       env:
         - name: BEACON_OPEN_API_TOKEN
           valueFrom:

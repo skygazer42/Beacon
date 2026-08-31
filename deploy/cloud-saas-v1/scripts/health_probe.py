@@ -51,6 +51,7 @@ def probe(
                 "Authorization": f"Bearer {token}",
                 "Connection": "close",
                 "Host": str(host_header or "127.0.0.1"),
+                "X-Forwarded-Proto": "https",
             },
         )
         response = connection.getresponse()

@@ -202,6 +202,7 @@ class CloudSaaSV1HelmChartTest(unittest.TestCase):
         self.assertNotIn('mc mb -p "local/', rendered)
         self.assertGreaterEqual(len(re.findall(r"image: .*@sha256:[a-f0-9]{64}", rendered)), 4)
         self.assertIn("Authorization: Bearer $BEACON_OPEN_API_TOKEN", rendered)
+        self.assertIn("X-Forwarded-Proto: https", rendered)
         self.assertIn("/readyz", rendered)
 
     def test_helm_template_supports_externally_managed_secret(self):

@@ -25,6 +25,7 @@ class _ProbeHandler(BaseHTTPRequestHandler):
             "authorization": self.headers.get("Authorization"),
             "host": self.headers.get("Host"),
             "path": self.path,
+            "x_forwarded_proto": self.headers.get("X-Forwarded-Proto"),
         }
         body = json.dumps(type(self).payload).encode("utf-8")
         self.send_response(type(self).status_code)
@@ -67,6 +68,7 @@ class HealthProbeTest(unittest.TestCase):
         self.assertEqual(_ProbeHandler.received["path"], "/readyz")
         self.assertEqual(_ProbeHandler.received["authorization"], "Bearer probe-token")
         self.assertEqual(_ProbeHandler.received["host"], "beacon-cloud.example.test")
+        self.assertEqual(_ProbeHandler.received["x_forwarded_proto"], "https")
 
     def test_probe_rejects_non_success_business_code(self):
         _ProbeHandler.payload = {"code": 0, "data": {"status": "fail"}}
