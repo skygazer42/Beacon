@@ -219,7 +219,7 @@ class CloudSaaSV1HelmChartTest(unittest.TestCase):
         self.assertNotRegex(rendered, r"(?m)^kind:\s+Secret$")
         self.assertIn("name: beacon-production-secrets", rendered)
         self.assertNotIn("test-open-api-token", rendered)
-        self.assertIn(f"beacon-cloud-saas-v1:v1.0.0@{self.TEST_IMAGE_DIGEST}", rendered)
+        self.assertIn(f"beacon-cloud-saas-v1:v1.0.1-rc.1@{self.TEST_IMAGE_DIGEST}", rendered)
 
     def test_helm_template_rejects_external_secret_without_application_digest(self):
         result = self.helm(

@@ -1,6 +1,7 @@
 import io
 import os
 import json
+import re
 import tempfile
 from datetime import datetime, timedelta
 from unittest import mock
@@ -117,7 +118,14 @@ class DigitalHumanAppShellApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"beacon-app-root", response.content)
         self.assertIn(b'"isStaff": true', response.content)
-        self.assertIn(f'"projectVersion": "{settings.PROJECT_VERSION}"'.encode(), response.content)
+        bootstrap_match = re.search(
+            rb'<script id="beacon-bootstrap" type="application/json">\s*(.*?)\s*</script>',
+            response.content,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(bootstrap_match)
+        bootstrap = json.loads(bootstrap_match.group(1))
+        self.assertEqual(bootstrap["projectVersion"], settings.PROJECT_VERSION)
         self.assertIn("数字人监管".encode(), response.content)
 
     @mock.patch("app.services.digital_human.requests.post")

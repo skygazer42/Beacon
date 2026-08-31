@@ -120,7 +120,7 @@ docker compose -f compose.yml -f compose.monitoring.yml up -d
 
 ```bash
 export BEACON_IMAGE_REPOSITORY=registry.example.com/beacon-cloud-saas-v1
-export BEACON_IMAGE_TAG=v1.0.0
+export BEACON_IMAGE_TAG=v1.0.1-rc.1
 export BEACON_IMAGE_DIGEST="$(docker buildx imagetools inspect \
   "$BEACON_IMAGE_REPOSITORY:$BEACON_IMAGE_TAG" | awk '/^Digest:/ {print $2; exit}')"
 

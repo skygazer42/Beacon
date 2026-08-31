@@ -5,7 +5,7 @@
 <p align="center">统一管理视频接入、AI 推理、布控告警、云边协同与平台运维，面向边缘和私有化部署。</p>
 
 <p align="center">
-  <a href="https://github.com/skygazer42/Beacon/releases/tag/v1.0.0"><img src="https://img.shields.io/badge/release-v1.0.0-3964fe?style=flat-square" alt="Release v1.0.0"></a>
+  <a href="https://github.com/skygazer42/Beacon/releases/tag/v1.0.1-rc.1"><img src="https://img.shields.io/badge/release-v1.0.1--rc.1-3964fe?style=flat-square" alt="Release v1.0.1-rc.1"></a>
   <a href="https://github.com/skygazer42/Beacon/actions/workflows/ci.yml"><img src="https://github.com/skygazer42/Beacon/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/Python-3.10--3.12-3776ab?style=flat-square&logo=python&logoColor=white" alt="Python 3.10–3.12">
   <img src="https://img.shields.io/badge/C++-17-00599c?style=flat-square&logo=cplusplus&logoColor=white" alt="C++17">

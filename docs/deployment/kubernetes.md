@@ -133,7 +133,7 @@ Secret，并且只把 Secret 名称交给 Helm：
 beaconCloud:
   image:
     repository: registry.example.com/beacon-cloud-saas-v1
-    tag: v1.0.0
+    tag: v1.0.1-rc.1
     digest: sha256:替换为镜像仓库返回的64位小写十六进制摘要
   secrets:
     existingSecret: beacon-production-secrets
@@ -208,7 +208,7 @@ beaconCloud:
   replicaCount: 2
   image:
     repository: beacon-cloud-saas-v1
-    tag: v1.0.0
+    tag: v1.0.1-rc.1
     # 生产环境必填，必须来自已推送镜像的 registry digest。
     digest: ""
     pullPolicy: IfNotPresent
@@ -366,7 +366,7 @@ edgeSimulator:
   enabled: false
   image:
     repository: beacon-cloud-saas-v1
-    tag: v1.0.0
+    tag: v1.0.1-rc.1
     pullPolicy: IfNotPresent
   cloudBaseURL: ""
   restartPolicy: OnFailure
@@ -657,7 +657,7 @@ helm upgrade beacon-cloud ./deploy/cloud-saas-v1/chart/ \
 helm upgrade beacon-cloud ./deploy/cloud-saas-v1/chart/ \
   -n beacon \
   -f deploy/cloud-saas-v1/chart/my-values.yaml \
-  --set beaconCloud.image.tag=v1.0.0
+  --set beaconCloud.image.tag=v1.0.1-rc.1
 
 # 查看 Release
 helm list -n beacon

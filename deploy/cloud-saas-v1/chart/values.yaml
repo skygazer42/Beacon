@@ -44,7 +44,7 @@ beaconCloud:
   replicaCount: 2
   image:
     repository: beacon-cloud-saas-v1
-    tag: v1.0.0
+    tag: v1.0.1-rc.1
     # Required when secrets.existingSecret is set (production mode).
     digest: ""
     pullPolicy: IfNotPresent
@@ -233,7 +233,7 @@ edgeSimulator:
   enabled: false
   image:
     repository: beacon-cloud-saas-v1
-    tag: v1.0.0
+    tag: v1.0.1-rc.1
     # Required whenever the optional simulator Job is enabled.
     digest: ""
     pullPolicy: IfNotPresent
