@@ -267,22 +267,52 @@ SESSION_COOKIE_AGE = _env_int(
 )  # session过期，单位（秒） 7天=7*24*60*60，1小时=1*60*60
 SESSION_EXPIRE_AT_BROWSER_CLOSE=False #会话cookie可以在用户浏览器中保持有效期  True：关闭浏览器则Cookie失效。
 
-# Production security knobs (opt-in via env, but safe defaults when DEBUG=0)
+# Production security knobs. DEBUG=0 is fail-closed: HTTPS, secure cookies and
+# HSTS are enabled unless an operator explicitly opts into loopback-only HTTP
+# for a POC. Cloud Compose keeps its existing, separately validated POC escape
+# hatch for backwards compatibility.
+_allow_insecure_http = _env_bool(
+    "BEACON_DJANGO_ALLOW_INSECURE_HTTP",
+    default=_env_bool("BEACON_CLOUD_ALLOW_INSECURE_HTTP", default=False),
+)
 SESSION_COOKIE_SECURE = _env_bool("BEACON_DJANGO_SESSION_COOKIE_SECURE", default=(not DEBUG))
 CSRF_COOKIE_SECURE = _env_bool("BEACON_DJANGO_CSRF_COOKIE_SECURE", default=(not DEBUG))
-SECURE_SSL_REDIRECT = _env_bool("BEACON_DJANGO_SECURE_SSL_REDIRECT", default=False)
+SECURE_SSL_REDIRECT = _env_bool(
+    "BEACON_DJANGO_SECURE_SSL_REDIRECT",
+    default=(not DEBUG and not _allow_insecure_http),
+)
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https') if _env_bool(
     "BEACON_DJANGO_TRUST_X_FORWARDED_PROTO", default=False
 ) else None
 SECURE_HSTS_SECONDS = _env_int(
     "BEACON_DJANGO_HSTS_SECONDS",
-    default=0,
+    default=(31536000 if not DEBUG and not _allow_insecure_http else 0),
     min_value=0,
     max_value=2 * 365 * 24 * 60 * 60,
 )
 SECURE_HSTS_INCLUDE_SUBDOMAINS = _env_bool("BEACON_DJANGO_HSTS_INCLUDE_SUBDOMAINS", default=False)
 SECURE_HSTS_PRELOAD = _env_bool("BEACON_DJANGO_HSTS_PRELOAD", default=False)
 CSRF_TRUSTED_ORIGINS = _env_csv("BEACON_DJANGO_CSRF_TRUSTED_ORIGINS", default=[])
+
+if not DEBUG and not _allow_insecure_http:
+    insecure_settings = []
+    if not SESSION_COOKIE_SECURE:
+        insecure_settings.append("BEACON_DJANGO_SESSION_COOKIE_SECURE")
+    if not CSRF_COOKIE_SECURE:
+        insecure_settings.append("BEACON_DJANGO_CSRF_COOKIE_SECURE")
+    if not SECURE_SSL_REDIRECT:
+        insecure_settings.append("BEACON_DJANGO_SECURE_SSL_REDIRECT")
+    if SECURE_PROXY_SSL_HEADER is None:
+        insecure_settings.append("BEACON_DJANGO_TRUST_X_FORWARDED_PROTO")
+    if SECURE_HSTS_SECONDS <= 0:
+        insecure_settings.append("BEACON_DJANGO_HSTS_SECONDS")
+    if insecure_settings:
+        raise RuntimeError(
+            "production HTTPS settings are required when BEACON_DJANGO_DEBUG=0: "
+            + ", ".join(insecure_settings)
+            + "; BEACON_DJANGO_ALLOW_INSECURE_HTTP=1 is only for an explicit "
+            "loopback-only POC"
+        )
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField' # 设置Model的主键自增
 

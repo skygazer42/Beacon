@@ -156,9 +156,10 @@ Cloud 的 `worker` 角色必须使用 PostgreSQL；advisory lock 依赖一个持
 | `BEACON_SESSION_COOKIE_AGE_SECONDS` | int | `604800` | Session 过期时间（秒），默认 7 天 |
 | `BEACON_DJANGO_SESSION_COOKIE_SECURE` | bool | 非调试默认 `true` | Session Cookie 是否仅通过 HTTPS 传输 |
 | `BEACON_DJANGO_CSRF_COOKIE_SECURE` | bool | 非调试默认 `true` | CSRF Cookie 是否仅通过 HTTPS 传输 |
-| `BEACON_DJANGO_SECURE_SSL_REDIRECT` | bool | `false` | 是否将 HTTP 请求自动重定向到 HTTPS |
-| `BEACON_DJANGO_TRUST_X_FORWARDED_PROTO` | bool | `false` | 是否信任反向代理的 `X-Forwarded-Proto` 头（Nginx 反代时启用） |
-| `BEACON_DJANGO_HSTS_SECONDS` | int | `0` | HSTS 有效秒数；确认正式域名全站 HTTPS 后再设为 `31536000` |
+| `BEACON_DJANGO_ALLOW_INSECURE_HTTP` | bool | `false` | 仅允许显式的 loopback POC 绕过生产 HTTPS、HSTS 与安全 Cookie 强制；生产禁止开启 |
+| `BEACON_DJANGO_SECURE_SSL_REDIRECT` | bool | 非调试默认 `true` | 是否将 HTTP 请求自动重定向到 HTTPS；生产模式关闭时会拒绝启动 |
+| `BEACON_DJANGO_TRUST_X_FORWARDED_PROTO` | bool | `false` | 是否信任反向代理的 `X-Forwarded-Proto` 头；生产 Waitress 反代部署必须显式启用 |
+| `BEACON_DJANGO_HSTS_SECONDS` | int | 非调试默认 `31536000` | HSTS 有效秒数；生产模式设为 `0` 时会拒绝启动，显式 POC 逃生模式除外 |
 | `BEACON_DJANGO_HSTS_INCLUDE_SUBDOMAINS` | bool | `false` | HSTS 是否覆盖所有子域名 |
 | `BEACON_DJANGO_HSTS_PRELOAD` | bool | `false` | 是否声明 HSTS preload；提交预加载列表前需单独评估 |
 | `BEACON_DJANGO_CSRF_TRUSTED_ORIGINS` | string | `""` | CSRF 可信源列表（逗号分隔），如 `https://beacon.example.com` |
