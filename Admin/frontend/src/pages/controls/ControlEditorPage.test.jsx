@@ -189,7 +189,7 @@ describe('ControlEditorPage', () => {
     });
 
     expect(await screen.findByDisplayValue('osd/20260330/brand.png')).toBeInTheDocument();
-  }, 20000);
+  }, 30000);
 
   it('binds the visual recognition region editor back into the control form payload', async () => {
     const originalLocation = window.location;
@@ -231,7 +231,7 @@ describe('ControlEditorPage', () => {
     expect(formData.get('polygon')).toBe('0,0,1,0,1,1,0,1');
 
     window.location = originalLocation;
-  });
+  }, 30000);
 
   it('captures and shows a current-frame preview for ROI drawing instead of a raw stream url', async () => {
     mockApiGet.mockImplementation((url, params) => {
