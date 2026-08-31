@@ -174,6 +174,14 @@ Cloud 的 `worker` 角色必须使用 PostgreSQL；advisory lock 依赖一个持
 
     # 设置允许的主机名（不可为 *）
     export BEACON_DJANGO_ALLOWED_HOSTS="beacon.example.com,192.168.1.100"
+
+    # TLS 在反向代理终止；生产安全门要求显式信任协议头
+    export BEACON_DJANGO_TRUST_X_FORWARDED_PROTO=1
+    export BEACON_DJANGO_SECURE_SSL_REDIRECT=1
+    export BEACON_DJANGO_SESSION_COOKIE_SECURE=1
+    export BEACON_DJANGO_CSRF_COOKIE_SECURE=1
+    export BEACON_DJANGO_HSTS_SECONDS=31536000
+    export BEACON_DJANGO_CSRF_TRUSTED_ORIGINS="https://beacon.example.com"
     ```
 
 ---
@@ -489,6 +497,11 @@ services:
       - BEACON_DJANGO_DEBUG=0
       - BEACON_DJANGO_SECRET_KEY=${BEACON_SECRET_KEY}
       - BEACON_DJANGO_ALLOWED_HOSTS=beacon.example.com
+      - BEACON_DJANGO_TRUST_X_FORWARDED_PROTO=1
+      - BEACON_DJANGO_SECURE_SSL_REDIRECT=1
+      - BEACON_DJANGO_SESSION_COOKIE_SECURE=1
+      - BEACON_DJANGO_CSRF_COOKIE_SECURE=1
+      - BEACON_DJANGO_HSTS_SECONDS=31536000
       - BEACON_DJANGO_CSRF_TRUSTED_ORIGINS=https://beacon.example.com
 
       # --- 数据库 ---

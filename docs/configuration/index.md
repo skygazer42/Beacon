@@ -96,6 +96,9 @@ Beacon/
 
     - `BEACON_DJANGO_SECRET_KEY`：Django 密钥，必须为高强度随机值（不少于 32 位）
     - `BEACON_DJANGO_ALLOWED_HOSTS`：允许的主机名列表，**不可**包含 `*`
+    - `BEACON_DJANGO_TRUST_X_FORWARDED_PROTO=1`：确认只有受信反向代理可直连 Admin 后，显式信任外部 HTTPS 协议头
+
+    生产模式还会强制 HTTPS 跳转、安全 Cookie 和 HSTS；只有回环地址 POC 可以显式启用不安全 HTTP 例外。
 
 ### 环境变量
 
@@ -148,6 +151,7 @@ Beacon 会校验安全关键项和部分有明确取值范围的字段，但目�
 | `config.json` | 必须能按 UTF-8 或 GBK 解码并解析为 JSON | Admin 初始化配置时 |
 | `BEACON_DJANGO_SECRET_KEY` | 不少于 32 位、不以 `django-insecure-` 开头 | `BEACON_DJANGO_DEBUG=0` |
 | `BEACON_DJANGO_ALLOWED_HOSTS` | 不得为空、不得包含 `*` | `BEACON_DJANGO_DEBUG=0` |
+| Django HTTPS 基线 | 可信代理协议头、HTTPS 跳转、安全 Cookie、HSTS 均必须有效 | `BEACON_DJANGO_DEBUG=0` 且未启用回环 POC 例外 |
 | `BEACON_CLOUD_DB_URL` | 只接受 PostgreSQL URL，并校验 URL 结构 | 设置该变量时 |
 | Cloud 后台设置 | Cloud 地址必须是完整 HTTP(S) URL，启用时必须配置 Edge Token | 从系统设置保存时 |
 | 部分数字字段 | 由对应模块限制最小值和最大值 | 加载或保存该字段时 |

@@ -84,6 +84,7 @@ class CloudSaaSV1HelmChartTest(unittest.TestCase):
         self.assertIn('org.opencontainers.image.licenses="MIT"', dockerfile)
         self.assertIn("LICENSE THIRD_PARTY_NOTICES.md /licenses/Beacon/", dockerfile)
         self.assertIn("python /app/Admin/manage.py collectstatic --noinput", dockerfile)
+        self.assertIn("BEACON_DJANGO_TRUST_X_FORWARDED_PROTO=1", dockerfile)
         for ignored_runtime_artifact in ("Admin/staticfiles", "Admin/build", "Admin/dist"):
             self.assertIn(ignored_runtime_artifact, dockerignore)
         self.assertIn("exec gunicorn", entrypoint)

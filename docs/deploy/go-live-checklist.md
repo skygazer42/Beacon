@@ -154,6 +154,8 @@ MediaServer（ZLM）：
   - `BEACON_DJANGO_DEBUG=0`
   - `BEACON_DJANGO_SECRET_KEY` 非默认占位
   - `BEACON_DJANGO_ALLOWED_HOSTS` 已显式配置且不含 `*`
+  - `BEACON_DJANGO_TRUST_X_FORWARDED_PROTO=1`，且只有受信反向代理可以直连 Admin
+  - HTTPS 跳转、Session/CSRF 安全 Cookie 和 HSTS 已启用；`BEACON_DJANGO_ALLOW_INSECURE_HTTP` 未开启
   - Edge Admin 使用默认 `waitress`（或经评审的其他生产 WSGI 服务），进程参数中不得出现 `runserver`
   - 若信任反向代理头，`BEACON_ADMIN_TRUSTED_PROXY` 必须是实际直连代理 IP，不得使用通配符
 - Cloud 外置 PostgreSQL URL 使用 `sslmode=verify-full`（最低不低于 `require`），外置 S3 endpoint 使用 HTTPS

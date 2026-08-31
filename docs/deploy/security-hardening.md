@@ -117,14 +117,14 @@ Token 读取顺序（Admin/Analyzer）：
 - `BEACON_DJANGO_SECRET_KEY` 必须设置为随机值，且不得使用默认占位（`django-insecure-*`）。
 - `BEACON_DJANGO_ALLOWED_HOSTS` 必须显式设置且不得包含 `*`。
 
-TLS/反代相关（可选，建议在反代启用 HTTPS 时配置）：
+TLS/反代相关（生产必填；仅回环地址 POC 可显式启用不安全 HTTP 例外）：
 
 - `BEACON_DJANGO_TRUST_X_FORWARDED_PROTO=1`
 - `BEACON_DJANGO_SECURE_SSL_REDIRECT=1`
 - `BEACON_DJANGO_SESSION_COOKIE_SECURE=1`
 - `BEACON_DJANGO_CSRF_COOKIE_SECURE=1`
 - `BEACON_DJANGO_CSRF_TRUSTED_ORIGINS=https://beacon.example.com`
-- `BEACON_DJANGO_HSTS_SECONDS=31536000`（确认全站 HTTPS 稳定后再开启）
+- `BEACON_DJANGO_HSTS_SECONDS=31536000`
 
 ### 3.5 运行时配置与 SQLite 文件权限
 
@@ -408,7 +408,7 @@ TLS 建议：
 
 - OpenAPI：设置强 Token，并开启 `BEACON_REQUIRE_OPEN_API_TOKEN=1`。
 - ApiKey：启用 DB 管理 ApiKey 并设置 `BEACON_API_KEY_PEPPER`（便于轮换与最小权限）。
-- Django：`BEACON_DJANGO_DEBUG=0`，配置 `BEACON_DJANGO_SECRET_KEY` 与 `BEACON_DJANGO_ALLOWED_HOSTS`。
+- Django：`BEACON_DJANGO_DEBUG=0`，配置密钥与允许主机，并强制可信代理协议头、HTTPS 跳转、安全 Cookie 和 HSTS。
 - 网络：仅暴露必要端口；Analyzer/MediaServer 优先不对公网开放。
 - IP 策略：对 OpenAPI/Ops 配置 allowlist/denylist（作为应用层兜底）。
 - 网关防护：按场景启用 Rate Limit 与 WAF；公网建议启用。

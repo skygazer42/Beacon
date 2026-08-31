@@ -49,6 +49,7 @@ RUN sed -i 's/\r$//' /app/deploy/cloud-saas-v1/scripts/*.sh \
     && BEACON_DJANGO_SECRET_KEY=build-only-not-for-runtime-7mQ2xV9pL4nR8sT5 \
         BEACON_DJANGO_DEBUG=0 \
         BEACON_DJANGO_ALLOWED_HOSTS=build.invalid \
+        BEACON_DJANGO_TRUST_X_FORWARDED_PROTO=1 \
         python /app/Admin/manage.py collectstatic --noinput \
     && chown -R beacon:beacon /app/Admin/staticfiles /app/data /demo
 
