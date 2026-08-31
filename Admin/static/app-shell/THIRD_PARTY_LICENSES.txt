@@ -121,7 +121,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-@ant-design/icons-svg@4.4.2
+@ant-design/icons-svg@4.5.0
 SPDX/license metadata: MIT
 Upstream: git+https://github.com/ant-design/ant-design-icons.git
 The published package did not include a standalone license file; see its repository and package metadata.
@@ -153,7 +153,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-@babel/runtime@7.29.2
+@babel/runtime@7.29.7
 SPDX/license metadata: MIT
 Upstream: https://github.com/babel/babel.git
 MIT License
@@ -232,7 +232,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-@rc-component/async-validator@5.1.0
+@rc-component/async-validator@5.1.2
 SPDX/license metadata: MIT
 Upstream: git@github.com:react-component/async-validator.git
 The MIT License (MIT)
@@ -274,7 +274,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 --------------------------------------------------------------------------------
-@rc-component/mini-decimal@1.1.3
+@rc-component/mini-decimal@1.1.4
 SPDX/license metadata: MIT
 Upstream: https://github.com/react-component/mini-decimal.git
 MIT License
@@ -352,7 +352,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-@rc-component/qrcode@1.1.1
+@rc-component/qrcode@1.1.3
 SPDX/license metadata: MIT
 Upstream: https://github.com/react-component/qrcode.git
 The MIT License (MIT)
@@ -584,7 +584,7 @@ MIT License
     SOFTWARE
 
 --------------------------------------------------------------------------------
-@types/d3-shape@3.1.8
+@types/d3-shape@3.2.0
 SPDX/license metadata: MIT
 Upstream: https://github.com/DefinitelyTyped/DefinitelyTyped.git
 MIT License
@@ -1018,7 +1018,7 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 
 --------------------------------------------------------------------------------
-dayjs@1.11.20
+dayjs@1.11.23
 SPDX/license metadata: MIT
 Upstream: https://github.com/iamkun/dayjs.git
 MIT License
@@ -1123,7 +1123,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-fast-equals@5.4.0
+fast-equals@5.4.1
 SPDX/license metadata: MIT
 Upstream: git+https://github.com/planttheidea/fast-equals.git
 MIT License
@@ -2292,7 +2292,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-stylis@4.3.6
+stylis@4.4.0
 SPDX/license metadata: MIT
 Upstream: https://github.com/thysultan/stylis.js
 MIT License
@@ -2405,7 +2405,7 @@ Upstream: https://github.com/FormidableLabs/victory
 The published package did not include a standalone license file; see its repository and package metadata.
 
 --------------------------------------------------------------------------------
-zustand@5.0.12
+zustand@5.0.15
 SPDX/license metadata: MIT
 Upstream: git+https://github.com/pmndrs/zustand.git
 MIT License

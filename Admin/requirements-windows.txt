@@ -22,7 +22,7 @@ Pillow==12.3.0
 cryptography==50.0.0
 
 # 视频处理和截图
-opencv-python==4.10.0.84
+opencv-python==4.11.0.86
 
 # 数组计算 (opencv-python 的依赖)
 numpy==1.26.4

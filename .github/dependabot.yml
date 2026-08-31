@@ -9,7 +9,9 @@ updates:
       default-days: 7
     groups:
       actions:
+        applies-to: version-updates
         patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: npm
     directory: /Admin/frontend
@@ -19,7 +21,15 @@ updates:
       default-days: 7
     groups:
       frontend:
+        applies-to: version-updates
         patterns: ["*"]
+        update-types: ["minor", "patch"]
+    # React, Ant Design, Recharts, Vite and the test stack require a planned
+    # compatibility migration for major releases. Security updates are not
+    # suppressed by version-update ignore rules.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /sdk/javascript
@@ -29,7 +39,9 @@ updates:
       default-days: 7
     groups:
       javascript-sdk:
+        applies-to: version-updates
         patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: pip
     directory: /Admin
@@ -39,7 +51,16 @@ updates:
       default-days: 7
     groups:
       admin-python:
+        applies-to: version-updates
         patterns: ["*"]
+        update-types: ["minor", "patch"]
+    # Beacon supports Python 3.10-3.12. Django 6.1 drops Python 3.10-3.11,
+    # while OpenCV >=4.12 forces the NumPy 2 ABI.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "opencv-python"
+        versions: [">=4.12"]
 
   - package-ecosystem: pip
     directory: /sdk/python
@@ -49,7 +70,9 @@ updates:
       default-days: 7
     groups:
       python-sdk:
+        applies-to: version-updates
         patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: pip
     directory: /docs
@@ -59,7 +82,9 @@ updates:
       default-days: 7
     groups:
       documentation:
+        applies-to: version-updates
         patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: gomod
     directory: /sdk/go
@@ -69,7 +94,9 @@ updates:
       default-days: 7
     groups:
       go-sdk:
+        applies-to: version-updates
         patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: docker
     directory: /deploy/cloud-saas-v1
@@ -79,7 +106,12 @@ updates:
       default-days: 7
     groups:
       cloud-images:
+        applies-to: version-updates
         patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "python"
+        versions: [">=3.13"]
 
   - package-ecosystem: docker-compose
     directory: /deploy/observability/tracing
@@ -89,4 +121,6 @@ updates:
       default-days: 7
     groups:
       tracing-images:
+        applies-to: version-updates
         patterns: ["*"]
+        update-types: ["minor", "patch"]

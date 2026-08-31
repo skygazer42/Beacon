@@ -30,7 +30,7 @@ processors:
 
 exporters:
   # Jaeger (OTLP ingestion). We keep Jaeger OTLP ports internal and ship from the collector.
-  otlp/jaeger:
+  otlp_grpc/jaeger:
     endpoint: jaeger:4317
     tls:
       insecure: true
@@ -45,7 +45,7 @@ exporters:
       max_elapsed_time: 300s
 
   # Tempo (OTLP ingestion).
-  otlp/tempo:
+  otlp_grpc/tempo:
     endpoint: tempo:4317
     tls:
       insecure: true
@@ -69,5 +69,4 @@ service:
     traces:
       receivers: [otlp, zipkin]
       processors: [memory_limiter, batch]
-      exporters: [otlp/jaeger, otlp/tempo]
-
+      exporters: [otlp_grpc/jaeger, otlp_grpc/tempo]

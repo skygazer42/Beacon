@@ -29,8 +29,13 @@ class ObservabilityComposeSecurityTests(unittest.TestCase):
         image_lines = re.findall(r"^\s*image:\s*\S+\s*$", self.compose, re.MULTILINE)
         pinned_lines = IMAGE_PATTERN.findall(self.compose)
 
-        self.assertEqual(len(image_lines), 4)
+        self.assertEqual(len(image_lines), 5)
         self.assertEqual(pinned_lines, image_lines)
+
+    def test_tempo_volume_is_initialized_without_running_tempo_as_root(self):
+        self.assertIn('command: ["chown -R 10001:10001 /tmp/tempo"]', self.compose)
+        self.assertIn('user: "10001:10001"', self.compose)
+        self.assertIn("condition: service_completed_successfully", self.compose)
 
     def test_grafana_password_is_required(self):
         self.assertIn(

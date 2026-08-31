@@ -15,8 +15,29 @@
 # approved private address only when another host must reach this dev stack.
 
 services:
+  tempo-volume-init:
+    # Tempo 3 runs as uid/gid 10001 and cannot initialize a fresh named volume
+    # that Docker creates as root. Reuse the pinned Grafana image for a minimal,
+    # one-shot ownership fix instead of running Tempo itself as root.
+    image: grafana/grafana:13.2.0@sha256:3fd54ae1214669f8355f065ec9f6445d5279a3d77095ab048ca045685272429b
+    user: "0:0"
+    entrypoint: ["/bin/sh", "-ec"]
+    command: ["chown -R 10001:10001 /tmp/tempo"]
+    volumes:
+      - tempo_data:/tmp/tempo
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
+
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.102.0@sha256:26bce721ca2f83db1c2c4e8873514dfe5b3973401fe88a1208efdc74e32840c1
+    image: otel/opentelemetry-collector-contrib:0.159.0@sha256:1f2c54a30e713fac6b3ae77a1ec84010c2007e29ced8ec666214fc2f6739c1cc
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
     volumes:
       - ./otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
@@ -34,7 +55,7 @@ services:
     restart: unless-stopped
 
   jaeger:
-    image: jaegertracing/all-in-one:1.53@sha256:60e65bfffe1f66aee96d6fc8b6bf65afd42016be5dcc09d2e15d8462f7d9409c
+    image: jaegertracing/all-in-one:1.60@sha256:4fd2d70fa347d6a47e79fcb06b1c177e6079f92cba88b083153d56263082135e
     environment:
       # Enable OTLP ingestion (collector listens on 4317/4318 inside the container network).
       COLLECTOR_OTLP_ENABLED: "true"
@@ -43,17 +64,21 @@ services:
     restart: unless-stopped
 
   tempo:
-    image: grafana/tempo:2.4.1@sha256:5b9c08f6d8fb43b3b72dfd1252ba4f198b11a245257bf76ee2ca13e243bac565
+    image: grafana/tempo:3.0.3@sha256:0296560ac66f8a3600d7fb3014a52c189d4d9c3549ad6ff441bf2409855d68d5
+    user: "10001:10001"
     command: ["-config.file=/etc/tempo.yaml"]
     volumes:
       - ./tempo.yaml:/etc/tempo.yaml:ro
       - tempo_data:/tmp/tempo
     ports:
       - "${BEACON_BIND_ADDRESS:-127.0.0.1}:3200:3200" # Tempo API; nosemgrep: trailofbits.yaml.docker-compose.port-all-interfaces.port-all-interfaces
+    depends_on:
+      tempo-volume-init:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   grafana:
-    image: grafana/grafana:10.4.2@sha256:7d5faae481a4c6f436c99e98af11534f7fd5e8d3e35213552dd1dd02bc393d2e
+    image: grafana/grafana:13.2.0@sha256:3fd54ae1214669f8355f065ec9f6445d5279a3d77095ab048ca045685272429b
     environment:
       GF_SECURITY_ADMIN_USER: "${GF_SECURITY_ADMIN_USER:-admin}"
       GF_SECURITY_ADMIN_PASSWORD: "${GF_SECURITY_ADMIN_PASSWORD:?set GF_SECURITY_ADMIN_PASSWORD}"
