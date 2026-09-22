@@ -1,6 +1,6 @@
 # ========== 核心依赖 ==========
 # Web 框架
-Django==5.2.17
+Django==6.1.1
 
 # 系统监控
 psutil==7.2.2
@@ -19,10 +19,10 @@ waitress==3.0.2
 Pillow==12.3.0
 
 # 授权签名校验（License Manager / Ed25519）
-cryptography==50.0.0
+cryptography==50.0.1
 
 # 视频处理和截图
-opencv-python==4.10.0.84
+opencv-python==5.0.0.93
 
 # 数组计算 (opencv-python 的依赖)
-numpy==1.26.4
+numpy==2.5.3
